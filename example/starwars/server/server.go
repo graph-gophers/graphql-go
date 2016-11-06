@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
 
@@ -25,15 +26,38 @@ func main() {
 	}))
 
 	http.HandleFunc("/query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var params struct {
-			Query string `json:"query"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		data, err := ioutil.ReadAll(r.Body)
+		defer r.Body.Close()
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		response := schema.Exec(r.Context(), params.Query, "", nil)
+		var params map[string]string
+		if err = json.Unmarshal(data, &params); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		query := ""
+		if val, ok := params["query"]; ok {
+			query = val
+		}
+
+		operationName := ""
+		if val, ok := params["operationName"]; ok {
+			operationName = val
+		}
+
+		var vars map[string]interface{}
+		if val, ok := params["variables"]; ok {
+			if err = json.Unmarshal([]byte(val), &vars); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		response := schema.Exec(r.Context(), query, operationName, vars)
 		responseJSON, err := json.Marshal(response)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
