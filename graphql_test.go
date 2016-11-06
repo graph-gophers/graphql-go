@@ -172,6 +172,25 @@ func TestArguments(t *testing.T) {
 			Schema: starwarsSchema,
 			Query: `
 				{
+					humans(height: 1.5) {
+						name
+						height
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"humans": [{
+						"height":1.5,
+						"name":"Leia Organa"
+					}]
+				}
+			`,
+		},
+		{
+			Schema: starwarsSchema,
+			Query: `
+				{
 					human(id: "1000") {
 						name
 						height(unit: FOOT)
