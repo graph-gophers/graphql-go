@@ -25,6 +25,7 @@ var Schema = `
 		character(id: ID!): Character
 		droid(id: ID!): Droid
 		human(id: ID!): Human
+		humans(height: Float): [Human]!
 		starship(id: ID!): Starship
 	}
 	# The mutation type, represents all updates we can make to our data
@@ -197,6 +198,15 @@ var humans = []*human{
 		Height:    1.8,
 		Mass:      0,
 	},
+	{
+		ID:        "1005",
+		Name:      "Augwynne Djo",
+		Friends:   []graphql.ID{"1002", "1003"},
+		AppearsIn: []string{"THELASTJEDI"},
+		Height:    2, // dono ;p
+		Mass:      60,
+		Starships: []graphql.ID{},
+	},
 }
 
 var humanData = make(map[graphql.ID]*human)
@@ -336,6 +346,16 @@ func (r *Resolver) Human(args *struct{ ID graphql.ID }) *humanResolver {
 		return &humanResolver{h: h}
 	}
 	return nil
+}
+
+func (r *Resolver) Humans(args *struct{ Height *float64 }) []*humanResolver {
+	var res []*humanResolver
+	for _, h := range humans {
+		if args.Height != nil && h.Height == *args.Height {
+			res = append(res, &humanResolver{h: h})
+		}
+	}
+	return res
 }
 
 func (r *Resolver) Droid(args *struct{ ID graphql.ID }) *droidResolver {

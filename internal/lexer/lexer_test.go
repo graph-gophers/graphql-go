@@ -5,9 +5,6 @@ import (
 	"testing"
 	"text/scanner"
 
-	"strconv"
-
-	"github.com/engoengine/math"
 	"github.com/neelance/graphql-go/internal/lexer"
 )
 
@@ -16,26 +13,8 @@ func TestLexer_ConsumeFloat(t *testing.T) {
 		given    string
 		expected float64
 	}{
-		"zero": {
-			given:    "0",
-			expected: 0.0,
-		},
-		"regular": {
-			given:    "1.5",
-			expected: 1.5,
-		},
-		"max-int64": {
-			given:    strconv.FormatInt(math.MaxInt64, 10),
-			expected: float64(math.MaxInt64),
-		},
-		"max-float64": {
-			given:    strconv.FormatFloat(math.MaxFloat64, 'g', 100000000, 64),
-			expected: math.MaxFloat64,
-		},
-		"smallest-nonzero-float64": {
-			given:    strconv.FormatFloat(math.SmallestNonzeroFloat64, 'g', 100000000, 64),
-			expected: math.SmallestNonzeroFloat64,
-		},
+		"integer": {given: "0", expected: 0.0},
+		"decimal": {given: "1.5", expected: 1.5},
 	}
 
 	for hint, c := range cases {

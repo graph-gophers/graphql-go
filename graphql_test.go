@@ -149,7 +149,25 @@ func TestArguments(t *testing.T) {
 				}
 			`,
 		},
-
+		{
+			Schema: starwarsSchema,
+			Query: `
+				{
+					humans(height: 2) {
+						name
+						height
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"humans": [{
+						"name": "Augwynne Djo",
+						"height": 2
+					}]
+				}
+			`,
+		},
 		{
 			Schema: starwarsSchema,
 			Query: `
