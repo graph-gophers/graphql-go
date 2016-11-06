@@ -2,11 +2,10 @@ package lexer_test
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"text/scanner"
-
-	"reflect"
 
 	"github.com/neelance/graphql-go/internal/lexer"
 )
