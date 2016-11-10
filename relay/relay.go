@@ -55,12 +55,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Variables     string `json:"variables"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
 	var parsedVariables map[string]interface{}
+
+	if r.Method == http.MethodGet {
+		params.Query = r.URL.Query().Get("query")
+		params.Variables = r.URL.Query().Get("variables")
+		params.OperationName = r.URL.Query().Get("operationName")
+	} else {
+		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 
 	if len(params.Variables) > 0 {
 		if err := json.Unmarshal([]byte(params.Variables), &parsedVariables); err != nil {
