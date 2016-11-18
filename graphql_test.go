@@ -40,6 +40,79 @@ func (r *timeResolver) AddHour(args *struct{ Time time.Time }) time.Time {
 	return args.Time.Add(time.Hour)
 }
 
+type valueCoercionResolver struct {
+	asBool   *bool
+	asFloat  *float64
+	asInt    *int32
+	asString *string
+}
+
+func (r *valueCoercionResolver) AsInt() *int32 {
+	return r.asInt
+}
+
+func (r *valueCoercionResolver) AsString() *string {
+	return r.asString
+}
+
+func (r *valueCoercionResolver) AsFloat() *float64 {
+	return r.asFloat
+}
+
+func (r *valueCoercionResolver) AsBool() *bool {
+	return r.asBool
+}
+
+func (r *valueCoercionResolver) Coercion(args *struct {
+	BoolArg   *bool
+	FloatArg  *float64
+	IntArg    *int32
+	StringArg *string
+}) []*valueCoercionResolver {
+	var res []*valueCoercionResolver
+	if args.FloatArg != nil {
+		res = append(res, &valueCoercionResolver{
+			asFloat: args.FloatArg,
+		})
+	}
+	if args.IntArg != nil {
+		res = append(res, &valueCoercionResolver{
+			asInt: args.IntArg,
+		})
+	}
+	if args.StringArg != nil {
+		res = append(res, &valueCoercionResolver{
+			asString: args.StringArg,
+		})
+	}
+	if args.BoolArg != nil {
+		res = append(res, &valueCoercionResolver{
+			asBool: args.BoolArg,
+		})
+	}
+	return res
+}
+
+var valueCoercionSchema = graphql.MustParseSchema(`
+schema {
+	query: Query
+}
+
+type Query {
+	coercion(
+		boolArg: Boolean,
+		floatArg: Float,
+		intArg: Int,
+		stringArg: String,
+	): [Result]!
+}
+type Result {
+	asBool: Boolean
+	asFloat: Float
+	asInt: Int
+	asString: String
+}
+`, &valueCoercionResolver{})
 var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
 
 func TestHelloWorld(t *testing.T) {
@@ -149,7 +222,6 @@ func TestArguments(t *testing.T) {
 				}
 			`,
 		},
-
 		{
 			Schema: starwarsSchema,
 			Query: `
@@ -1166,6 +1238,79 @@ func TestTime(t *testing.T) {
 				{
 					"a": "2000-02-03T05:05:06Z",
 					"b": "2001-02-03T05:05:06Z"
+				}
+			`,
+		},
+	})
+}
+
+func TestValueCoercion(t *testing.T) {
+	graphql.RunTests(t, []*graphql.Test{
+		{
+			Schema: valueCoercionSchema,
+			Query: `
+				{
+					coercion(intArg: 25.0) {
+						asInt,
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"coercion": [{
+						"asInt": 25
+					}]
+				}
+			`,
+		},
+		{
+			Schema: valueCoercionSchema,
+			Query: `
+				{
+					coercion(floatArg: 1) {
+						asFloat,
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"coercion": [{
+						"asFloat": 1.0
+					}]
+				}
+			`,
+		},
+		{
+			Schema: valueCoercionSchema,
+			Query: `
+				{
+					coercion(floatArg: 99.55) {
+						asFloat,
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"coercion": [{
+						"asFloat": 99.55
+					}]
+				}
+			`,
+		},
+		{
+			Schema: valueCoercionSchema,
+			Query: `
+				{
+					coercion(boolArg: true) {
+						asBool,
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"coercion": [{
+						"asBool": true
+					}]
 				}
 			`,
 		},

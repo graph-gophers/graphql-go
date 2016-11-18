@@ -197,6 +197,15 @@ var humans = []*human{
 		Height:    1.8,
 		Mass:      0,
 	},
+	{
+		ID:        "1005",
+		Name:      "Augwynne Djo",
+		Friends:   []graphql.ID{"1002", "1003"},
+		AppearsIn: []string{"THELASTJEDI"},
+		Height:    2, // dono ;p
+		Mass:      60,
+		Starships: []graphql.ID{},
+	},
 }
 
 var humanData = make(map[graphql.ID]*human)
