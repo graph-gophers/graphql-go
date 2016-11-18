@@ -319,6 +319,10 @@ func makeStructPacker(s *schema.Schema, obj *common.InputMap, typ reflect.Type) 
 				return nil, err
 			}
 			fe.fieldPacker = e
+		case *common.List:
+			fe.fieldPacker = &valuePacker{
+				nonNull: nonNull,
+			}
 		default:
 			panic("TODO")
 		}
