@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
@@ -40,6 +41,12 @@ func (id *ID) Scan(src interface{}) error {
 	switch t := src.(type) {
 	case string:
 		*id = ID(t)
+	case int64:
+		*id = ID(strconv.FormatInt(t, 10))
+	case []byte:
+		*id = ID(t)
+	case nil:
+		// do nothing
 	default:
 		return fmt.Errorf("wrong type")
 	}
