@@ -2,8 +2,11 @@ package graphql
 
 import (
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
@@ -27,6 +30,32 @@ const OpenTracingTagArgsPrefix = "graphql.args."
 const OpenTracingTagError = "graphql.error"
 
 type ID string
+
+// compile time check
+var (
+	_ sql.Scanner   = (*ID)(nil)
+	_ driver.Valuer = (*ID)(nil)
+)
+
+func (id *ID) Scan(src interface{}) error {
+	switch t := src.(type) {
+	case string:
+		*id = ID(t)
+	case int64:
+		*id = ID(strconv.FormatInt(t, 10))
+	case []byte:
+		*id = ID(t)
+	case nil:
+		// do nothing
+	default:
+		return fmt.Errorf("wrong type")
+	}
+	return nil
+}
+
+func (id ID) Value() (driver.Value, error) {
+	return string(id), nil
+}
 
 func ParseSchema(schemaString string, resolver interface{}) (*Schema, error) {
 	b := New()
