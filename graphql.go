@@ -25,6 +25,10 @@ const OpenTracingTagTrivial = "graphql.trivial"
 const OpenTracingTagArgsPrefix = "graphql.args."
 const OpenTracingTagError = "graphql.error"
 
+// ErrContextDeadlineExceeded is the error that will be returned when a context
+// is cancelled before an Exec command is completed
+var ErrContextDeadlineExceeded = errors.Errorf("context deadline was exceeded")
+
 type ID string
 
 func (_ ID) ImplementsGraphQLType(name string) bool {
@@ -88,32 +92,47 @@ func (s *Schema) Exec(ctx context.Context, queryString string, operationName str
 		panic("schema created without resolver, can not exec")
 	}
 
-	document, err := query.Parse(queryString, s.schema.Resolve)
-	if err != nil {
-		return &Response{
-			Errors: []*errors.QueryError{err},
+	resChannel := make(chan *Response)
+	go func(done chan<- *Response) {
+		document, err := query.Parse(queryString, s.schema.Resolve)
+		if err != nil {
+			done <- &Response{
+				Errors: []*errors.QueryError{err},
+			}
+			return
+		}
+
+		span, subCtx := opentracing.StartSpanFromContext(ctx, "GraphQL request")
+		span.SetTag(OpenTracingTagQuery, queryString)
+		if operationName != "" {
+			span.SetTag(OpenTracingTagOperationName, operationName)
+		}
+		if len(variables) != 0 {
+			span.SetTag(OpenTracingTagVariables, variables)
+		}
+		defer span.Finish()
+
+		data, errs := exec.ExecuteRequest(subCtx, s.exec, document, operationName, variables, s.MaxParallelism)
+		if len(errs) != 0 {
+			ext.Error.Set(span, true)
+			span.SetTag(OpenTracingTagError, errs)
+		}
+		done <- &Response{
+			Data:   data,
+			Errors: errs,
+		}
+	}(resChannel)
+
+	var res *Response
+	select {
+	case res = <-resChannel:
+	case <-ctx.Done():
+		res = &Response{
+			Errors: []*errors.QueryError{ErrContextDeadlineExceeded},
 		}
 	}
 
-	span, subCtx := opentracing.StartSpanFromContext(ctx, "GraphQL request")
-	span.SetTag(OpenTracingTagQuery, queryString)
-	if operationName != "" {
-		span.SetTag(OpenTracingTagOperationName, operationName)
-	}
-	if len(variables) != 0 {
-		span.SetTag(OpenTracingTagVariables, variables)
-	}
-	defer span.Finish()
-
-	data, errs := exec.ExecuteRequest(subCtx, s.exec, document, operationName, variables, s.MaxParallelism)
-	if len(errs) != 0 {
-		ext.Error.Set(span, true)
-		span.SetTag(OpenTracingTagError, errs)
-	}
-	return &Response{
-		Data:   data,
-		Errors: errs,
-	}
+	return res
 }
 
 func (s *Schema) Inspect() *introspection.Schema {
