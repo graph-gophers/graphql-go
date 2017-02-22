@@ -1478,7 +1478,8 @@ func TestContextDeadline(t *testing.T) {
 	`
 
 	timeout := time.Millisecond * 100
-	acceptableDelay := time.Millisecond * 5
+	// We accept that we wont quite exit exactly when the context deadline is exceeded
+	acceptableDelay := time.Millisecond * 20
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
