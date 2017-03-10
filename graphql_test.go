@@ -1451,3 +1451,43 @@ func TestInput(t *testing.T) {
 		},
 	})
 }
+
+type sleepyResolver struct {
+	SleepFor time.Duration
+}
+
+func (r *sleepyResolver) Hello() string {
+	time.Sleep(r.SleepFor)
+	return "Hello world!"
+}
+
+func TestContextDeadline(t *testing.T) {
+	s := graphql.MustParseSchema(`
+		schema {
+			query: Query
+		}
+		
+		type Query {
+			hello: String!
+		}
+	`, &sleepyResolver{SleepFor: time.Second * 2})
+	q := `
+	{
+		hello
+	}
+	`
+
+	timeout := time.Millisecond * 100
+	// We accept that we wont quite exit exactly when the context deadline is exceeded
+	acceptableDelay := time.Millisecond * 20
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	startTime := time.Now()
+	_ = s.Exec(ctx, q, "", nil)
+	duration := time.Since(startTime)
+
+	if duration > timeout+acceptableDelay {
+		t.Errorf("expected exec to be cancelled after %s, but instead took %s", timeout, duration)
+	}
+}
