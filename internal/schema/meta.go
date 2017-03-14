@@ -43,7 +43,7 @@ var metaSrc = `
 		# Explains why this element was deprecated, usually also including a suggestion
 		# for how to access supported similar data. Formatted in
 		# [Markdown](https://daringfireball.net/projects/markdown/).
-		reason: String = "No longer supported"
+		reason: String
 	) on FIELD_DEFINITION | ENUM_VALUE
 
 	# A Directive provides a way to describe alternate runtime execution and type validation behavior in a GraphQL document.
