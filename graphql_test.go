@@ -512,7 +512,7 @@ func TestDeprecatedDirective(t *testing.T) {
 						],
 						"allFields": [
 							{ "name": "a", "isDeprecated": false, "deprecationReason": null },
-							{ "name": "b", "isDeprecated": true, "deprecationReason": "No longer supported" },
+							{ "name": "b", "isDeprecated": true, "deprecationReason": null },
 							{ "name": "c", "isDeprecated": true, "deprecationReason": "We don't like it" }
 						]
 					}
@@ -556,7 +556,7 @@ func TestDeprecatedDirective(t *testing.T) {
 						],
 						"allEnumValues": [
 							{ "name": "A", "isDeprecated": false, "deprecationReason": null },
-							{ "name": "B", "isDeprecated": true, "deprecationReason": "No longer supported" },
+							{ "name": "B", "isDeprecated": true, "deprecationReason": null },
 							{ "name": "C", "isDeprecated": true, "deprecationReason": "We don't like it" }
 						]
 					}

@@ -232,8 +232,10 @@ func (r *Field) DeprecationReason() *string {
 	if !ok {
 		return nil
 	}
-	reason := args["reason"].(string)
-	return &reason
+	if reason, ok := args["reason"].(string); ok {
+		return &reason
+	}
+	return nil
 }
 
 type InputValue struct {
@@ -292,8 +294,10 @@ func (r *EnumValue) DeprecationReason() *string {
 	if !ok {
 		return nil
 	}
-	reason := args["reason"].(string)
-	return &reason
+	if reason, ok := args["reason"].(string); ok {
+		return &reason
+	}
+	return nil
 }
 
 type Directive struct {
