@@ -25,6 +25,11 @@ const OpenTracingTagTrivial = "graphql.trivial"
 const OpenTracingTagArgsPrefix = "graphql.args."
 const OpenTracingTagError = "graphql.error"
 
+type contextKey string
+type FieldList map[string]FieldList
+
+const ResolverFields contextKey = "Resolver_Fields"
+
 type Exec struct {
 	queryExec    iExec
 	mutationExec iExec
@@ -498,8 +503,9 @@ func (e *objectExec) execSelectionSet(ctx context.Context, r *request, selSet *q
 				continue
 			}
 
+			namedFields := resolveFieldNames(make(FieldList), sel.SelSet, r.doc)
 			execSel(func() {
-				e.execField(ctx, r, sel, resolver, addResult)
+				e.execField(context.WithValue(ctx, ResolverFields, namedFields), r, sel, resolver, addResult)
 			})
 
 		case *query.FragmentSpread:
@@ -531,6 +537,29 @@ func (e *objectExec) execSelectionSet(ctx context.Context, r *request, selSet *q
 		}
 	}
 	wg.Wait()
+}
+
+func resolveFieldNames(namedFields FieldList, selSet *query.SelectionSet, doc *query.Document) FieldList {
+	if selSet != nil {
+		for _, selectionField := range selSet.Selections {
+			switch selectionField := selectionField.(type) {
+			case *query.Field:
+				namedFields[selectionField.Name] = make(FieldList)
+				resolveFieldNames(namedFields[selectionField.Name], selectionField.SelSet, doc)
+			case *query.FragmentSpread:
+				frag, ok := doc.Fragments[selectionField.Name]
+				if !ok {
+					panic(fmt.Errorf("fragment %q not found", selectionField.Name)) // TODO proper error handling
+				}
+				resolveFieldNames(namedFields, frag.SelSet, doc)
+			case *query.InlineFragment:
+				resolveFieldNames(namedFields, selectionField.SelSet, doc)
+			default:
+				panic("invalid type")
+			}
+		}
+	}
+	return namedFields
 }
 
 func (e *objectExec) execField(ctx context.Context, r *request, f *query.Field, resolver reflect.Value, addResult addResultFn) {

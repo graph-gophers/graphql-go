@@ -140,3 +140,12 @@ func (s *Schema) ToJSON() ([]byte, error) {
 	}
 	return json.MarshalIndent(result, "", "\t")
 }
+
+// GetFieldsFromContext can be used in resolvers to get the fields that were requested in the currenty query for the current type
+func GetFieldsFromContext(ctx context.Context) exec.FieldList {
+	fields, ok := ctx.Value(exec.ResolverFields).(exec.FieldList)
+	if !ok {
+		panic("Could not get graphql fields from context")
+	}
+	return fields
+}
