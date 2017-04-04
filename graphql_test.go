@@ -38,8 +38,8 @@ func (r *helloSnakeResolver2) HelloHTML(ctx context.Context) (string, error) {
 	return "Hello snake!", nil
 }
 
-func (r *helloSnakeResolver2) SayHello(ctx context.Context, args *struct{ FullName string }) string {
-	return "Hello " + args.FullName + "!"
+func (r *helloSnakeResolver2) SayHello(ctx context.Context, args *struct{ FullName string }) (string, error) {
+	return "Hello " + args.FullName + "!", nil
 }
 
 type theNumberResolver struct {
