@@ -333,7 +333,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 
 func findMethod(t reflect.Type, name string) int {
 	for i := 0; i < t.NumMethod(); i++ {
-		if strings.EqualFold(name, t.Method(i).Name) || strings.EqualFold(stripUnderscore(name), stripUnderscore(t.Method(i).Name)) {
+		if strings.EqualFold(stripUnderscore(name), stripUnderscore(t.Method(i).Name)) {
 			return i
 		}
 	}
