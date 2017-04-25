@@ -42,6 +42,27 @@ func (r *helloSnakeResolver2) SayHello(ctx context.Context, args *struct{ FullNa
 	return "Hello " + args.FullName + "!", nil
 }
 
+type helloGetResolver1 struct{}
+
+func (r *helloGetResolver1) GetHelloHTML() string {
+	return "Hello snake!"
+}
+
+func (r *helloGetResolver1) GetSayHello(args *struct{ FullName string }) string {
+	return "Hello " + args.FullName + "!"
+}
+
+type helloGetResolver2 struct {
+}
+
+func (r *helloGetResolver2) GetHelloHTML(ctx context.Context) (string, error) {
+	return "Hello snake!", nil
+}
+
+func (r *helloGetResolver2) GetSayHello(ctx context.Context, args *struct{ FullName string }) (string, error) {
+	return "Hello " + args.FullName + "!", nil
+}
+
 type theNumberResolver struct {
 	number int32
 }
@@ -193,6 +214,102 @@ func TestHelloSnakeArguments(t *testing.T) {
 					say_hello(full_name: String!): String!
 				}
 			`, &helloSnakeResolver2{}),
+			Query: `
+				{
+					say_hello(full_name: "Rob Pike")
+				}
+			`,
+			ExpectedResult: `
+				{
+					"say_hello": "Hello Rob Pike!"
+				}
+			`,
+		},
+	})
+}
+
+func TestGetMethods(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello_html: String!
+				}
+			`, &helloGetResolver2{}),
+			Query: `
+				{
+					hello_html
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello_html": "Hello snake!"
+				}
+			`,
+		},
+
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello_html: String!
+				}
+			`, &helloGetResolver2{}),
+			Query: `
+				{
+					hello_html
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello_html": "Hello snake!"
+				}
+			`,
+		},
+	})
+}
+
+func TestHelloGetArguments(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					say_hello(full_name: String!): String!
+				}
+			`, &helloGetResolver1{}),
+			Query: `
+				{
+					say_hello(full_name: "Rob Pike")
+				}
+			`,
+			ExpectedResult: `
+				{
+					"say_hello": "Hello Rob Pike!"
+				}
+			`,
+		},
+
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					say_hello(full_name: String!): String!
+				}
+			`, &helloGetResolver1{}),
 			Query: `
 				{
 					say_hello(full_name: "Rob Pike")
