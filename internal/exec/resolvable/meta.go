@@ -6,24 +6,23 @@ import (
 
 	"github.com/neelance/graphql-go/internal/common"
 	"github.com/neelance/graphql-go/internal/schema"
-	"github.com/neelance/graphql-go/introspection"
 )
 
 var MetaSchema *Object
 var MetaType *Object
 
-func init() {
+func InitMeta(resolvers TypeToResolversMap, schemaType, typeType reflect.Type) {
 	var err error
-	b := newBuilder(schema.Meta)
+	b := newBuilder(schema.Meta, resolvers)
 
 	metaSchema := schema.Meta.Types["__Schema"].(*schema.Object)
-	MetaSchema, err = b.makeObjectExec(metaSchema.Name, metaSchema.Fields, nil, false, reflect.TypeOf(&introspection.Schema{}))
+	MetaSchema, err = b.makeObjectExec(metaSchema, schemaType, false)
 	if err != nil {
 		panic(err)
 	}
 
 	metaType := schema.Meta.Types["__Type"].(*schema.Object)
-	MetaType, err = b.makeObjectExec(metaType.Name, metaType.Fields, nil, false, reflect.TypeOf(&introspection.Type{}))
+	MetaType, err = b.makeObjectExec(metaType, typeType, false)
 	if err != nil {
 		panic(err)
 	}

@@ -1,7 +1,6 @@
 package selected
 
 import (
-	"fmt"
 	"reflect"
 	"sync"
 
@@ -28,7 +27,7 @@ func (r *Request) AddError(err *errors.QueryError) {
 	r.Mu.Unlock()
 }
 
-func ApplyOperation(r *Request, s *resolvable.Schema, op *query.Operation) []Selection {
+func ApplyOperation(r *Request, s *resolvable.Schema, op *query.Operation) []*Field {
 	var obj *resolvable.Object
 	switch op.Type {
 	case query.Query:
@@ -36,38 +35,46 @@ func ApplyOperation(r *Request, s *resolvable.Schema, op *query.Operation) []Sel
 	case query.Mutation:
 		obj = s.Mutation.(*resolvable.Object)
 	}
-	return applySelectionSet(r, obj, op.Selections)
+	return applySelectionSet(r, obj, obj.Type, op.Selections)
 }
 
-type Selection interface {
-	isSelection()
-}
-
-type SchemaField struct {
+type Field struct {
 	resolvable.Field
 	Alias       string
 	Args        map[string]interface{}
-	PackedArgs  reflect.Value
-	Sels        []Selection
+	Resolver    resolvable.SelectedResolver
+	SubSel      SubSelection
 	Async       bool
 	FixedResult reflect.Value
 }
 
-type TypeAssertion struct {
-	resolvable.TypeAssertion
-	Sels []Selection
+type SubSelection interface {
+	Sels(t reflect.Type) []*Field
 }
 
-type TypenameField struct {
-	resolvable.Object
-	Alias string
+type concreteSubSelection []*Field
+
+func (s concreteSubSelection) Sels(t reflect.Type) []*Field {
+	return s
 }
 
-func (*SchemaField) isSelection()   {}
-func (*TypeAssertion) isSelection() {}
-func (*TypenameField) isSelection() {}
+type interfaceSubSelection []interfaceSubSelectionOption
 
-func applySelectionSet(r *Request, e *resolvable.Object, sels []query.Selection) (flattenedSels []Selection) {
+type interfaceSubSelectionOption struct {
+	common.TypePair
+	SubSel SubSelection
+}
+
+func (s interfaceSubSelection) Sels(t reflect.Type) []*Field {
+	for _, opt := range s {
+		if opt.GoType == t {
+			return opt.SubSel.Sels(t)
+		}
+	}
+	panic("invalid type") // TODO
+}
+
+func applySelectionSet(r *Request, e *resolvable.Object, t schema.NamedType, sels []query.Selection) (flattenedSels concreteSubSelection) {
 	for _, sel := range sels {
 		switch sel := sel.(type) {
 		case *query.Field:
@@ -78,16 +85,17 @@ func applySelectionSet(r *Request, e *resolvable.Object, sels []query.Selection)
 
 			switch field.Name.Name {
 			case "__typename":
-				flattenedSels = append(flattenedSels, &TypenameField{
-					Object: *e,
-					Alias:  field.Alias.Name,
+				flattenedSels = append(flattenedSels, &Field{
+					Field:       resolvable.MetaFieldTypename,
+					Alias:       field.Alias.Name,
+					FixedResult: reflect.ValueOf(t.TypeName()),
 				})
 
 			case "__schema":
-				flattenedSels = append(flattenedSels, &SchemaField{
+				flattenedSels = append(flattenedSels, &Field{
 					Field:       resolvable.MetaFieldSchema,
 					Alias:       field.Alias.Name,
-					Sels:        applySelectionSet(r, resolvable.MetaSchema, field.Selections),
+					SubSel:      applySelectionSet(r, resolvable.MetaSchema, resolvable.MetaSchema.Type, field.Selections),
 					Async:       true,
 					FixedResult: reflect.ValueOf(introspection.WrapSchema(r.Schema)),
 				})
@@ -105,10 +113,10 @@ func applySelectionSet(r *Request, e *resolvable.Object, sels []query.Selection)
 					return nil
 				}
 
-				flattenedSels = append(flattenedSels, &SchemaField{
+				flattenedSels = append(flattenedSels, &Field{
 					Field:       resolvable.MetaFieldType,
 					Alias:       field.Alias.Name,
-					Sels:        applySelectionSet(r, resolvable.MetaType, field.Selections),
+					SubSel:      applySelectionSet(r, resolvable.MetaType, resolvable.MetaType.Type, field.Selections),
 					Async:       true,
 					FixedResult: reflect.ValueOf(introspection.WrapType(t)),
 				})
@@ -117,28 +125,27 @@ func applySelectionSet(r *Request, e *resolvable.Object, sels []query.Selection)
 				fe := e.Fields[field.Name.Name]
 
 				var args map[string]interface{}
-				var packedArgs reflect.Value
-				if fe.ArgsPacker != nil {
+				if len(field.Arguments) > 0 {
 					args = make(map[string]interface{})
 					for _, arg := range field.Arguments {
 						args[arg.Name.Name] = arg.Value.Value(r.Vars)
 					}
-					var err error
-					packedArgs, err = fe.ArgsPacker.Pack(args)
-					if err != nil {
-						r.AddError(errors.Errorf("%s", err))
-						return
-					}
+				}
+
+				res, async, err := fe.Resolver.Select(args)
+				if err != nil {
+					r.AddError(errors.Errorf("%s", err))
+					return
 				}
 
 				fieldSels := applyField(r, fe.ValueExec, field.Selections)
-				flattenedSels = append(flattenedSels, &SchemaField{
-					Field:      *fe,
-					Alias:      field.Alias.Name,
-					Args:       args,
-					PackedArgs: packedArgs,
-					Sels:       fieldSels,
-					Async:      fe.HasContext || fe.ArgsPacker != nil || fe.HasError || HasAsyncSel(fieldSels),
+				flattenedSels = append(flattenedSels, &Field{
+					Field:    *fe,
+					Alias:    field.Alias.Name,
+					Args:     args,
+					Resolver: res,
+					SubSel:   fieldSels,
+					Async:    async || hasAsyncSel(fieldSels),
 				})
 			}
 
@@ -147,14 +154,14 @@ func applySelectionSet(r *Request, e *resolvable.Object, sels []query.Selection)
 			if skipByDirective(r, frag.Directives) {
 				continue
 			}
-			flattenedSels = append(flattenedSels, applyFragment(r, e, &frag.Fragment)...)
+			flattenedSels = append(flattenedSels, applyFragment(r, e, t, &frag.Fragment)...)
 
 		case *query.FragmentSpread:
 			spread := sel
 			if skipByDirective(r, spread.Directives) {
 				continue
 			}
-			flattenedSels = append(flattenedSels, applyFragment(r, e, &r.Doc.Fragments.Get(spread.Name.Name).Fragment)...)
+			flattenedSels = append(flattenedSels, applyFragment(r, e, t, &r.Doc.Fragments.Get(spread.Name.Name).Fragment)...)
 
 		default:
 			panic("invalid type")
@@ -163,25 +170,44 @@ func applySelectionSet(r *Request, e *resolvable.Object, sels []query.Selection)
 	return
 }
 
-func applyFragment(r *Request, e *resolvable.Object, frag *query.Fragment) []Selection {
-	if frag.On.Name != "" && frag.On.Name != e.Name {
-		a, ok := e.TypeAssertions[frag.On.Name]
-		if !ok {
-			panic(fmt.Errorf("%q does not implement %q", frag.On, e.Name)) // TODO proper error handling
+func applyFragment(r *Request, e *resolvable.Object, t schema.NamedType, frag *query.Fragment) []*Field {
+	if frag.On.Name != "" {
+		for _, on := range possibleTypes(r.Schema.Types[frag.On.Name]) {
+			if on == t {
+				return applySelectionSet(r, e, t, frag.Selections)
+			}
 		}
-
-		return []Selection{&TypeAssertion{
-			TypeAssertion: *a,
-			Sels:          applySelectionSet(r, a.TypeExec.(*resolvable.Object), frag.Selections),
-		}}
+		return nil
 	}
-	return applySelectionSet(r, e, frag.Selections)
+	return applySelectionSet(r, e, t, frag.Selections)
 }
 
-func applyField(r *Request, e resolvable.Resolvable, sels []query.Selection) []Selection {
+func possibleTypes(t common.Type) []*schema.Object {
+	switch t := t.(type) {
+	case *schema.Object:
+		return []*schema.Object{t}
+	case *schema.Interface:
+		return t.PossibleTypes
+	case *schema.Union:
+		return t.PossibleTypes
+	default:
+		panic("unreachable")
+	}
+}
+
+func applyField(r *Request, e resolvable.Resolvable, sels []query.Selection) SubSelection {
 	switch e := e.(type) {
 	case *resolvable.Object:
-		return applySelectionSet(r, e, sels)
+		return applySelectionSet(r, e, e.Type, sels)
+	case *resolvable.Interface:
+		var s interfaceSubSelection
+		for _, opt := range e.Options {
+			s = append(s, interfaceSubSelectionOption{
+				TypePair: opt.TypePair,
+				SubSel:   applySelectionSet(r, opt.Exec.(*resolvable.Object), opt.GraphQLType.(schema.NamedType), sels),
+			})
+		}
+		return s
 	case *resolvable.List:
 		return applyField(r, e.Elem, sels)
 	case *resolvable.Scalar:
@@ -217,22 +243,38 @@ func skipByDirective(r *Request, directives common.DirectiveList) bool {
 	return false
 }
 
-func HasAsyncSel(sels []Selection) bool {
-	for _, sel := range sels {
-		switch sel := sel.(type) {
-		case *SchemaField:
-			if sel.Async {
-				return true
-			}
-		case *TypeAssertion:
-			if HasAsyncSel(sel.Sels) {
-				return true
-			}
-		case *TypenameField:
-			// sync
-		default:
-			panic("unreachable")
+func HasAsyncSel(subSels []SubSelection) bool {
+	for _, s := range subSels {
+		if hasAsyncSel(s) {
+			return true
 		}
 	}
 	return false
+}
+
+func HasAsyncSel1(sels []*Field) bool {
+	return hasAsyncSel(concreteSubSelection(sels))
+}
+
+func hasAsyncSel(subSel SubSelection) bool {
+	switch subSel := subSel.(type) {
+	case concreteSubSelection:
+		for _, f := range subSel {
+			if f.Async {
+				return true
+			}
+		}
+		return false
+	case interfaceSubSelection:
+		for _, opt := range subSel {
+			if hasAsyncSel(opt.SubSel) {
+				return true
+			}
+		}
+		return false
+	case nil:
+		return false
+	default:
+		panic("unreachable")
+	}
 }

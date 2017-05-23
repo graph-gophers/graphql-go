@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/neelance/graphql-go/internal/common"
 	"github.com/neelance/graphql-go/internal/exec/packer"
@@ -18,30 +17,30 @@ type Schema struct {
 	Resolver reflect.Value
 }
 
-type Resolvable interface {
+type Resolvable interface { // TODO rename? remove?
 	isResolvable()
 }
 
 type Object struct {
-	Name           string
-	Fields         map[string]*Field
-	TypeAssertions map[string]*TypeAssertion
+	Type   schema.NamedType
+	Fields map[string]*Field
 }
 
 type Field struct {
 	schema.Field
-	TypeName    string
-	MethodIndex int
-	HasContext  bool
-	ArgsPacker  *packer.StructPacker
-	HasError    bool
-	ValueExec   Resolvable
-	TraceLabel  string
+	TypeName   string
+	Resolver   *Resolver
+	ValueExec  Resolvable
+	TraceLabel string
 }
 
-type TypeAssertion struct {
-	MethodIndex int
-	TypeExec    Resolvable
+type Interface struct {
+	Options []*InterfaceOption
+}
+
+type InterfaceOption struct {
+	common.TypePair
+	Exec Resolvable
 }
 
 type List struct {
@@ -50,23 +49,34 @@ type List struct {
 
 type Scalar struct{}
 
-func (*Object) isResolvable() {}
-func (*List) isResolvable()   {}
-func (*Scalar) isResolvable() {}
+func (*Object) isResolvable()    {}
+func (*Interface) isResolvable() {}
+func (*List) isResolvable()      {}
+func (*Scalar) isResolvable()    {}
 
-func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
-	b := newBuilder(s)
+type Resolver struct {
+	Select     func(args map[string]interface{}) (SelectedResolver, bool, error)
+	ResultType reflect.Type
+}
+
+type TypeToResolversMap map[common.TypePair]FieldToResolverMap
+type FieldToResolverMap map[string]*Resolver
+
+type SelectedResolver func(ctx context.Context, parent reflect.Value) (reflect.Value, error)
+
+func ApplyResolvers(s *schema.Schema, resolvers TypeToResolversMap, root interface{}) (*Schema, error) {
+	b := newBuilder(s, resolvers)
 
 	var query, mutation Resolvable
 
 	if t, ok := s.EntryPoints["query"]; ok {
-		if err := b.assignExec(&query, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&query, t, reflect.TypeOf(root)); err != nil {
 			return nil, err
 		}
 	}
 
 	if t, ok := s.EntryPoints["mutation"]; ok {
-		if err := b.assignExec(&mutation, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&mutation, t, reflect.TypeOf(root)); err != nil {
 			return nil, err
 		}
 	}
@@ -77,21 +87,16 @@ func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 
 	return &Schema{
 		Schema:   *s,
-		Resolver: reflect.ValueOf(resolver),
+		Resolver: reflect.ValueOf(root),
 		Query:    query,
 		Mutation: mutation,
 	}, nil
 }
 
 type execBuilder struct {
-	schema        *schema.Schema
-	resMap        map[typePair]*resMapEntry
-	packerBuilder *packer.Builder
-}
-
-type typePair struct {
-	graphQLType  common.Type
-	resolverType reflect.Type
+	schema    *schema.Schema
+	resolvers TypeToResolversMap
+	resMap    map[common.TypePair]*resMapEntry
 }
 
 type resMapEntry struct {
@@ -99,11 +104,11 @@ type resMapEntry struct {
 	targets []*Resolvable
 }
 
-func newBuilder(s *schema.Schema) *execBuilder {
+func newBuilder(s *schema.Schema, resolvers TypeToResolversMap) *execBuilder {
 	return &execBuilder{
-		schema:        s,
-		resMap:        make(map[typePair]*resMapEntry),
-		packerBuilder: packer.NewBuilder(),
+		schema:    s,
+		resolvers: resolvers,
+		resMap:    make(map[common.TypePair]*resMapEntry),
 	}
 }
 
@@ -114,17 +119,17 @@ func (b *execBuilder) finish() error {
 		}
 	}
 
-	return b.packerBuilder.Finish()
+	return nil
 }
 
-func (b *execBuilder) assignExec(target *Resolvable, t common.Type, resolverType reflect.Type) error {
-	k := typePair{t, resolverType}
+func (b *execBuilder) assignExec(target *Resolvable, t common.Type, valueType reflect.Type) error {
+	k := common.TypePair{GraphQLType: t, GoType: valueType}
 	ref, ok := b.resMap[k]
 	if !ok {
 		ref = &resMapEntry{}
 		b.resMap[k] = ref
 		var err error
-		ref.exec, err = b.makeExec(t, resolverType)
+		ref.exec, err = b.makeExec(t, valueType)
 		if err != nil {
 			return err
 		}
@@ -133,41 +138,41 @@ func (b *execBuilder) assignExec(target *Resolvable, t common.Type, resolverType
 	return nil
 }
 
-func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type) (Resolvable, error) {
+func (b *execBuilder) makeExec(t common.Type, valueType reflect.Type) (Resolvable, error) {
 	var nonNull bool
 	t, nonNull = unwrapNonNull(t)
 
 	switch t := t.(type) {
 	case *schema.Object:
-		return b.makeObjectExec(t.Name, t.Fields, nil, nonNull, resolverType)
+		return b.makeObjectExec(t, valueType, nonNull)
 
 	case *schema.Interface:
-		return b.makeObjectExec(t.Name, t.Fields, t.PossibleTypes, nonNull, resolverType)
+		return b.makeInterfaceExec(t.PossibleTypes)
 
 	case *schema.Union:
-		return b.makeObjectExec(t.Name, nil, t.PossibleTypes, nonNull, resolverType)
+		return b.makeInterfaceExec(t.PossibleTypes)
 	}
 
 	if !nonNull {
-		if resolverType.Kind() != reflect.Ptr {
-			return nil, fmt.Errorf("%s is not a pointer", resolverType)
+		if valueType.Kind() != reflect.Ptr {
+			return nil, fmt.Errorf("%s is not a pointer", valueType)
 		}
-		resolverType = resolverType.Elem()
+		valueType = valueType.Elem()
 	}
 
 	switch t := t.(type) {
 	case *schema.Scalar:
-		return makeScalarExec(t, resolverType)
+		return makeScalarExec(t, valueType)
 
 	case *schema.Enum:
 		return &Scalar{}, nil
 
 	case *common.List:
-		if resolverType.Kind() != reflect.Slice {
-			return nil, fmt.Errorf("%s is not a slice", resolverType)
+		if valueType.Kind() != reflect.Slice {
+			return nil, fmt.Errorf("%s is not a slice", valueType)
 		}
 		e := &List{}
-		if err := b.assignExec(&e.Elem, t.OfType, resolverType.Elem()); err != nil {
+		if err := b.assignExec(&e.Elem, t.OfType, valueType.Elem()); err != nil {
 			return nil, err
 		}
 		return e, nil
@@ -177,9 +182,9 @@ func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type) (Resolv
 	}
 }
 
-func makeScalarExec(t *schema.Scalar, resolverType reflect.Type) (Resolvable, error) {
+func makeScalarExec(t *schema.Scalar, valueType reflect.Type) (Resolvable, error) {
 	implementsType := false
-	switch r := reflect.New(resolverType).Interface().(type) {
+	switch r := reflect.New(valueType).Interface().(type) {
 	case *int32:
 		implementsType = (t.Name == "Int")
 	case *float64:
@@ -192,131 +197,61 @@ func makeScalarExec(t *schema.Scalar, resolverType reflect.Type) (Resolvable, er
 		implementsType = r.ImplementsGraphQLType(t.Name)
 	}
 	if !implementsType {
-		return nil, fmt.Errorf("can not use %s as %s", resolverType, t.Name)
+		return nil, fmt.Errorf("can not use %s as %s", valueType, t.Name)
 	}
 	return &Scalar{}, nil
 }
 
-func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, possibleTypes []*schema.Object, nonNull bool, resolverType reflect.Type) (*Object, error) {
+func (b *execBuilder) makeObjectExec(t *schema.Object, valueType reflect.Type, nonNull bool) (*Object, error) {
 	if !nonNull {
-		if resolverType.Kind() != reflect.Ptr && resolverType.Kind() != reflect.Interface {
-			return nil, fmt.Errorf("%s is not a pointer or interface", resolverType)
+		if valueType.Kind() != reflect.Ptr && valueType.Kind() != reflect.Interface {
+			return nil, fmt.Errorf("%s is not a pointer or interface", valueType)
 		}
 	}
 
-	methodHasReceiver := resolverType.Kind() != reflect.Interface
-
-	Fields := make(map[string]*Field)
-	for _, f := range fields {
-		methodIndex := findMethod(resolverType, f.Name)
-		if methodIndex == -1 {
-			hint := ""
-			if findMethod(reflect.PtrTo(resolverType), f.Name) != -1 {
-				hint = " (hint: the method exists on the pointer type)"
-			}
-			return nil, fmt.Errorf("%s does not resolve %q: missing method for field %q%s", resolverType, typeName, f.Name, hint)
-		}
-
-		m := resolverType.Method(methodIndex)
-		fe, err := b.makeFieldExec(typeName, f, m, methodIndex, methodHasReceiver)
-		if err != nil {
-			return nil, fmt.Errorf("%s\n\treturned by (%s).%s", err, resolverType, m.Name)
-		}
-		Fields[f.Name] = fe
+	fieldResolvers, ok := b.resolvers[common.TypePair{GraphQLType: t, GoType: valueType}]
+	if !ok {
+		return nil, fmt.Errorf("no resolvers declared for %s used as %q", valueType, t)
 	}
 
-	typeAssertions := make(map[string]*TypeAssertion)
-	for _, impl := range possibleTypes {
-		methodIndex := findMethod(resolverType, "to"+impl.Name)
-		if methodIndex == -1 {
-			return nil, fmt.Errorf("%s does not resolve %q: missing method %q to convert to %q", resolverType, typeName, "to"+impl.Name, impl.Name)
+	resFields := make(map[string]*Field)
+	for _, f := range t.Fields {
+		r, ok := fieldResolvers[f.Name]
+		if !ok {
+			return nil, fmt.Errorf("missing resolver %q for %s used as %q", f.Name, valueType, t)
 		}
-		if resolverType.Method(methodIndex).Type.NumOut() != 2 {
-			return nil, fmt.Errorf("%s does not resolve %q: method %q should return a value and a bool indicating success", resolverType, typeName, "to"+impl.Name)
+		fe := &Field{
+			Field:      *f,
+			TypeName:   t.String(),
+			Resolver:   r,
+			TraceLabel: fmt.Sprintf("GraphQL field: %s.%s", t, f.Name),
 		}
-		a := &TypeAssertion{
-			MethodIndex: methodIndex,
-		}
-		if err := b.assignExec(&a.TypeExec, impl, resolverType.Method(methodIndex).Type.Out(0)); err != nil {
+		if err := b.assignExec(&fe.ValueExec, f.Type, r.ResultType); err != nil {
 			return nil, err
 		}
-		typeAssertions[impl.Name] = a
+		resFields[f.Name] = fe
 	}
 
 	return &Object{
-		Name:           typeName,
-		Fields:         Fields,
-		TypeAssertions: typeAssertions,
+		Type:   t,
+		Fields: resFields,
 	}, nil
 }
 
-var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
-var errorType = reflect.TypeOf((*error)(nil)).Elem()
-
-func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.Method, methodIndex int, methodHasReceiver bool) (*Field, error) {
-	in := make([]reflect.Type, m.Type.NumIn())
-	for i := range in {
-		in[i] = m.Type.In(i)
-	}
-	if methodHasReceiver {
-		in = in[1:] // first parameter is receiver
-	}
-
-	hasContext := len(in) > 0 && in[0] == contextType
-	if hasContext {
-		in = in[1:]
-	}
-
-	var argsPacker *packer.StructPacker
-	if len(f.Args) > 0 {
-		if len(in) == 0 {
-			return nil, fmt.Errorf("must have parameter for field arguments")
-		}
-		var err error
-		argsPacker, err = b.packerBuilder.MakeStructPacker(f.Args, in[0])
-		if err != nil {
-			return nil, err
-		}
-		in = in[1:]
-	}
-
-	if len(in) > 0 {
-		return nil, fmt.Errorf("too many parameters")
-	}
-
-	if m.Type.NumOut() > 2 {
-		return nil, fmt.Errorf("too many return values")
-	}
-
-	hasError := m.Type.NumOut() == 2
-	if hasError {
-		if m.Type.Out(1) != errorType {
-			return nil, fmt.Errorf(`must have "error" as its second return value`)
+func (b *execBuilder) makeInterfaceExec(possibleTypes []*schema.Object) (*Interface, error) {
+	iface := &Interface{}
+	for _, pt := range possibleTypes {
+		for tp := range b.resolvers {
+			if tp.GraphQLType == pt {
+				opt := &InterfaceOption{TypePair: tp}
+				if err := b.assignExec(&opt.Exec, tp.GraphQLType, tp.GoType); err != nil {
+					return nil, err
+				}
+				iface.Options = append(iface.Options, opt)
+			}
 		}
 	}
-
-	fe := &Field{
-		Field:       *f,
-		TypeName:    typeName,
-		MethodIndex: methodIndex,
-		HasContext:  hasContext,
-		ArgsPacker:  argsPacker,
-		HasError:    hasError,
-		TraceLabel:  fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name),
-	}
-	if err := b.assignExec(&fe.ValueExec, f.Type, m.Type.Out(0)); err != nil {
-		return nil, err
-	}
-	return fe, nil
-}
-
-func findMethod(t reflect.Type, name string) int {
-	for i := 0; i < t.NumMethod(); i++ {
-		if strings.EqualFold(stripUnderscore(name), stripUnderscore(t.Method(i).Name)) {
-			return i
-		}
-	}
-	return -1
+	return iface, nil
 }
 
 func unwrapNonNull(t common.Type) (common.Type, bool) {
@@ -324,8 +259,4 @@ func unwrapNonNull(t common.Type) (common.Type, bool) {
 		return nn.OfType, true
 	}
 	return t, false
-}
-
-func stripUnderscore(s string) string {
-	return strings.Replace(s, "_", "", -1)
 }

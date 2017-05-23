@@ -16,13 +16,8 @@ type packer interface {
 }
 
 type Builder struct {
-	packerMap     map[typePair]*packerMapEntry
+	packerMap     map[common.TypePair]*packerMapEntry
 	structPackers []*StructPacker
-}
-
-type typePair struct {
-	graphQLType  common.Type
-	resolverType reflect.Type
 }
 
 type packerMapEntry struct {
@@ -32,7 +27,7 @@ type packerMapEntry struct {
 
 func NewBuilder() *Builder {
 	return &Builder{
-		packerMap: make(map[typePair]*packerMapEntry),
+		packerMap: make(map[common.TypePair]*packerMapEntry),
 	}
 }
 
@@ -60,7 +55,7 @@ func (b *Builder) Finish() error {
 }
 
 func (b *Builder) assignPacker(target *packer, schemaType common.Type, reflectType reflect.Type) error {
-	k := typePair{schemaType, reflectType}
+	k := common.TypePair{GraphQLType: schemaType, GoType: reflectType}
 	ref, ok := b.packerMap[k]
 	if !ok {
 		ref = &packerMapEntry{}

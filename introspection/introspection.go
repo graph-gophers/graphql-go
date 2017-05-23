@@ -1,11 +1,74 @@
 package introspection
 
 import (
+	"reflect"
 	"sort"
 
 	"github.com/neelance/graphql-go/internal/common"
+	"github.com/neelance/graphql-go/internal/exec/resolvable"
+	"github.com/neelance/graphql-go/internal/resolvers"
 	"github.com/neelance/graphql-go/internal/schema"
 )
+
+func init() {
+	b := resolvers.NewBuilder(schema.Meta)
+
+	b.Resolvers("__Schema", (*Schema)(nil), map[string]interface{}{
+		"directives":       (*Schema).Directives,
+		"mutationType":     (*Schema).MutationType,
+		"queryType":        (*Schema).QueryType,
+		"subscriptionType": (*Schema).SubscriptionType,
+		"types":            (*Schema).Types,
+	})
+
+	b.Resolvers("__Type", (*Type)(nil), map[string]interface{}{
+		"description":   (*Type).Description,
+		"enumValues":    (*Type).EnumValues,
+		"fields":        (*Type).Fields,
+		"inputFields":   (*Type).InputFields,
+		"interfaces":    (*Type).Interfaces,
+		"kind":          (*Type).Kind,
+		"name":          (*Type).Name,
+		"ofType":        (*Type).OfType,
+		"possibleTypes": (*Type).PossibleTypes,
+	})
+
+	b.Resolvers("__Field", (*Field)(nil), map[string]interface{}{
+		"args":              (*Field).Args,
+		"deprecationReason": (*Field).DeprecationReason,
+		"description":       (*Field).Description,
+		"isDeprecated":      (*Field).IsDeprecated,
+		"name":              (*Field).Name,
+		"type":              (*Field).Type,
+	})
+
+	b.Resolvers("__InputValue", (*InputValue)(nil), map[string]interface{}{
+		"defaultValue": (*InputValue).DefaultValue,
+		"description":  (*InputValue).Description,
+		"name":         (*InputValue).Name,
+		"type":         (*InputValue).Type,
+	})
+
+	b.Resolvers("__EnumValue", (*EnumValue)(nil), map[string]interface{}{
+		"deprecationReason": (*EnumValue).DeprecationReason,
+		"description":       (*EnumValue).Description,
+		"isDeprecated":      (*EnumValue).IsDeprecated,
+		"name":              (*EnumValue).Name,
+	})
+
+	b.Resolvers("__Directive", (*Directive)(nil), map[string]interface{}{
+		"args":        (*Directive).Args,
+		"description": (*Directive).Description,
+		"locations":   (*Directive).Locations,
+		"name":        (*Directive).Name,
+	})
+
+	if err := b.PackerBuilder.Finish(); err != nil {
+		panic(err)
+	}
+
+	resolvable.InitMeta(b.ResolverMap, reflect.TypeOf((*Schema)(nil)), reflect.TypeOf((*Type)(nil)))
+}
 
 type Schema struct {
 	schema *schema.Schema

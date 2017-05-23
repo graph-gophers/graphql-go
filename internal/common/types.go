@@ -1,6 +1,8 @@
 package common
 
 import (
+	"reflect"
+
 	"github.com/neelance/graphql-go/errors"
 )
 
@@ -77,4 +79,9 @@ func ResolveType(t Type, resolver Resolver) (Type, *errors.QueryError) {
 	default:
 		return t, nil
 	}
+}
+
+type TypePair struct {
+	GraphQLType Type
+	GoType      reflect.Type
 }

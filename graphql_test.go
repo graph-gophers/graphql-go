@@ -5,194 +5,78 @@ import (
 	"testing"
 	"time"
 
-	"github.com/neelance/graphql-go"
+	graphql "github.com/neelance/graphql-go"
 	"github.com/neelance/graphql-go/example/starwars"
 	"github.com/neelance/graphql-go/gqltesting"
 )
 
-type helloWorldResolver1 struct{}
-
-func (r *helloWorldResolver1) Hello() string {
-	return "Hello world!"
-}
-
-type helloWorldResolver2 struct{}
-
-func (r *helloWorldResolver2) Hello(ctx context.Context) (string, error) {
-	return "Hello world!", nil
-}
-
-type helloSnakeResolver1 struct{}
-
-func (r *helloSnakeResolver1) HelloHTML() string {
-	return "Hello snake!"
-}
-
-func (r *helloSnakeResolver1) SayHello(args struct{ FullName string }) string {
-	return "Hello " + args.FullName + "!"
-}
-
-type helloSnakeResolver2 struct{}
-
-func (r *helloSnakeResolver2) HelloHTML(ctx context.Context) (string, error) {
-	return "Hello snake!", nil
-}
-
-func (r *helloSnakeResolver2) SayHello(ctx context.Context, args struct{ FullName string }) (string, error) {
-	return "Hello " + args.FullName + "!", nil
-}
-
-type theNumberResolver struct {
-	number int32
-}
-
-func (r *theNumberResolver) TheNumber() int32 {
-	return r.number
-}
-
-func (r *theNumberResolver) ChangeTheNumber(args struct{ NewNumber int32 }) *theNumberResolver {
-	r.number = args.NewNumber
-	return r
-}
-
-type timeResolver struct{}
-
-func (r *timeResolver) AddHour(args struct{ Time graphql.Time }) graphql.Time {
-	return graphql.Time{Time: args.Time.Add(time.Hour)}
-}
-
-var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
+var starwarsSchema = starwars.Schema()
 
 func TestHelloWorld(t *testing.T) {
-	gqltesting.RunTests(t, []*gqltesting.Test{
-		{
-			Schema: graphql.MustParseSchema(`
-				schema {
-					query: Query
-				}
+	type query struct{}
 
-				type Query {
-					hello: String!
-				}
-			`, &helloWorldResolver1{}),
-			Query: `
-				{
-					hello
-				}
-			`,
-			ExpectedResult: `
-				{
-					"hello": "Hello world!"
-				}
-			`,
+	b := graphql.ParseSchema(`
+		schema {
+			query: Query
+		}
+
+		type Query {
+			hello1: String!
+			hello2: String!
+		}
+	`)
+
+	b.Resolvers("Query", (*query)(nil), map[string]interface{}{
+		"hello1": func(_ *query) string {
+			return "Hello world!"
 		},
 
-		{
-			Schema: graphql.MustParseSchema(`
-				schema {
-					query: Query
-				}
+		"hello2": func(_ *query, ctx context.Context) (string, error) {
+			return "Hello world!", nil
+		},
+	})
 
-				type Query {
-					hello: String!
-				}
-			`, &helloWorldResolver2{}),
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: b.Build(&query{}),
 			Query: `
 				{
-					hello
+					hello1
+					hello2
 				}
 			`,
 			ExpectedResult: `
 				{
-					"hello": "Hello world!"
+					"hello1": "Hello world!",
+					"hello2": "Hello world!"
 				}
 			`,
 		},
 	})
 }
 
-func TestHelloSnake(t *testing.T) {
-	gqltesting.RunTests(t, []*gqltesting.Test{
-		{
-			Schema: graphql.MustParseSchema(`
-				schema {
-					query: Query
-				}
+func TestSnakeCase(t *testing.T) {
+	b := graphql.ParseSchema(`
+		schema {
+			query: Query
+		}
 
-				type Query {
-					hello_html: String!
-				}
-			`, &helloSnakeResolver1{}),
-			Query: `
-				{
-					hello_html
-				}
-			`,
-			ExpectedResult: `
-				{
-					"hello_html": "Hello snake!"
-				}
-			`,
-		},
+		type Query {
+			say_hello(full_name: String!): String!
+		}
+	`)
 
-		{
-			Schema: graphql.MustParseSchema(`
-				schema {
-					query: Query
-				}
+	type snakeResolver struct{}
 
-				type Query {
-					hello_html: String!
-				}
-			`, &helloSnakeResolver2{}),
-			Query: `
-				{
-					hello_html
-				}
-			`,
-			ExpectedResult: `
-				{
-					"hello_html": "Hello snake!"
-				}
-			`,
+	b.Resolvers("Query", (*snakeResolver)(nil), map[string]interface{}{
+		"say_hello": func(r *snakeResolver, args struct{ FullName string }) string {
+			return "Hello " + args.FullName + "!"
 		},
 	})
-}
 
-func TestHelloSnakeArguments(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
-			Schema: graphql.MustParseSchema(`
-				schema {
-					query: Query
-				}
-
-				type Query {
-					say_hello(full_name: String!): String!
-				}
-			`, &helloSnakeResolver1{}),
-			Query: `
-				{
-					say_hello(full_name: "Rob Pike")
-				}
-			`,
-			ExpectedResult: `
-				{
-					"say_hello": "Hello Rob Pike!"
-				}
-			`,
-		},
-
-		{
-			Schema: graphql.MustParseSchema(`
-				schema {
-					query: Query
-				}
-
-				type Query {
-					say_hello(full_name: String!): String!
-				}
-			`, &helloSnakeResolver2{}),
+			Schema: b.Build(&snakeResolver{}),
 			Query: `
 				{
 					say_hello(full_name: "Rob Pike")
@@ -579,78 +463,76 @@ func TestIncludeDirective(t *testing.T) {
 	})
 }
 
-type testDeprecatedDirectiveResolver struct{}
-
-func (r *testDeprecatedDirectiveResolver) A() int32 {
-	return 0
-}
-
-func (r *testDeprecatedDirectiveResolver) B() int32 {
-	return 0
-}
-
-func (r *testDeprecatedDirectiveResolver) C() int32 {
-	return 0
-}
-
 func TestDeprecatedDirective(t *testing.T) {
+	type query struct{}
+
+	b1 := graphql.ParseSchema(`
+		schema {
+			query: Query
+		}
+
+		type Query {
+			a: Int!
+			b: Int! @deprecated
+			c: Int! @deprecated(reason: "We don't like it")
+		}
+	`)
+	b1.Resolvers("Query", (*query)(nil), map[string]interface{}{
+		"a": func(*query) int32 { return 0 },
+		"b": func(*query) int32 { return 0 },
+		"c": func(*query) int32 { return 0 },
+	})
+
+	b2 := graphql.ParseSchema(`
+		schema {
+			query: Query
+		}
+
+		type Query {
+		}
+
+		enum Test {
+			A
+			B @deprecated
+			C @deprecated(reason: "We don't like it")
+		}
+	`)
+	b2.Resolvers("Query", (*query)(nil), map[string]interface{}{})
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
-			Schema: graphql.MustParseSchema(`
-				schema {
-					query: Query
-				}
-
-				type Query {
-					a: Int!
-					b: Int! @deprecated
-					c: Int! @deprecated(reason: "We don't like it")
-				}
-			`, &testDeprecatedDirectiveResolver{}),
+			Schema: b1.Build(&query{}),
 			Query: `
-				{
-					__type(name: "Query") {
-						fields {
-							name
-						}
-						allFields: fields(includeDeprecated: true) {
-							name
-							isDeprecated
-							deprecationReason
-						}
+			{
+				__type(name: "Query") {
+					fields {
+						name
+					}
+					allFields: fields(includeDeprecated: true) {
+						name
+						isDeprecated
+						deprecationReason
 					}
 				}
-			`,
+			}
+		`,
 			ExpectedResult: `
-				{
-					"__type": {
-						"fields": [
-							{ "name": "a" }
-						],
-						"allFields": [
-							{ "name": "a", "isDeprecated": false, "deprecationReason": null },
-							{ "name": "b", "isDeprecated": true, "deprecationReason": "No longer supported" },
-							{ "name": "c", "isDeprecated": true, "deprecationReason": "We don't like it" }
-						]
-					}
+			{
+				"__type": {
+					"fields": [
+						{ "name": "a" }
+					],
+					"allFields": [
+						{ "name": "a", "isDeprecated": false, "deprecationReason": null },
+						{ "name": "b", "isDeprecated": true, "deprecationReason": "No longer supported" },
+						{ "name": "c", "isDeprecated": true, "deprecationReason": "We don't like it" }
+					]
 				}
-			`,
+			}
+		`,
 		},
 		{
-			Schema: graphql.MustParseSchema(`
-				schema {
-					query: Query
-				}
-
-				type Query {
-				}
-
-				enum Test {
-					A
-					B @deprecated
-					C @deprecated(reason: "We don't like it")
-				}
-			`, &testDeprecatedDirectiveResolver{}),
+			Schema: b2.Build(&query{}),
 			Query: `
 				{
 					__type(name: "Test") {
@@ -1426,22 +1308,41 @@ func TestIntrospection(t *testing.T) {
 }
 
 func TestMutationOrder(t *testing.T) {
+	type theNumberResolver struct {
+		number int32
+	}
+
+	b := graphql.ParseSchema(`
+		schema {
+			query: Query
+			mutation: Mutation
+		}
+
+		type Query {
+			theNumber: Int!
+		}
+
+		type Mutation {
+			changeTheNumber(newNumber: Int!): Query
+		}
+	`)
+
+	b.Resolvers("Query", &theNumberResolver{}, map[string]interface{}{
+		"theNumber": func(r *theNumberResolver) int32 {
+			return r.number
+		},
+	})
+
+	b.Resolvers("Mutation", &theNumberResolver{}, map[string]interface{}{
+		"changeTheNumber": func(r *theNumberResolver, args struct{ NewNumber int32 }) *theNumberResolver {
+			r.number = args.NewNumber
+			return r
+		},
+	})
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
-			Schema: graphql.MustParseSchema(`
-				schema {
-					query: Query
-					mutation: Mutation
-				}
-
-				type Query {
-					theNumber: Int!
-				}
-
-				type Mutation {
-					changeTheNumber(newNumber: Int!): Query
-				}
-			`, &theNumberResolver{}),
+			Schema: b.Build(&theNumberResolver{}),
 			Query: `
 				mutation {
 					first: changeTheNumber(newNumber: 1) {
@@ -1473,19 +1374,29 @@ func TestMutationOrder(t *testing.T) {
 }
 
 func TestTime(t *testing.T) {
+	b := graphql.ParseSchema(`
+		schema {
+			query: Query
+		}
+
+		type Query {
+			addHour(time: Time = "2001-02-03T04:05:06Z"): Time!
+		}
+
+		scalar Time
+	`)
+
+	type timeResolver struct{}
+
+	b.Resolvers("Query", (*timeResolver)(nil), map[string]interface{}{
+		"addHour": func(r *timeResolver, args struct{ Time graphql.Time }) graphql.Time {
+			return graphql.Time{Time: args.Time.Add(time.Hour)}
+		},
+	})
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
-			Schema: graphql.MustParseSchema(`
-				schema {
-					query: Query
-				}
-
-				type Query {
-					addHour(time: Time = "2001-02-03T04:05:06Z"): Time!
-				}
-
-				scalar Time
-			`, &timeResolver{}),
+			Schema: b.Build(&timeResolver{}),
 			Query: `
 				query($t: Time!) {
 					a: addHour(time: $t)
@@ -1505,115 +1416,8 @@ func TestTime(t *testing.T) {
 	})
 }
 
-type resolverWithUnexportedMethod struct{}
-
-func (r *resolverWithUnexportedMethod) changeTheNumber(args struct{ NewNumber int32 }) int32 {
-	return args.NewNumber
-}
-
-func TestUnexportedMethod(t *testing.T) {
-	_, err := graphql.ParseSchema(`
-		schema {
-			mutation: Mutation
-		}
-
-		type Mutation {
-			changeTheNumber(newNumber: Int!): Int!
-		}
-	`, &resolverWithUnexportedMethod{})
-	if err == nil {
-		t.Error("error expected")
-	}
-}
-
-type resolverWithUnexportedField struct{}
-
-func (r *resolverWithUnexportedField) ChangeTheNumber(args struct{ newNumber int32 }) int32 {
-	return args.newNumber
-}
-
-func TestUnexportedField(t *testing.T) {
-	_, err := graphql.ParseSchema(`
-		schema {
-			mutation: Mutation
-		}
-
-		type Mutation {
-			changeTheNumber(newNumber: Int!): Int!
-		}
-	`, &resolverWithUnexportedField{})
-	if err == nil {
-		t.Error("error expected")
-	}
-}
-
-type inputResolver struct{}
-
-func (r *inputResolver) Int(args struct{ Value int32 }) int32 {
-	return args.Value
-}
-
-func (r *inputResolver) Float(args struct{ Value float64 }) float64 {
-	return args.Value
-}
-
-func (r *inputResolver) String(args struct{ Value string }) string {
-	return args.Value
-}
-
-func (r *inputResolver) Boolean(args struct{ Value bool }) bool {
-	return args.Value
-}
-
-func (r *inputResolver) Nullable(args struct{ Value *int32 }) *int32 {
-	return args.Value
-}
-
-func (r *inputResolver) List(args struct{ Value []*struct{ V int32 } }) []int32 {
-	l := make([]int32, len(args.Value))
-	for i, entry := range args.Value {
-		l[i] = entry.V
-	}
-	return l
-}
-
-func (r *inputResolver) NullableList(args struct{ Value *[]*struct{ V int32 } }) *[]*int32 {
-	if args.Value == nil {
-		return nil
-	}
-	l := make([]*int32, len(*args.Value))
-	for i, entry := range *args.Value {
-		if entry != nil {
-			l[i] = &entry.V
-		}
-	}
-	return &l
-}
-
-func (r *inputResolver) Enum(args struct{ Value string }) string {
-	return args.Value
-}
-
-func (r *inputResolver) NullableEnum(args struct{ Value *string }) *string {
-	return args.Value
-}
-
-type recursive struct {
-	Next *recursive
-}
-
-func (r *inputResolver) Recursive(args struct{ Value *recursive }) int32 {
-	n := int32(0)
-	v := args.Value
-	for v != nil {
-		v = v.Next
-		n++
-	}
-	return n
-}
-
 func TestInput(t *testing.T) {
-	coercionSchema := graphql.MustParseSchema(`
+	b := graphql.ParseSchema(`
 		schema {
 			query: Query
 		}
@@ -1643,10 +1447,78 @@ func TestInput(t *testing.T) {
 			Option1
 			Option2
 		}
-	`, &inputResolver{})
+	`)
+
+	type inputResolver struct{}
+
+	type recursive struct {
+		Next *recursive
+	}
+
+	b.Resolvers("Query", (*inputResolver)(nil), map[string]interface{}{
+		"int": func(r *inputResolver, args struct{ Value int32 }) int32 {
+			return args.Value
+		},
+
+		"float": func(r *inputResolver, args struct{ Value float64 }) float64 {
+			return args.Value
+		},
+
+		"string": func(r *inputResolver, args struct{ Value string }) string {
+			return args.Value
+		},
+
+		"boolean": func(r *inputResolver, args struct{ Value bool }) bool {
+			return args.Value
+		},
+
+		"nullable": func(r *inputResolver, args struct{ Value *int32 }) *int32 {
+			return args.Value
+		},
+
+		"list": func(r *inputResolver, args struct{ Value []*struct{ V int32 } }) []int32 {
+			l := make([]int32, len(args.Value))
+			for i, entry := range args.Value {
+				l[i] = entry.V
+			}
+			return l
+		},
+
+		"nullableList": func(r *inputResolver, args struct{ Value *[]*struct{ V int32 } }) *[]*int32 {
+			if args.Value == nil {
+				return nil
+			}
+			l := make([]*int32, len(*args.Value))
+			for i, entry := range *args.Value {
+				if entry != nil {
+					l[i] = &entry.V
+				}
+			}
+			return &l
+		},
+
+		"enum": func(r *inputResolver, args struct{ Value string }) string {
+			return args.Value
+		},
+
+		"nullableEnum": func(r *inputResolver, args struct{ Value *string }) *string {
+			return args.Value
+		},
+
+		"recursive": func(r *inputResolver, args struct{ Value *recursive }) int32 {
+			n := int32(0)
+			v := args.Value
+			for v != nil {
+				v = v.Next
+				n++
+			}
+			return n
+		},
+	})
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
-			Schema: coercionSchema,
+			Schema: b.Build(&inputResolver{}),
 			Query: `
 				{
 					int(value: 42)

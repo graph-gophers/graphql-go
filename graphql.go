@@ -14,6 +14,7 @@ import (
 	"github.com/neelance/graphql-go/internal/exec/resolvable"
 	"github.com/neelance/graphql-go/internal/exec/selected"
 	"github.com/neelance/graphql-go/internal/query"
+	"github.com/neelance/graphql-go/internal/resolvers"
 	"github.com/neelance/graphql-go/internal/schema"
 	"github.com/neelance/graphql-go/internal/validation"
 	"github.com/neelance/graphql-go/introspection"
@@ -42,12 +43,46 @@ func (id ID) MarshalJSON() ([]byte, error) {
 	return strconv.AppendQuote(nil, string(id)), nil
 }
 
+func ParseSchema(schemaString string) *SchemaBuilder {
+	b, err := TryParseSchema(schemaString)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+func TryParseSchema(schemaString string) (*SchemaBuilder, error) {
+	s := schema.New()
+	if err := s.Parse(schemaString); err != nil {
+		return nil, err
+	}
+	return &SchemaBuilder{
+		builder: resolvers.NewBuilder(s),
+	}, nil
+}
+
+type SchemaBuilder struct {
+	builder *resolvers.Builder
+}
+
+func (b *SchemaBuilder) Resolvers(graphqlType string, goType interface{}, fieldMap map[string]interface{}) {
+	b.builder.Resolvers(graphqlType, goType, fieldMap)
+}
+
 // ParseSchema parses a GraphQL schema and attaches the given root resolver. It returns an error if
 // the Go type signature of the resolvers does not match the schema. If nil is passed as the
 // resolver, then the schema can not be executed, but it may be inspected (e.g. with ToJSON).
-func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (*Schema, error) {
+func (b *SchemaBuilder) Build(root interface{}, opts ...SchemaOpt) *Schema {
+	s, err := b.TryBuild(root, opts...)
+	if err != nil {
+		panic(err)
+	}
+	return s
+}
+
+func (b *SchemaBuilder) TryBuild(root interface{}, opts ...SchemaOpt) (*Schema, error) {
 	s := &Schema{
-		schema:         schema.New(),
+		schema:         b.builder.Schema,
 		maxParallelism: 10,
 		tracer:         trace.OpenTracingTracer{},
 		logger:         &log.DefaultLogger{},
@@ -56,12 +91,12 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		opt(s)
 	}
 
-	if err := s.schema.Parse(schemaString); err != nil {
+	if err := b.builder.PackerBuilder.Finish(); err != nil {
 		return nil, err
 	}
 
-	if resolver != nil {
-		r, err := resolvable.ApplyResolver(s.schema, resolver)
+	if root != nil {
+		r, err := resolvable.ApplyResolvers(s.schema, b.builder.ResolverMap, root)
 		if err != nil {
 			return nil, err
 		}
@@ -69,15 +104,6 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 	}
 
 	return s, nil
-}
-
-// MustParseSchema calls ParseSchema and panics on error.
-func MustParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) *Schema {
-	s, err := ParseSchema(schemaString, resolver, opts...)
-	if err != nil {
-		panic(err)
-	}
-	return s
 }
 
 // Schema represents a GraphQL schema with an optional resolver.
