@@ -6,6 +6,12 @@
     "errors": []
   },
   {
+    "name": "Validate: Argument values of correct type/Valid values/Good negative int value",
+    "rule": "ArgumentsOfCorrectType",
+    "query": "\n        {\n          complicatedArgs {\n            intArgField(intArg: -2)\n          }\n        }\n      ",
+    "errors": []
+  },
+  {
     "name": "Validate: Argument values of correct type/Valid values/Good boolean value",
     "rule": "ArgumentsOfCorrectType",
     "query": "\n        {\n          complicatedArgs {\n            booleanArgField(booleanArg: true)\n          }\n        }\n      ",
@@ -21,6 +27,12 @@
     "name": "Validate: Argument values of correct type/Valid values/Good float value",
     "rule": "ArgumentsOfCorrectType",
     "query": "\n        {\n          complicatedArgs {\n            floatArgField(floatArg: 1.1)\n          }\n        }\n      ",
+    "errors": []
+  },
+  {
+    "name": "Validate: Argument values of correct type/Valid values/Good negative float value",
+    "rule": "ArgumentsOfCorrectType",
+    "query": "\n        {\n          complicatedArgs {\n            floatArgField(floatArg: -1.1)\n          }\n        }\n      ",
     "errors": []
   },
   {
