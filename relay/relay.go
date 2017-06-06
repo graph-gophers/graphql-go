@@ -50,16 +50,34 @@ type Handler struct {
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var params struct {
-		Query         string                 `json:"query"`
-		OperationName string                 `json:"operationName"`
-		Variables     map[string]interface{} `json:"variables"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		Query         string `json:"query"`
+		OperationName string `json:"operationName"`
+		Variables     string `json:"variables"`
 	}
 
-	response := h.Schema.Exec(r.Context(), params.Query, params.OperationName, params.Variables)
+	var parsedVariables map[string]interface{}
+
+	if r.Method == http.MethodGet {
+		params.Query = r.URL.Query().Get("query")
+		params.Variables = r.URL.Query().Get("variables")
+		params.OperationName = r.URL.Query().Get("operationName")
+	} else {
+		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	if len(params.Variables) > 0 {
+		if err := json.Unmarshal([]byte(params.Variables), &parsedVariables); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else {
+		parsedVariables = make(map[string]interface{})
+	}
+
+	response := h.Schema.Exec(r.Context(), params.Query, params.OperationName, parsedVariables)
 	responseJSON, err := json.Marshal(response)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
