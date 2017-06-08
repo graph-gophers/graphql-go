@@ -336,7 +336,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 
 func findMethod(t reflect.Type, name string) int {
 	for i := 0; i < t.NumMethod(); i++ {
-		if strings.EqualFold(stripUnderscore(name), stripUnderscore(t.Method(i).Name)) {
+		if strings.EqualFold(stripUnderscore(name), stripGetPrefixAndUnderscore(t.Method(i).Name)) {
 			return i
 		}
 	}
@@ -348,6 +348,13 @@ func unwrapNonNull(t common.Type) (common.Type, bool) {
 		return nn.OfType, true
 	}
 	return t, false
+}
+
+func stripGetPrefixAndUnderscore(s string) string {
+	if strings.HasPrefix(s, "Get") {
+		s = s[3:]
+	}
+	return stripUnderscore(s)
 }
 
 func stripUnderscore(s string) string {
