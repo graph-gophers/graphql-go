@@ -8,6 +8,8 @@ import (
 	"github.com/neelance/graphql-go"
 	"github.com/neelance/graphql-go/example/starwars"
 	"github.com/neelance/graphql-go/gqltesting"
+	"fmt"
+	"bytes"
 )
 
 type helloWorldResolver1 struct{}
@@ -1743,4 +1745,72 @@ func TestComposedFragments(t *testing.T) {
 			`,
 		},
 	})
+}
+
+// go test -bench=FragmentQueries -benchmem
+func BenchmarkFragmentQueries(b *testing.B) {
+	singleQuery := `
+		composed_%d: hero(episode: EMPIRE) {
+			name
+			...friendsNames
+			...friendsIds
+		}
+	`
+
+	queryTemplate := `
+		{
+			%s
+		}
+
+		fragment friendsNames on Character {
+			name
+			friends {
+				name
+			}
+		}
+
+		fragment friendsIds on Character {
+			name
+			friends {
+				id
+			}
+		}
+	`
+
+	testCases := []int {
+		1,
+		10,
+		100,
+		1000,
+		10000,
+	}
+
+	for _, c := range testCases {
+		// for each count, add a case for overlapping aliases vs non-overlapping aliases
+		for _, o := range []bool{ true, false } {
+
+			var buffer bytes.Buffer
+			for i := 0; i < c; i++ {
+				idx := 0
+				if o {
+					idx = i
+				}
+				buffer.WriteString(fmt.Sprintf(singleQuery, idx))
+			}
+
+			query := fmt.Sprintf(queryTemplate, buffer.String())
+			a := "overlapping"
+			if o {
+				a = "non-overlapping"
+			}
+			b.Run(fmt.Sprintf("%d queries %s aliases", c, a), func(b *testing.B) {
+				for n := 0; n < b.N; n++ {
+					result := starwarsSchema.Exec(context.Background(), query, "", nil)
+					if len(result.Errors) != 0 {
+						b.Fatal(result.Errors[0])
+					}
+				}
+			})
+		}
+	}
 }
