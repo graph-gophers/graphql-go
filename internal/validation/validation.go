@@ -171,9 +171,10 @@ func validateSelectionSet(c *opContext, sels []query.Selection, t schema.NamedTy
 		validateSelection(c, sel, t)
 	}
 
+	useCache := len(sels) <= 100
 	for i, a := range sels {
 		for _, b := range sels[i+1:] {
-			c.validateOverlap(a, b, nil, nil)
+			c.validateOverlap(a, b, nil, nil, useCache)
 		}
 	}
 }
@@ -381,16 +382,18 @@ func detectFragmentCycleSel(c *context, sel query.Selection, fragVisited map[*qu
 	}
 }
 
-func (c *context) validateOverlap(a, b query.Selection, reasons *[]string, locs *[]errors.Location) {
+func (c *context) validateOverlap(a, b query.Selection, reasons *[]string, locs *[]errors.Location, useCache bool) {
 	if a == b {
 		return
 	}
 
-	if _, ok := c.overlapValidated[selectionPair{a, b}]; ok {
-		return
+	if useCache {
+		if _, ok := c.overlapValidated[selectionPair{a, b}]; ok {
+			return
+		}
+		c.overlapValidated[selectionPair{a, b}] = struct{}{}
+		c.overlapValidated[selectionPair{b, a}] = struct{}{}
 	}
-	c.overlapValidated[selectionPair{a, b}] = struct{}{}
-	c.overlapValidated[selectionPair{b, a}] = struct{}{}
 
 	switch a := a.(type) {
 	case *query.Field:
@@ -399,7 +402,7 @@ func (c *context) validateOverlap(a, b query.Selection, reasons *[]string, locs 
 			if b.Alias.Loc.Before(a.Alias.Loc) {
 				a, b = b, a
 			}
-			if reasons2, locs2 := c.validateFieldOverlap(a, b); len(reasons2) != 0 {
+			if reasons2, locs2 := c.validateFieldOverlap(a, b, useCache); len(reasons2) != 0 {
 				locs2 = append(locs2, a.Alias.Loc, b.Alias.Loc)
 				if reasons == nil {
 					c.addErrMultiLoc(locs2, "OverlappingFieldsCanBeMerged", "Fields %q conflict because %s. Use different aliases on the fields to fetch both if this was intentional.", a.Alias.Name, strings.Join(reasons2, " and "))
@@ -413,13 +416,13 @@ func (c *context) validateOverlap(a, b query.Selection, reasons *[]string, locs 
 
 		case *query.InlineFragment:
 			for _, sel := range b.Selections {
-				c.validateOverlap(a, sel, reasons, locs)
+				c.validateOverlap(a, sel, reasons, locs, useCache)
 			}
 
 		case *query.FragmentSpread:
 			if frag := c.doc.Fragments.Get(b.Name.Name); frag != nil {
 				for _, sel := range frag.Selections {
-					c.validateOverlap(a, sel, reasons, locs)
+					c.validateOverlap(a, sel, reasons, locs, useCache)
 				}
 			}
 
@@ -429,13 +432,13 @@ func (c *context) validateOverlap(a, b query.Selection, reasons *[]string, locs 
 
 	case *query.InlineFragment:
 		for _, sel := range a.Selections {
-			c.validateOverlap(sel, b, reasons, locs)
+			c.validateOverlap(sel, b, reasons, locs, useCache)
 		}
 
 	case *query.FragmentSpread:
 		if frag := c.doc.Fragments.Get(a.Name.Name); frag != nil {
 			for _, sel := range frag.Selections {
-				c.validateOverlap(sel, b, reasons, locs)
+				c.validateOverlap(sel, b, reasons, locs, useCache)
 			}
 		}
 
@@ -444,7 +447,7 @@ func (c *context) validateOverlap(a, b query.Selection, reasons *[]string, locs 
 	}
 }
 
-func (c *context) validateFieldOverlap(a, b *query.Field) ([]string, []errors.Location) {
+func (c *context) validateFieldOverlap(a, b *query.Field, useCache bool) ([]string, []errors.Location) {
 	if a.Alias.Name != b.Alias.Name {
 		return nil, nil
 	}
@@ -473,7 +476,7 @@ func (c *context) validateFieldOverlap(a, b *query.Field) ([]string, []errors.Lo
 	var locs []errors.Location
 	for _, a2 := range a.Selections {
 		for _, b2 := range b.Selections {
-			c.validateOverlap(a2, b2, &reasons, &locs)
+			c.validateOverlap(a2, b2, &reasons, &locs, useCache)
 		}
 	}
 	return reasons, locs
