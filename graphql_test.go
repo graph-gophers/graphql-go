@@ -1747,6 +1747,21 @@ func TestComposedFragments(t *testing.T) {
 	})
 }
 
+func TestOverlappingAlias(t *testing.T) {
+	query := `
+		{
+			hero(episode: EMPIRE) {
+				a: name
+				a: id
+			}
+		}
+	`
+	result := starwarsSchema.Exec(context.Background(), query, "", nil)
+	if len(result.Errors) == 0 {
+		t.Fatal("Expected error from overlapping alias")
+	}
+}
+
 // go test -bench=FragmentQueries -benchmem
 func BenchmarkFragmentQueries(b *testing.B) {
 	singleQuery := `
