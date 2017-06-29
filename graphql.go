@@ -122,7 +122,7 @@ type Response struct {
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
-// Validate validates the given query with the schema
+// Validate validates the given query with the schema.
 func (s *Schema) Validate(queryString string) []*errors.QueryError {
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
