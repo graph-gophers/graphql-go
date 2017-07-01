@@ -391,8 +391,11 @@ func (c *context) validateOverlap(a, b query.Selection, reasons *[]string, locs 
 		if _, ok := c.overlapValidated[selectionPair{a, b}]; ok {
 			return
 		}
-		c.overlapValidated[selectionPair{a, b}] = struct{}{}
-		c.overlapValidated[selectionPair{b, a}] = struct{}{}
+		key := selectionPair{b, a}
+		if _, ok := c.overlapValidated[key]; ok {
+			return
+		}
+		c.overlapValidated[key] = struct{}{}
 	}
 
 	switch a := a.(type) {
@@ -452,16 +455,19 @@ func (c *context) validateFieldOverlap(a, b *query.Field, useCache bool) ([]stri
 		return nil, nil
 	}
 
-	if asf := c.fieldMap[a].sf; asf != nil {
-		if bsf := c.fieldMap[b].sf; bsf != nil {
+	afm := c.fieldMap[a]
+	bfm := c.fieldMap[b]
+
+	if asf := afm.sf; asf != nil {
+		if bsf := bfm.sf; bsf != nil {
 			if !typesCompatible(asf.Type, bsf.Type) {
 				return []string{fmt.Sprintf("they return conflicting types %s and %s", asf.Type, bsf.Type)}, nil
 			}
 		}
 	}
 
-	at := c.fieldMap[a].parent
-	bt := c.fieldMap[b].parent
+	at := afm.parent
+	bt := bfm.parent
 	if at == nil || bt == nil || at == bt {
 		if a.Name.Name != b.Name.Name {
 			return []string{fmt.Sprintf("%s and %s are different fields", a.Name.Name, b.Name.Name)}, nil
