@@ -1778,14 +1778,12 @@ func BenchmarkFragmentQueries(b *testing.B) {
 		}
 
 		fragment friendsNames on Character {
-			name
 			friends {
 				name
 			}
 		}
 
 		fragment friendsIds on Character {
-			name
 			friends {
 				id
 			}
@@ -1802,7 +1800,7 @@ func BenchmarkFragmentQueries(b *testing.B) {
 
 	for _, c := range testCases {
 		// for each count, add a case for overlapping aliases vs non-overlapping aliases
-		for _, o := range []bool{ true, false } {
+		for _, o := range []bool{ true } {
 
 			var buffer bytes.Buffer
 			for i := 0; i < c; i++ {
