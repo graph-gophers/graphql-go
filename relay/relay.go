@@ -179,7 +179,7 @@ func (h *Handler) ContextHandler(ctx context.Context, w http.ResponseWriter, r *
 	}
 
 	// Use proper JSON Header
-	w.Header().Add("Content-Type", "application/json; charset=utf-8")
+	w.Header().Add("Content-Type", ContentTypeJSON)
 
 	if h.pretty {
 		w.WriteHeader(http.StatusOK)
