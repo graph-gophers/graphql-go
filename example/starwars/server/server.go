@@ -18,7 +18,6 @@ func init() {
 func main() {
 	h := relay.New(&relay.Config{
 		Schema:   schema,
-		Pretty:   true,
 		GraphiQL: true,
 	})
 	// Endpoint can be set to anything, using `/graphiql` just for convention.

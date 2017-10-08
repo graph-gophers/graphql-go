@@ -54,7 +54,6 @@ const (
 
 type Handler struct {
 	Schema   *graphql.Schema
-	pretty   bool
 	graphiql bool
 }
 
@@ -180,24 +179,13 @@ func (h *Handler) ContextHandler(ctx context.Context, w http.ResponseWriter, r *
 
 	// Use proper JSON Header
 	w.Header().Add("Content-Type", ContentTypeJSON)
-
-	if h.pretty {
-		w.WriteHeader(http.StatusOK)
-		responseJSON, err := json.MarshalIndent(response, "", "\t")
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Write(responseJSON)
-	} else {
-		w.WriteHeader(http.StatusOK)
-		responseJSON, err := json.Marshal(response)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Write(responseJSON)
+	w.WriteHeader(http.StatusOK)
+	responseJSON, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	w.Write(responseJSON)
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -206,14 +194,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 type Config struct {
 	Schema   *graphql.Schema
-	Pretty   bool
 	GraphiQL bool
 }
 
 func NewConfig() *Config {
 	return &Config{
 		Schema:   nil,
-		Pretty:   true,
 		GraphiQL: true,
 	}
 }
@@ -228,7 +214,6 @@ func New(p *Config) *Handler {
 
 	return &Handler{
 		Schema:   p.Schema,
-		pretty:   p.Pretty,
 		graphiql: p.GraphiQL,
 	}
 }
