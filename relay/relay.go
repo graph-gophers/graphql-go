@@ -1,11 +1,14 @@
 package relay
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strings"
 
 	graphql "github.com/neelance/graphql-go"
@@ -43,28 +46,174 @@ func UnmarshalSpec(id graphql.ID, v interface{}) error {
 	return json.Unmarshal([]byte(s[i+1:]), v)
 }
 
+const (
+	ContentTypeJSON           = "application/json"
+	ContentTypeGraphQL        = "application/graphql"
+	ContentTypeFormURLEncoded = "application/x-www-form-urlencoded"
+)
+
 type Handler struct {
-	Schema *graphql.Schema
+	Schema   *graphql.Schema
+	graphiql bool
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var params struct {
-		Query         string                 `json:"query"`
-		OperationName string                 `json:"operationName"`
-		Variables     map[string]interface{} `json:"variables"`
+type RequestOptions struct {
+	Query         string                 `json:"query" url:"query" schema:"query"`
+	Variables     map[string]interface{} `json:"variables" url:"variables" schema:"variables"`
+	OperationName string                 `json:"operationName" url:"operationName" schema:"operationName"`
+}
+
+// A workaround for getting `variables` as a JSON string
+type requestOptionsCompatibility struct {
+	Query         string `json:"query" url:"query" schema:"query"`
+	Variables     string `json:"variables" url:"variables" schema:"variables"`
+	OperationName string `json:"operationName" url:"operationName" schema:"operationName"`
+}
+
+func getFromForm(values url.Values) *RequestOptions {
+	query := values.Get("query")
+	if query != "" {
+		// get variables map
+		var variables map[string]interface{}
+		variablesStr := values.Get("variables")
+		json.Unmarshal([]byte(variablesStr), variables)
+
+		return &RequestOptions{
+			Query:         query,
+			Variables:     variables,
+			OperationName: values.Get("operationName"),
+		}
 	}
-	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	return nil
+}
+
+// NewRequestOptions Parses an http.Request into GraphQL request options struct
+func NewRequestOptions(r *http.Request) *RequestOptions {
+	if reqOpt := getFromForm(r.URL.Query()); reqOpt != nil {
+		return reqOpt
 	}
 
-	response := h.Schema.Exec(r.Context(), params.Query, params.OperationName, params.Variables)
+	if r.Method != "POST" {
+		return &RequestOptions{}
+	}
+
+	if r.Body == nil {
+		return &RequestOptions{}
+	}
+
+	// TODO: improve Content-Type handling
+	contentTypeStr := r.Header.Get("Content-Type")
+	contentTypeTokens := strings.Split(contentTypeStr, ";")
+	contentType := contentTypeTokens[0]
+
+	switch contentType {
+	case ContentTypeGraphQL:
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			return &RequestOptions{}
+		}
+		return &RequestOptions{
+			Query: string(body),
+		}
+	case ContentTypeFormURLEncoded:
+		if err := r.ParseForm(); err != nil {
+			return &RequestOptions{}
+		}
+
+		if reqOpt := getFromForm(r.PostForm); reqOpt != nil {
+			return reqOpt
+		}
+
+		return &RequestOptions{}
+
+	case ContentTypeJSON:
+		fallthrough
+	default:
+		var opts RequestOptions
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			return &opts
+		}
+		err = json.Unmarshal(body, &opts)
+		if err != nil {
+			// Probably `variables` was sent as a string instead of an object.
+			// So, we try to be polite and try to parse that as a JSON string
+			var optsCompatible requestOptionsCompatibility
+			json.Unmarshal(body, &optsCompatible)
+			json.Unmarshal([]byte(optsCompatible.Variables), &opts.Variables)
+		}
+		return &opts
+	}
+}
+
+type param struct {
+	Schema          *graphql.Schema
+	RequestString   string
+	VariablesValues map[string]interface{}
+	OperationName   string
+	Context         context.Context
+}
+
+// ContextHandler provides an entrypoint into executing graphQL queries with a
+// user-provided context.
+func (h *Handler) ContextHandler(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	// Gets Query
+	opts := NewRequestOptions(r)
+	params := param{
+		Schema:          h.Schema,
+		RequestString:   opts.Query,
+		VariablesValues: opts.Variables,
+		OperationName:   opts.OperationName,
+		Context:         ctx,
+	}
+	response := h.Schema.Exec(ctx, params.RequestString, params.OperationName, params.VariablesValues)
+
+	if h.graphiql {
+		acceptHeader := r.Header.Get("Accept")
+		_, raw := r.URL.Query()["raw"]
+		if !raw && !strings.Contains(acceptHeader, ContentTypeJSON) && strings.Contains(acceptHeader, "text/html") {
+			renderGraphiQL(w, params)
+			return
+		}
+	}
+
+	// Use proper JSON Header
+	w.Header().Add("Content-Type", ContentTypeJSON)
+	w.WriteHeader(http.StatusOK)
 	responseJSON, err := json.Marshal(response)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
 	w.Write(responseJSON)
+}
+
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.ContextHandler(r.Context(), w, r)
+}
+
+type Config struct {
+	Schema   *graphql.Schema
+	GraphiQL bool
+}
+
+func NewConfig() *Config {
+	return &Config{
+		Schema:   nil,
+		GraphiQL: true,
+	}
+}
+
+func New(p *Config) *Handler {
+	if p == nil {
+		p = NewConfig()
+	}
+	if p.Schema == nil {
+		panic("Undefined GraphQL Schema")
+	}
+
+	return &Handler{
+		Schema:   p.Schema,
+		graphiql: p.GraphiQL,
+	}
 }
