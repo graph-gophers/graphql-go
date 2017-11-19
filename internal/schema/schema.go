@@ -141,20 +141,55 @@ type Field struct {
 
 func New() *Schema {
 	s := &Schema{
-		entryPointNames: make(map[string]string),
-		Types:           make(map[string]NamedType),
-		Directives:      make(map[string]*DirectiveDecl),
+		Types:      make(map[string]NamedType),
+		Directives: make(map[string]*DirectiveDecl),
 	}
-	for n, t := range Meta.Types {
-		s.Types[n] = t
-	}
-	for n, d := range Meta.Directives {
-		s.Directives[n] = d
+	if Meta != nil {
+		for n, t := range Meta.Types {
+			s.Types[n] = t
+		}
+		for n, d := range Meta.Directives {
+			s.Directives[n] = d
+		}
 	}
 	return s
 }
 
 func (s *Schema) Parse(schemaString string) error {
+	err := s.parseWithoutEntryPoints(schemaString)
+	if err != nil {
+		return err
+	}
+
+	s.EntryPoints = make(map[string]NamedType)
+	if s.entryPointNames != nil {
+		for key, name := range s.entryPointNames {
+			t, ok := s.Types[name]
+			if !ok {
+				return errors.Errorf("type %q not found", name)
+			}
+			s.EntryPoints[key] = t
+		}
+	} else {
+		if queryType, ok := s.Types["Query"]; ok {
+			s.EntryPoints["query"] = queryType
+		}
+		if mutationType, ok := s.Types["Mutation"]; ok {
+			s.EntryPoints["mutation"] = mutationType
+		}
+		if subscriptionType, ok := s.Types["Subscription"]; ok {
+			s.EntryPoints["subscription"] = subscriptionType
+		}
+	}
+
+	if _, hasQueryType := s.EntryPoints["query"]; !hasQueryType {
+		return errors.Errorf(`must provide "schema" definition with "query" type or a type named "Query"`)
+	}
+
+	return nil
+}
+
+func (s *Schema) parseWithoutEntryPoints(schemaString string) error {
 	sc := &scanner.Scanner{
 		Mode: scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats | scanner.ScanStrings,
 	}
@@ -181,17 +216,6 @@ func (s *Schema) Parse(schemaString string) error {
 			}
 			arg.Type = t
 		}
-	}
-
-	s.EntryPoints = make(map[string]NamedType)
-	for key, name := range s.entryPointNames {
-		t, ok := s.Types[name]
-		if !ok {
-			if !ok {
-				return errors.Errorf("type %q not found", name)
-			}
-		}
-		s.EntryPoints[key] = t
 	}
 
 	for _, obj := range s.objects {
@@ -307,14 +331,10 @@ func parseSchema(s *Schema, l *common.Lexer) {
 		desc := l.DescComment()
 		switch x := l.ConsumeIdent(); x {
 		case "schema":
-			l.ConsumeToken('{')
-			for l.Peek() != '}' {
-				name := l.ConsumeIdent()
-				l.ConsumeToken(':')
-				typ := l.ConsumeIdent()
-				s.entryPointNames[name] = typ
+			if s.entryPointNames != nil {
+				l.SyntaxError(fmt.Sprintf(`cannot declare "schema" more than once`))
 			}
-			l.ConsumeToken('}')
+			s.entryPointNames = parseSchemaDecl(l)
 		case "type":
 			obj := parseObjectDecl(l)
 			obj.Desc = desc
@@ -349,6 +369,27 @@ func parseSchema(s *Schema, l *common.Lexer) {
 			l.SyntaxError(fmt.Sprintf(`unexpected %q, expecting "schema", "type", "enum", "interface", "union", "input", "scalar" or "directive"`, x))
 		}
 	}
+}
+
+func parseSchemaDecl(l *common.Lexer) map[string]string {
+	entryPointNames := make(map[string]string)
+	l.ConsumeToken('{')
+	for l.Peek() != '}' {
+		name := l.ConsumeIdent()
+		l.ConsumeToken(':')
+		typ := l.ConsumeIdent()
+		switch name {
+		case "query", "mutation", "subscription":
+			if _, alreadyDeclared := entryPointNames["name"]; alreadyDeclared {
+				l.SyntaxError(fmt.Sprintf(`cannot declare %q more than once`, name))
+			}
+			entryPointNames[name] = typ
+		default:
+			l.SyntaxError(fmt.Sprintf(`unexpected %q, expecting "query", "mutation", or "subscription"`, name))
+		}
+	}
+	l.ConsumeToken('}')
+	return entryPointNames
 }
 
 func parseObjectDecl(l *common.Lexer) *Object {

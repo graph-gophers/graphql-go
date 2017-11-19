@@ -111,6 +111,28 @@ func TestHelloWorld(t *testing.T) {
 	})
 }
 
+func TestHelloWithoutSchemaDecl(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				type Query {
+					hello: String!
+				}
+			`, &helloWorldResolver1{}),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!"
+				}
+			`,
+		},
+	})
+}
+
 func TestHelloSnake(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
@@ -201,6 +223,66 @@ func TestHelloSnakeArguments(t *testing.T) {
 			ExpectedResult: `
 				{
 					"say_hello": "Hello Rob Pike!"
+				}
+			`,
+		},
+	})
+}
+
+func TestNoSchemaOrQueryDeclaration(t *testing.T) {
+	_, got := graphql.ParseSchema(`
+		type Foo {
+			someField: String!
+		}
+	`, nil)
+	want := `graphql: must provide "schema" definition with "query" type or a type named "Query"`
+	if got == nil || got.Error() != want {
+		t.Logf("got:  %s", got)
+		t.Logf("want: %s", want)
+		t.Fail()
+	}
+}
+
+func TestOnlyMutationDeclaration(t *testing.T) {
+	_, got := graphql.ParseSchema(`
+		schema {
+			mutation: Mutation
+		}
+		type Mutation {
+			test: Boolean!
+		}
+	`, nil)
+	want := `graphql: must provide "schema" definition with "query" type or a type named "Query"`
+	if got == nil || got.Error() != want {
+		t.Logf("got:  %s", got)
+		t.Logf("want: %s", want)
+		t.Fail()
+	}
+}
+
+func TestOnlyQueryAndMutationDeclaration(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				type Query {
+					theNumber: Int!
+				}
+				type Mutation {
+					changeTheNumber(newNumber: Int!): Query
+				}
+			`, &theNumberResolver{}),
+			Query: `
+				mutation {
+					changeTheNumber(newNumber: 1) {
+						theNumber
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"changeTheNumber": {
+						"theNumber": 1
+					}
 				}
 			`,
 		},

@@ -40,6 +40,7 @@ func TestAll(t *testing.T) {
 	for i, schemaStr := range testData.Schemas {
 		schemas[i] = schema.New()
 		if err := schemas[i].Parse(schemaStr); err != nil {
+			t.Logf("\n" + schemaStr)
 			t.Fatal(err)
 		}
 	}

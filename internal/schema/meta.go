@@ -3,9 +3,8 @@ package schema
 var Meta *Schema
 
 func init() {
-	Meta = &Schema{} // bootstrap
 	Meta = New()
-	if err := Meta.Parse(metaSrc); err != nil {
+	if err := Meta.parseWithoutEntryPoints(metaSrc); err != nil {
 		panic(err)
 	}
 }
