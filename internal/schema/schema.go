@@ -363,18 +363,14 @@ func parseObjectDecl(l *common.Lexer) *Object {
 			}
 		}
 	}
-	l.ConsumeToken('{')
 	o.Fields = parseFields(l)
-	l.ConsumeToken('}')
 	return o
 }
 
 func parseInterfaceDecl(l *common.Lexer) *Interface {
 	i := &Interface{}
 	i.Name = l.ConsumeIdent()
-	l.ConsumeToken('{')
 	i.Fields = parseFields(l)
-	l.ConsumeToken('}')
 	return i
 }
 
@@ -431,6 +427,7 @@ func parseDirectiveDecl(l *common.Lexer) *DirectiveDecl {
 
 func parseFields(l *common.Lexer) FieldList {
 	var fields FieldList
+	l.ConsumeToken('{')
 	for l.Peek() != '}' {
 		f := &Field{}
 		f.Desc = l.DescComment()
@@ -441,5 +438,6 @@ func parseFields(l *common.Lexer) FieldList {
 		f.Directives = common.ParseDirectives(l)
 		fields = append(fields, f)
 	}
+	l.ConsumeToken('}')
 	return fields
 }
