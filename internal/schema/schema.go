@@ -393,11 +393,7 @@ func parseUnionDecl(l *common.Lexer) *Union {
 func parseInputDecl(l *common.Lexer) *InputObject {
 	i := &InputObject{}
 	i.Name = l.ConsumeIdent()
-	l.ConsumeToken('{')
-	for l.Peek() != '}' {
-		i.Values = append(i.Values, common.ParseInputValue(l))
-	}
-	l.ConsumeToken('}')
+	i.Values = common.ParseInputFieldList(i.Name, l)
 	return i
 }
 
@@ -420,14 +416,7 @@ func parseDirectiveDecl(l *common.Lexer) *DirectiveDecl {
 	d := &DirectiveDecl{}
 	l.ConsumeToken('@')
 	d.Name = l.ConsumeIdent()
-	if l.Peek() == '(' {
-		l.ConsumeToken('(')
-		for l.Peek() != ')' {
-			v := common.ParseInputValue(l)
-			d.Args = append(d.Args, v)
-		}
-		l.ConsumeToken(')')
-	}
+	d.Args = common.ParseArgumentDeclList(l)
 	l.ConsumeKeyword("on")
 	for {
 		loc := l.ConsumeIdent()
@@ -446,13 +435,7 @@ func parseFields(l *common.Lexer) FieldList {
 		f := &Field{}
 		f.Desc = l.DescComment()
 		f.Name = l.ConsumeIdent()
-		if l.Peek() == '(' {
-			l.ConsumeToken('(')
-			for l.Peek() != ')' {
-				f.Args = append(f.Args, common.ParseInputValue(l))
-			}
-			l.ConsumeToken(')')
-		}
+		f.Args = common.ParseArgumentDeclList(l)
 		l.ConsumeToken(':')
 		f.Type = common.ParseType(l)
 		f.Directives = common.ParseDirectives(l)

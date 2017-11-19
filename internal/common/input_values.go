@@ -38,3 +38,25 @@ func ParseInputValue(l *Lexer) *InputValue {
 	}
 	return p
 }
+
+func ParseArgumentDeclList(l *Lexer) InputValueList {
+	var args InputValueList
+	if l.Peek() == '(' {
+		l.ConsumeToken('(')
+		for l.Peek() != ')' {
+			args = append(args, ParseInputValue(l))
+		}
+		l.ConsumeToken(')')
+	}
+	return args
+}
+
+func ParseInputFieldList(typeName string, l *Lexer) InputValueList {
+	l.ConsumeToken('{')
+	var list InputValueList
+	for l.Peek() != '}' {
+		list = append(list, ParseInputValue(l))
+	}
+	l.ConsumeToken('}')
+	return list
+}
