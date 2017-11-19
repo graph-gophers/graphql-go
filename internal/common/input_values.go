@@ -1,6 +1,8 @@
 package common
 
 import (
+	"fmt"
+
 	"github.com/neelance/graphql-go/errors"
 )
 
@@ -56,6 +58,9 @@ func ParseInputFieldList(typeName string, l *Lexer) InputValueList {
 	var list InputValueList
 	for l.Peek() != '}' {
 		list = append(list, ParseInputValue(l))
+	}
+	if len(list) == 0 {
+		l.SyntaxError(fmt.Sprintf(`input type %q must define one or more fields`, typeName))
 	}
 	l.ConsumeToken('}')
 	return list

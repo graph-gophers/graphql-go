@@ -363,14 +363,14 @@ func parseObjectDecl(l *common.Lexer) *Object {
 			}
 		}
 	}
-	o.Fields = parseFields(l)
+	o.Fields = parseFields("object", o.Name, l)
 	return o
 }
 
 func parseInterfaceDecl(l *common.Lexer) *Interface {
 	i := &Interface{}
 	i.Name = l.ConsumeIdent()
-	i.Fields = parseFields(l)
+	i.Fields = parseFields("interface", i.Name, l)
 	return i
 }
 
@@ -425,7 +425,7 @@ func parseDirectiveDecl(l *common.Lexer) *DirectiveDecl {
 	return d
 }
 
-func parseFields(l *common.Lexer) FieldList {
+func parseFields(declType, typeName string, l *common.Lexer) FieldList {
 	var fields FieldList
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
@@ -437,6 +437,9 @@ func parseFields(l *common.Lexer) FieldList {
 		f.Type = common.ParseType(l)
 		f.Directives = common.ParseDirectives(l)
 		fields = append(fields, f)
+	}
+	if len(fields) == 0 {
+		l.SyntaxError(fmt.Sprintf(`%s type %q must define one or more fields`, declType, typeName))
 	}
 	l.ConsumeToken('}')
 	return fields

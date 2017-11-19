@@ -581,6 +581,10 @@ func TestIncludeDirective(t *testing.T) {
 
 type testDeprecatedDirectiveResolver struct{}
 
+func (r *testDeprecatedDirectiveResolver) Test() string {
+	return ""
+}
+
 func (r *testDeprecatedDirectiveResolver) A() int32 {
 	return 0
 }
@@ -643,6 +647,7 @@ func TestDeprecatedDirective(t *testing.T) {
 				}
 
 				type Query {
+					test: String!
 				}
 
 				enum Test {
