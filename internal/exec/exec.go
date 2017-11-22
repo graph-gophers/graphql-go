@@ -45,7 +45,11 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *query.O
 	func() {
 		defer r.handlePanic(ctx)
 		sels := selected.ApplyOperation(&r.Request, s, op)
-		r.execSelections(ctx, sels, nil, s.Resolver, &out, op.Type == query.Mutation)
+		if op.Type == "QUERY" {
+			r.execSelections(ctx, sels, nil, s.ResolverQuery, &out, op.Type == query.Mutation)
+		} else if op.Type == "MUTATION" {
+			r.execSelections(ctx, sels, nil, s.ResolverMutation, &out, op.Type == query.Mutation)
+		}
 	}()
 
 	if err := ctx.Err(); err != nil {
