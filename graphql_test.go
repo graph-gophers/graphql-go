@@ -1753,3 +1753,34 @@ func TestComposedFragments(t *testing.T) {
 		},
 	})
 }
+
+func TestSubscription(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+					subscription: Subscription
+				}
+
+				type Query {
+					hello: String!
+				}
+
+				type Subscription {
+					hello: String!
+				}
+			`, &helloWorldResolver1{}),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!"
+				}
+			`,
+		},
+	})
+}
