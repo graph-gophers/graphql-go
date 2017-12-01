@@ -50,9 +50,14 @@ func UnmarshalSpec(id graphql.ID, v interface{}) error {
 	return json.Unmarshal([]byte(s[i+1:]), v)
 }
 
+// Used to customize response
+// eg: custom error struct or fill Response.Extensions
+type OnResponse func(r *graphql.Response) interface{}
+
 type Handler struct {
-	Schema *graphql.Schema
-	pretty bool
+	Schema     *graphql.Schema
+	pretty     bool
+	onResponse OnResponse
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -102,7 +107,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var resp interface{}
 	response := h.Schema.Exec(r.Context(), params.Query, params.OperationName, params.Variables)
+
+	if h.onResponse != nil {
+		resp = h.onResponse(response)
+	} else {
+		resp = response
+	}
 
 	// Process response
 	var buf bytes.Buffer
@@ -110,7 +122,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.pretty {
 		encoder.SetIndent("", "\t")
 	}
-	if err := encoder.Encode(response); err != nil {
+	if err := encoder.Encode(resp); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -120,13 +132,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write(buf.Bytes())
 }
 
-func NewHandler(schema *graphql.Schema, pretty bool) *Handler {
+func NewHandler(schema *graphql.Schema, pretty bool, onResponse OnResponse) *Handler {
 	if schema == nil {
 		panic("nil GraphQL schema")
 	}
 
 	return &Handler{
-		Schema: schema,
-		pretty: pretty,
+		Schema:     schema,
+		pretty:     pretty,
+		onResponse: onResponse,
 	}
 }
