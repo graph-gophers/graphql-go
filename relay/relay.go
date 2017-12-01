@@ -48,6 +48,17 @@ type Handler struct {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.Header().Set("Allow", "POST")
+		http.Error(w, "GraphQL only supports POST requests.", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if r.Body == nil {
+		http.Error(w, "No body provided.", http.StatusBadRequest)
+		return
+	}
+
 	var params struct {
 		Query         string                 `json:"query"`
 		OperationName string                 `json:"operationName"`
@@ -55,6 +66,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if params.Query == "" {
+		http.Error(w, "Must provide query string.", http.StatusBadRequest)
 		return
 	}
 
