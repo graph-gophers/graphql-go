@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -45,6 +46,7 @@ func UnmarshalSpec(id graphql.ID, v interface{}) error {
 
 type Handler struct {
 	Schema *graphql.Schema
+	pretty bool
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -75,12 +77,30 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := h.Schema.Exec(r.Context(), params.Query, params.OperationName, params.Variables)
-	responseJSON, err := json.Marshal(response)
-	if err != nil {
+
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	if h.pretty {
+		encoder.SetIndent("", "\t")
+	}
+
+	if err := encoder.Encode(response); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(responseJSON)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write(buf.Bytes())
+}
+
+func NewHandler(schema *graphql.Schema, pretty bool) *Handler {
+	if schema == nil {
+		panic("nil GraphQL schema")
+	}
+
+	return &Handler{
+		Schema: schema,
+		pretty: pretty,
+	}
 }
