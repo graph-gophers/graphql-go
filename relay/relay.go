@@ -6,10 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strings"
 
 	graphql "github.com/graph-gophers/graphql-go"
+)
+
+const (
+	ContentTypeJSON    = "application/json"
+	ContentTypeGraphQL = "application/graphql"
 )
 
 func MarshalID(kind string, spec interface{}) graphql.ID {
@@ -66,8 +72,28 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		OperationName string                 `json:"operationName"`
 		Variables     map[string]interface{} `json:"variables"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+
+	// Check Content-Type
+	contentTypeStr := r.Header.Get("Content-Type")
+	switch {
+	case strings.HasPrefix(contentTypeStr, ContentTypeJSON):
+		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+			http.Error(w, "POST body is invalid JSON.", http.StatusBadRequest)
+			return
+		}
+	case strings.HasPrefix(contentTypeStr, ContentTypeGraphQL):
+		data, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			if err == bytes.ErrTooLarge {
+				http.Error(w, "POST body is too large.", http.StatusRequestEntityTooLarge)
+			} else {
+				http.Error(w, "POST body is invalid.", http.StatusInternalServerError)
+			}
+			return
+		}
+		params.Query = string(data)
+	default:
+		http.Error(w, "Not supported content type.", http.StatusBadRequest)
 		return
 	}
 
@@ -78,18 +104,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	response := h.Schema.Exec(r.Context(), params.Query, params.OperationName, params.Variables)
 
+	// Process response
 	var buf bytes.Buffer
 	encoder := json.NewEncoder(&buf)
 	if h.pretty {
 		encoder.SetIndent("", "\t")
 	}
-
 	if err := encoder.Encode(response); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Content-Type", ContentTypeJSON)
 	w.WriteHeader(http.StatusOK)
 	w.Write(buf.Bytes())
 }
