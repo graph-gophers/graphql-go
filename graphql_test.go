@@ -20,29 +20,29 @@ func (r *helloWorldQueryResolver1) Hello() string {
 type helloWorldQueryResolver2 struct{}
 type helloWorldMutationResolver2 struct{}
 
-func (r *helloWorldResolver2) Hello(ctx context.Context) (string, error) {
+func (r *helloWorldQueryResolver2) Hello(ctx context.Context) (string, error) {
 	return "Hello world!", nil
 }
 
 type helloSnakeQueryResolver1 struct{}
 type helloSnakeMutationResolver1 struct{}
 
-func (r *helloSnakeResolver1) HelloHTML() string {
+func (r *helloSnakeQueryResolver1) HelloHTML() string {
 	return "Hello snake!"
 }
 
-func (r *helloSnakeResolver1) SayHello(args struct{ FullName string }) string {
+func (r *helloSnakeQueryResolver1) SayHello(args struct{ FullName string }) string {
 	return "Hello " + args.FullName + "!"
 }
 
 type helloSnakeQueryResolver2 struct{}
 type helloSnakeMutationResolver2 struct{}
 
-func (r *helloSnakeResolver2) HelloHTML(ctx context.Context) (string, error) {
+func (r *helloSnakeQueryResolver2) HelloHTML(ctx context.Context) (string, error) {
 	return "Hello snake!", nil
 }
 
-func (r *helloSnakeResolver2) SayHello(ctx context.Context, args struct{ FullName string }) (string, error) {
+func (r *helloSnakeQueryResolver2) SayHello(ctx context.Context, args struct{ FullName string }) (string, error) {
 	return "Hello " + args.FullName + "!", nil
 }
 
@@ -54,11 +54,11 @@ type theNumberMutationResolver struct {
 	number int32
 }
 
-func (r *theNumberResolver) TheNumber() int32 {
+func (r *theNumberQueryResolver) TheNumber() int32 {
 	return r.number
 }
 
-func (r *theNumberResolver) ChangeTheNumber(args struct{ NewNumber int32 }) *theNumberResolver {
+func (r *theNumberMutationResolver) ChangeTheNumber(args struct{ NewNumber int32 }) *theNumberResolver {
 	r.number = args.NewNumber
 	return r
 }
@@ -66,7 +66,7 @@ func (r *theNumberResolver) ChangeTheNumber(args struct{ NewNumber int32 }) *the
 type timeQueryResolver struct{}
 type timeMutationResolver struct{}
 
-func (r *timeResolver) AddHour(args struct{ Time graphql.Time }) graphql.Time {
+func (r *timeQueryResolver) AddHour(args struct{ Time graphql.Time }) graphql.Time {
 	return graphql.Time{Time: args.Time.Add(time.Hour)}
 }
 
