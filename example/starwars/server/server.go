@@ -12,7 +12,7 @@ import (
 var schema *graphql.Schema
 
 func init() {
-	schema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
+	schema = graphql.MustParseSchema(starwars.Schema, &starwars.QueryResolver{}, &starwars.MutationResolver{})
 }
 
 func main() {
