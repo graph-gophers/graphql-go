@@ -1515,9 +1515,10 @@ func TestTime(t *testing.T) {
 	})
 }
 
-type resolverWithUnexportedMethod struct{}
+type resolverWithUnexportedMethodQuery struct{}
+type resolverWithUnexportedMethodMutation struct{}
 
-func (r *resolverWithUnexportedMethod) changeTheNumber(args struct{ NewNumber int32 }) int32 {
+func (r *resolverWithUnexportedMethodMutation) changeTheNumber(args struct{ NewNumber int32 }) int32 {
 	return args.NewNumber
 }
 
@@ -1530,15 +1531,16 @@ func TestUnexportedMethod(t *testing.T) {
 		type Mutation {
 			changeTheNumber(newNumber: Int!): Int!
 		}
-	`, &resolverWithUnexportedMethod{})
+	`, &resolverWithUnexportedMethodQuery{}, &resolverWithUnexportedMethodMutation{})
 	if err == nil {
 		t.Error("error expected")
 	}
 }
 
-type resolverWithUnexportedField struct{}
+type resolverWithUnexportedFieldQuery struct{}
+type resolverWithUnexportedFieldMutation struct{}
 
-func (r *resolverWithUnexportedField) ChangeTheNumber(args struct{ newNumber int32 }) int32 {
+func (r *resolverWithUnexportedFieldMutation) ChangeTheNumber(args struct{ newNumber int32 }) int32 {
 	return args.newNumber
 }
 
@@ -1551,7 +1553,7 @@ func TestUnexportedField(t *testing.T) {
 		type Mutation {
 			changeTheNumber(newNumber: Int!): Int!
 		}
-	`, &resolverWithUnexportedField{})
+	`, &resolverWithUnexportedFieldQuery{}, &resolverWithUnexportedFieldMutation{})
 	if err == nil {
 		t.Error("error expected")
 	}
