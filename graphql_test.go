@@ -58,7 +58,7 @@ func (r *theNumberQueryResolver) TheNumber() int32 {
 	return r.number
 }
 
-func (r *theNumberMutationResolver) ChangeTheNumber(args struct{ NewNumber int32 }) *theNumberMutationResolver {
+func (r *theNumberMutationResolver) ChangeTheNumber(args struct{ NewNumber int32 }) *theNumberQueryResolver {
 	r.number = args.NewNumber
 	return r
 }
