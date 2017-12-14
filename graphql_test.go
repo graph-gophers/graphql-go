@@ -59,7 +59,7 @@ func (r *theNumberQueryResolver) TheNumber() int32 {
 }
 
 func (r *theNumberMutationResolver) ChangeTheNumber(args struct{ NewNumber int32 }) *theNumberQueryResolver {
-	var x *theNumberQueryResolver
+	var x theNumberQueryResolver
 	x.number = args.NewNumber
 	return x
 }
