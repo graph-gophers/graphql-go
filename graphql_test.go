@@ -59,8 +59,9 @@ func (r *theNumberQueryResolver) TheNumber() int32 {
 }
 
 func (r *theNumberMutationResolver) ChangeTheNumber(args struct{ NewNumber int32 }) *theNumberQueryResolver {
-	r.number = args.NewNumber
-	return r
+	var x *theNumberQueryResolver
+	x.number = args.NewNumber
+	return x
 }
 
 type timeQueryResolver struct{}
