@@ -1,0 +1,68 @@
+schema {
+    query: Query
+    mutation: Mutation
+}
+
+# The query type, represents all of the entry points into our object graph
+type Query {
+    getUser(id: ID!): User
+    getPet(id: ID!): Pet
+    getTag(title: String!): Tag
+}
+
+# The mutation type, represents all updates we can make to our data
+type Mutation {
+    addPet(pet: PetInput!): Pet
+    updatePet(pet: PetInput!): Pet
+    deletePet(userID: ID!, petID: ID!): Boolean
+}
+
+# what is needed for a pet
+type Pet {
+    id: ID
+    owner: User
+    name: String
+    tags: [Tag]
+}
+
+# Tag has everything needed for a tag
+type Tag {
+    id: ID
+    title: String
+    pets: [Pet]
+}
+
+# what is needed for a user
+type User {
+    id: ID
+    name: String
+    # user pets exposed as a full list
+    pets: [Pet]
+    # user pets exposed as a connection with edges
+    petsConnection(first: Int, after: ID): UserPetConnection!
+}
+
+type UserPetConnection {
+    totalCount: Int!
+    edges: [UserPetEdge]
+    pageInfo: PageInfo!
+}
+
+type UserPetEdge {
+    cursor: ID!
+    node: Pet
+}
+
+type PageInfo {
+    startCursor: ID
+    endCursor: ID
+    hasNextPage: Boolean!
+    hasPreviousPage: Boolean!
+}
+
+input PetInput {
+    id: ID!
+    ownerID: ID!
+    name: String!
+    tagIDs: [Int]!
+}
