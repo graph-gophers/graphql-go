@@ -46,6 +46,10 @@ func RunTest(t *testing.T, test *Test) {
 			t.Fatal(result.Errors[0])
 		}
 	} else {
+		if test.ErrorExpected {
+			t.Fatal("error expected")
+		}
+
 		got := formatJSON(t, result.Data)
 
 		want := formatJSON(t, []byte(test.ExpectedResult))
