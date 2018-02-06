@@ -18,6 +18,7 @@ type Test struct {
 	OperationName  string
 	Variables      map[string]interface{}
 	ExpectedResult string
+	ErrorExpected  bool
 }
 
 // RunTests runs the given GraphQL test cases as subtests.
@@ -41,16 +42,19 @@ func RunTest(t *testing.T, test *Test) {
 	}
 	result := test.Schema.Exec(test.Context, test.Query, test.OperationName, test.Variables)
 	if len(result.Errors) != 0 {
-		t.Fatal(result.Errors[0])
-	}
-	got := formatJSON(t, result.Data)
+		if !test.ErrorExpected {
+			t.Fatal(result.Errors[0])
+		}
+	} else {
+		got := formatJSON(t, result.Data)
 
-	want := formatJSON(t, []byte(test.ExpectedResult))
+		want := formatJSON(t, []byte(test.ExpectedResult))
 
-	if !bytes.Equal(got, want) {
-		t.Logf("got:  %s", got)
-		t.Logf("want: %s", want)
-		t.Fail()
+		if !bytes.Equal(got, want) {
+			t.Logf("got:  %s", got)
+			t.Logf("want: %s", want)
+			t.Fail()
+		}
 	}
 }
 
