@@ -47,8 +47,8 @@ const fakeModules = {
 	'mocha': {
 		describe(name, f) {
 			switch (name) {
-			case 'within schema language':
-				return;
+				case 'within schema language':
+					return;
 			}
 			names.push(name);
 			f();
@@ -56,10 +56,10 @@ const fakeModules = {
 		},
 		it(name, f) {
 			switch (name) {
-			case 'ignores type definitions':
-			case 'reports correctly when a non-exclusive follows an exclusive':
-			case 'disallows differing subfields':
-				return;
+				case 'ignores type definitions':
+				case 'reports correctly when a non-exclusive follows an exclusive':
+				case 'disallows differing subfields':
+					return;
 			}
 			names.push(name);
 			f();
@@ -70,12 +70,11 @@ const fakeModules = {
 };
 
 const originalLoader = Module._load;
-Module._load = function(request, parent, isMain) {
+Module._load = function (request, parent, isMain) {
 	return fakeModules[request] || originalLoader(request, parent, isMain);
 };
 
-require('./src/validation/__tests__/ArgumentsOfCorrectType-test');
-require('./src/validation/__tests__/DefaultValuesOfCorrectType-test');
+require('./src/validation/__tests__/ExecutableDefinitions-test');
 require('./src/validation/__tests__/FieldsOnCorrectType-test');
 require('./src/validation/__tests__/FragmentsOnCompositeTypes-test');
 require('./src/validation/__tests__/KnownArgumentNames-test');
@@ -91,13 +90,17 @@ require('./src/validation/__tests__/OverlappingFieldsCanBeMerged-test');
 require('./src/validation/__tests__/PossibleFragmentSpreads-test');
 require('./src/validation/__tests__/ProvidedNonNullArguments-test');
 require('./src/validation/__tests__/ScalarLeafs-test');
+// TODO: Support GraphQL subscriptions.
+// require('./src/validation/__tests__/SingleFieldSubscriptions-test.js');
 require('./src/validation/__tests__/UniqueArgumentNames-test');
 require('./src/validation/__tests__/UniqueDirectivesPerLocation-test');
 require('./src/validation/__tests__/UniqueFragmentNames-test');
 require('./src/validation/__tests__/UniqueInputFieldNames-test');
 require('./src/validation/__tests__/UniqueOperationNames-test');
 require('./src/validation/__tests__/UniqueVariableNames-test');
+require('./src/validation/__tests__/ValuesofCorrectType-test');
 require('./src/validation/__tests__/VariablesAreInputTypes-test');
+require('./src/validation/__tests__/VariablesDefaultValueAllowed-test.js');
 require('./src/validation/__tests__/VariablesInAllowedPosition-test');
 
 let output = JSON.stringify({

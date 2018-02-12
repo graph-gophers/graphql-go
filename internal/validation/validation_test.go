@@ -1,4 +1,4 @@
-package tests
+package validation_test
 
 import (
 	"os"
@@ -22,7 +22,7 @@ type Test struct {
 	Errors []*errors.QueryError
 }
 
-func TestAll(t *testing.T) {
+func TestValidation(t *testing.T) {
 	f, err := os.Open("testdata/tests.json")
 	if err != nil {
 		t.Fatal(err)
@@ -33,14 +33,14 @@ func TestAll(t *testing.T) {
 		Tests   []*Test
 	}
 	if err := json.NewDecoder(f).Decode(&testData); err != nil {
-		t.Fatal(err)
+		t.Fatalf("test data JSON decode failed: %v", err)
 	}
 
 	schemas := make([]*schema.Schema, len(testData.Schemas))
 	for i, schemaStr := range testData.Schemas {
 		schemas[i] = schema.New()
 		if err := schemas[i].Parse(schemaStr); err != nil {
-			t.Fatal(err)
+			t.Fatalf("schema parse failed: %v", err)
 		}
 	}
 
@@ -48,7 +48,7 @@ func TestAll(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			d, err := query.Parse(test.Query)
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("query parse failed: %v", err)
 			}
 			errs := validation.Validate(schemas[test.Schema], d)
 			got := []*errors.QueryError{}
