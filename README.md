@@ -30,10 +30,11 @@ The project is under heavy development. It is stable enough so we use it in prod
 
 A resolver must have one method for each field of the GraphQL type it resolves. The method name has to be [exported](https://golang.org/ref/spec#Exported_identifiers) and match the field's name in a non-case-sensitive way.
 
-The method has up to two arguments:
+The method has up to three arguments:
 
 - Optional `context.Context` argument.
 - Mandatory `*struct { ... }` argument if the corresponding GraphQL field has arguments. The names of the struct fields have to be [exported](https://golang.org/ref/spec#Exported_identifiers) and have to match the names of the GraphQL arguments in a non-case-sensitive way.
+- Optional `[]selected.SelectedField` argument to receive the tree of selected subfields in the GraphQL query (useful for preloading of database relations)
 
 The method has up to two results:
 

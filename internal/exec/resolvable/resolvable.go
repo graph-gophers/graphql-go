@@ -9,6 +9,7 @@ import (
 	"github.com/neelance/graphql-go/internal/common"
 	"github.com/neelance/graphql-go/internal/exec/packer"
 	"github.com/neelance/graphql-go/internal/schema"
+	pubselected "github.com/neelance/graphql-go/selected"
 )
 
 type Schema struct {
@@ -34,6 +35,7 @@ type Field struct {
 	MethodIndex int
 	HasContext  bool
 	ArgsPacker  *packer.StructPacker
+	HasSelected bool
 	HasError    bool
 	ValueExec   Resolvable
 	TraceLabel  string
@@ -251,6 +253,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 }
 
 var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
+var selectedType = reflect.TypeOf([]pubselected.SelectedField(nil))
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
 
 func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.Method, methodIndex int, methodHasReceiver bool) (*Field, error) {
@@ -280,6 +283,12 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 		in = in[1:]
 	}
 
+	// NOTE: we're passing selected.Selection[], not checking the specific type due to resolvable <-> selected circular dependency
+	hasSelected := len(in) > 0 && in[0] == selectedType
+	if hasSelected {
+		in = in[1:]
+	}
+
 	if len(in) > 0 {
 		return nil, fmt.Errorf("too many parameters")
 	}
@@ -300,6 +309,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 		TypeName:    typeName,
 		MethodIndex: methodIndex,
 		HasContext:  hasContext,
+		HasSelected: hasSelected,
 		ArgsPacker:  argsPacker,
 		HasError:    hasError,
 		TraceLabel:  fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name),
