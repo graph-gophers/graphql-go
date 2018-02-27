@@ -21,6 +21,10 @@ func (a Location) Before(b Location) bool {
 	return a.Line < b.Line || (a.Line == b.Line && a.Column < b.Column)
 }
 
+func (a Location) String() string {
+	return fmt.Sprintf("(line %d, column %d)", a.Line, a.Column)
+}
+
 func Errorf(format string, a ...interface{}) *QueryError {
 	return &QueryError{
 		Message: fmt.Sprintf(format, a...),
@@ -33,7 +37,7 @@ func (err *QueryError) Error() string {
 	}
 	str := fmt.Sprintf("graphql: %s", err.Message)
 	for _, loc := range err.Locations {
-		str += fmt.Sprintf(" (line %d, column %d)", loc.Line, loc.Column)
+		str += fmt.Sprintf(" %s", loc)
 	}
 	return str
 }

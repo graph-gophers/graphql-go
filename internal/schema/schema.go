@@ -14,7 +14,7 @@ type Schema struct {
 	Types       map[string]NamedType
 	Directives  map[string]*DirectiveDecl
 
-	entryPointNames map[string]string
+	entryPointNames map[string]*EntryPoint
 	objects         []*Object
 	unions          []*Union
 	enums           []*Enum
@@ -24,15 +24,23 @@ func (s *Schema) Resolve(name string) common.Type {
 	return s.Types[name]
 }
 
+type EntryPoint struct {
+	Name string
+	Type string
+	Loc  errors.Location
+}
+
 type NamedType interface {
 	common.Type
 	TypeName() string
 	Description() string
+	Location() errors.Location
 }
 
 type Scalar struct {
 	Name string
 	Desc string
+	Loc  errors.Location
 }
 
 type Object struct {
@@ -40,6 +48,7 @@ type Object struct {
 	Interfaces []*Interface
 	Fields     FieldList
 	Desc       string
+	Loc        errors.Location
 
 	interfaceNames []string
 }
@@ -49,12 +58,14 @@ type Interface struct {
 	PossibleTypes []*Object
 	Fields        FieldList
 	Desc          string
+	Loc           errors.Location
 }
 
 type Union struct {
 	Name          string
 	PossibleTypes []*Object
 	Desc          string
+	Loc           errors.Location
 
 	typeNames []string
 }
@@ -63,6 +74,7 @@ type Enum struct {
 	Name   string
 	Values []*EnumValue
 	Desc   string
+	Loc    errors.Location
 }
 
 type EnumValue struct {
@@ -75,6 +87,7 @@ type InputObject struct {
 	Name   string
 	Desc   string
 	Values common.InputValueList
+	Loc    errors.Location
 }
 
 type FieldList []*Field
@@ -99,6 +112,7 @@ func (l FieldList) Names() []string {
 type DirectiveDecl struct {
 	Name string
 	Desc string
+	Loc  errors.Location
 	Locs []string
 	Args common.InputValueList
 }
@@ -131,6 +145,13 @@ func (t *Union) Description() string       { return t.Desc }
 func (t *Enum) Description() string        { return t.Desc }
 func (t *InputObject) Description() string { return t.Desc }
 
+func (t *Scalar) Location() errors.Location      { return t.Loc }
+func (t *Object) Location() errors.Location      { return t.Loc }
+func (t *Interface) Location() errors.Location   { return t.Loc }
+func (t *Union) Location() errors.Location       { return t.Loc }
+func (t *Enum) Location() errors.Location        { return t.Loc }
+func (t *InputObject) Location() errors.Location { return t.Loc }
+
 type Field struct {
 	Name       string
 	Args       common.InputValueList
@@ -141,7 +162,7 @@ type Field struct {
 
 func New() *Schema {
 	s := &Schema{
-		entryPointNames: make(map[string]string),
+		entryPointNames: make(map[string]*EntryPoint),
 		Types:           make(map[string]NamedType),
 		Directives:      make(map[string]*DirectiveDecl),
 	}
@@ -161,9 +182,13 @@ func (s *Schema) Parse(schemaString string) error {
 	sc.Init(strings.NewReader(schemaString))
 
 	l := common.New(sc)
-	err := l.CatchSyntaxError(func() {
-		parseSchema(s, l)
+	var err error
+	syntaxErr := l.CatchSyntaxError(func() {
+		err = parseSchema(s, l)
 	})
+	if syntaxErr != nil {
+		return syntaxErr
+	}
 	if err != nil {
 		return err
 	}
@@ -184,12 +209,10 @@ func (s *Schema) Parse(schemaString string) error {
 	}
 
 	s.EntryPoints = make(map[string]NamedType)
-	for key, name := range s.entryPointNames {
-		t, ok := s.Types[name]
+	for key, e := range s.entryPointNames {
+		t, ok := s.Types[e.Type]
 		if !ok {
-			if !ok {
-				return errors.Errorf("type %q not found", name)
-			}
+			return errors.Errorf("type %q not found", e.Type)
 		}
 		s.EntryPoints[key] = t
 	}
@@ -199,7 +222,7 @@ func (s *Schema) Parse(schemaString string) error {
 		for i, intfName := range obj.interfaceNames {
 			t, ok := s.Types[intfName]
 			if !ok {
-				return errors.Errorf("interface %q not found", intfName)
+				return errors.Errorf("interface %q not found %s", intfName)
 			}
 			intf, ok := t.(*Interface)
 			if !ok {
@@ -302,58 +325,156 @@ func resolveInputObject(s *Schema, values common.InputValueList) error {
 	return nil
 }
 
-func parseSchema(s *Schema, l *common.Lexer) {
+func parseSchema(s *Schema, l *common.Lexer) error {
 	for l.Peek() != scanner.EOF {
 		desc := l.DescComment()
 		switch x := l.ConsumeIdent(); x {
 		case "schema":
 			l.ConsumeToken('{')
 			for l.Peek() != '}' {
-				name := l.ConsumeIdent()
+				ident := l.ConsumeIdentWithLoc()
+				name := ident.Name
 				l.ConsumeToken(':')
-				typ := l.ConsumeIdent()
-				s.entryPointNames[name] = typ
+				typeIdent := l.ConsumeIdentWithLoc()
+				entryPoint := &EntryPoint{Name: name, Type: typeIdent.Name, Loc: ident.Loc}
+				if err := validateEntryPointName(s, entryPoint); err != nil {
+					return err
+				}
+				s.entryPointNames[name] = entryPoint
 			}
 			l.ConsumeToken('}')
 		case "type":
 			obj := parseObjectDecl(l)
 			obj.Desc = desc
+			if err := validateTypeName(s, obj); err != nil {
+				return err
+			}
 			s.Types[obj.Name] = obj
 			s.objects = append(s.objects, obj)
 		case "interface":
 			intf := parseInterfaceDecl(l)
 			intf.Desc = desc
+			if err := validateTypeName(s, intf); err != nil {
+				return err
+			}
 			s.Types[intf.Name] = intf
 		case "union":
 			union := parseUnionDecl(l)
 			union.Desc = desc
+			if err := validateTypeName(s, union); err != nil {
+				return err
+			}
 			s.Types[union.Name] = union
 			s.unions = append(s.unions, union)
 		case "enum":
 			enum := parseEnumDecl(l)
 			enum.Desc = desc
+			if err := validateTypeName(s, enum); err != nil {
+				return err
+			}
 			s.Types[enum.Name] = enum
 			s.enums = append(s.enums, enum)
 		case "input":
 			input := parseInputDecl(l)
 			input.Desc = desc
+			if err := validateTypeName(s, input); err != nil {
+				return err
+			}
 			s.Types[input.Name] = input
 		case "scalar":
-			name := l.ConsumeIdent()
-			s.Types[name] = &Scalar{Name: name, Desc: desc}
+			ident := l.ConsumeIdentWithLoc()
+			name := ident.Name
+			scalar := &Scalar{Name: name, Desc: desc, Loc: ident.Loc}
+			if err := validateTypeName(s, scalar); err != nil {
+				return err
+			}
+			s.Types[name] = scalar
 		case "directive":
 			directive := parseDirectiveDecl(l)
 			directive.Desc = desc
+			if err := validateDirectiveName(s, directive); err != nil {
+				return err
+			}
 			s.Directives[directive.Name] = directive
 		default:
 			l.SyntaxError(fmt.Sprintf(`unexpected %q, expecting "schema", "type", "enum", "interface", "union", "input", "scalar" or "directive"`, x))
 		}
 	}
+	return nil
+}
+
+func validateEntryPointName(s *Schema, entryPoint *EntryPoint) error {
+	if s == Meta {
+		return nil
+	}
+	switch name := entryPoint.Name; name {
+	case "query", "mutation", "subscription":
+		if prev, ok := s.entryPointNames[name]; ok {
+			return &errors.QueryError{
+				Message:   fmt.Sprintf(`%q type provided more than once`, name),
+				Locations: []errors.Location{prev.Loc, entryPoint.Loc},
+			}
+		}
+	default:
+		return &errors.QueryError{
+			Message:   fmt.Sprintf(`unexpected %q, expected "query", "mutation" or "subscription"`, name),
+			Locations: []errors.Location{entryPoint.Loc},
+		}
+	}
+	return nil
+}
+
+func validateTypeName(s *Schema, t NamedType) error {
+	if s == Meta {
+		return nil
+	}
+	name := t.TypeName()
+	if strings.HasPrefix(name, "__") {
+		return &errors.QueryError{
+			Message:   fmt.Sprintf(`%q must not begin with "__", reserved for introspection types`, name),
+			Locations: []errors.Location{t.Location()},
+		}
+	}
+	if _, ok := Meta.Types[name]; ok {
+		return &errors.QueryError{
+			Message:   fmt.Sprintf(`built-in type %q redefined`, name),
+			Locations: []errors.Location{t.Location()},
+		}
+	}
+	if prev, ok := s.Types[name]; ok {
+		return &errors.QueryError{
+			Message:   fmt.Sprintf(`%q defined more than once`, name),
+			Locations: []errors.Location{prev.Location(), t.Location()},
+		}
+	}
+	return nil
+}
+
+func validateDirectiveName(s *Schema, directive *DirectiveDecl) error {
+	if s == Meta {
+		return nil
+	}
+	name := directive.Name
+	if _, ok := Meta.Directives[name]; ok {
+		return &errors.QueryError{
+			Message:   fmt.Sprintf(`built-in directive %q redefined`, name),
+			Locations: []errors.Location{directive.Loc},
+		}
+	}
+	if prev, ok := s.Directives[name]; ok {
+		return &errors.QueryError{
+			Message:   fmt.Sprintf("%q defined more than once", name),
+			Locations: []errors.Location{prev.Loc, directive.Loc},
+		}
+	}
+	return nil
 }
 
 func parseObjectDecl(l *common.Lexer) *Object {
 	o := &Object{}
-	o.Name = l.ConsumeIdent()
+	ident := l.ConsumeIdentWithLoc()
+	o.Name = ident.Name
+	o.Loc = ident.Loc
 	if l.Peek() == scanner.Ident {
 		l.ConsumeKeyword("implements")
 		for {
@@ -371,7 +492,9 @@ func parseObjectDecl(l *common.Lexer) *Object {
 
 func parseInterfaceDecl(l *common.Lexer) *Interface {
 	i := &Interface{}
-	i.Name = l.ConsumeIdent()
+	ident := l.ConsumeIdentWithLoc()
+	i.Name = ident.Name
+	i.Loc = ident.Loc
 	l.ConsumeToken('{')
 	i.Fields = parseFields(l)
 	l.ConsumeToken('}')
@@ -380,7 +503,9 @@ func parseInterfaceDecl(l *common.Lexer) *Interface {
 
 func parseUnionDecl(l *common.Lexer) *Union {
 	union := &Union{}
-	union.Name = l.ConsumeIdent()
+	ident := l.ConsumeIdentWithLoc()
+	union.Name = ident.Name
+	union.Loc = ident.Loc
 	l.ConsumeToken('=')
 	union.typeNames = []string{l.ConsumeIdent()}
 	for l.Peek() == '|' {
@@ -392,7 +517,9 @@ func parseUnionDecl(l *common.Lexer) *Union {
 
 func parseInputDecl(l *common.Lexer) *InputObject {
 	i := &InputObject{}
-	i.Name = l.ConsumeIdent()
+	ident := l.ConsumeIdentWithLoc()
+	i.Name = ident.Name
+	i.Loc = ident.Loc
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
 		i.Values = append(i.Values, common.ParseInputValue(l))
@@ -403,7 +530,9 @@ func parseInputDecl(l *common.Lexer) *InputObject {
 
 func parseEnumDecl(l *common.Lexer) *Enum {
 	enum := &Enum{}
-	enum.Name = l.ConsumeIdent()
+	ident := l.ConsumeIdentWithLoc()
+	enum.Name = ident.Name
+	enum.Loc = ident.Loc
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
 		v := &EnumValue{}
@@ -419,7 +548,9 @@ func parseEnumDecl(l *common.Lexer) *Enum {
 func parseDirectiveDecl(l *common.Lexer) *DirectiveDecl {
 	d := &DirectiveDecl{}
 	l.ConsumeToken('@')
-	d.Name = l.ConsumeIdent()
+	ident := l.ConsumeIdentWithLoc()
+	d.Name = ident.Name
+	d.Loc = ident.Loc
 	if l.Peek() == '(' {
 		l.ConsumeToken('(')
 		for l.Peek() != ')' {
