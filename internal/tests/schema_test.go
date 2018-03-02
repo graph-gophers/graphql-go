@@ -23,6 +23,13 @@ type Baz {
 `,
 		},
 		{
+			schema: `directive @foo on FIELD_DEFINITION
+type Foo {
+	foo: Foo @foo
+}
+`,
+		},
+		{
 			schema: `schema {
   query: Query
   mutation: Mutation
@@ -143,6 +150,13 @@ directive @ignore on FIELD_DEFINITION
 			schema: `directive @deprecated on FIELD_DEFINITION | ENUM_VALUE`,
 			err: &errors.QueryError{
 				Message:   `built-in directive "deprecated" redefined`,
+				Locations: []errors.Location{{Line: 1, Column: 12}},
+			},
+		},
+		{
+			schema: `directive @__foo on FIELD_DEFINITION`,
+			err: &errors.QueryError{
+				Message:   `"__foo" must not begin with "__", reserved for introspection types`,
 				Locations: []errors.Location{{Line: 1, Column: 12}},
 			},
 		},
