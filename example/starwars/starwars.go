@@ -6,8 +6,10 @@ package starwars
 import (
 	"encoding/base64"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
+	"time"
 
 	graphql "github.com/graph-gophers/graphql-go"
 )
@@ -201,12 +203,6 @@ var humans = []*human{
 
 var humanData = make(map[graphql.ID]*human)
 
-func init() {
-	for _, h := range humans {
-		humanData[h.ID] = h
-	}
-}
-
 type droid struct {
 	ID              graphql.ID
 	Name            string
@@ -332,7 +328,13 @@ func (r *Resolver) Character(args struct{ ID graphql.ID }) *characterResolver {
 }
 
 func (r *Resolver) Human(args struct{ ID graphql.ID }) *humanResolver {
+	startTime := time.Now()
+	for _, h := range humans {
+		humanData[h.ID] = h
+	}
 	if h := humanData[args.ID]; h != nil {
+		endTime := time.Now()
+		log.Println("duration:", endTime.Sub(startTime).Seconds())
 		return &humanResolver{h}
 	}
 	return nil
