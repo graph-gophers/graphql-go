@@ -33,8 +33,8 @@ type Field struct {
 	TypeName    string
 	MethodIndex int
 	HasContext  bool
-	ArgsPacker  *packer.StructPacker
 	HasError    bool
+	ArgsPacker  *packer.StructPacker
 	ValueExec   Resolvable
 	TraceLabel  string
 }
