@@ -72,3 +72,9 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 	return "Hello world!", nil
 }
 ```
+
+### Community Examples
+
+[tonyghita/graphql-go-example](https://github.com/tonyghita/graphql-go-example)
+
+[deltaskelta/graphql-go-pets-example](https://github.com/deltaskelta/graphql-go-pets-example) - graphql-go resolving against a sqlite database
