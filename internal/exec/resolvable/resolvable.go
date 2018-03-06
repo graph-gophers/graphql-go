@@ -9,7 +9,7 @@ import (
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 	"github.com/graph-gophers/graphql-go/internal/schema"
-  pubselected "github.com/graph-gophers/graphql-go/selected"
+	pubselected "github.com/graph-gophers/graphql-go/selected"
 )
 
 type Schema struct {
@@ -35,7 +35,7 @@ type Field struct {
 	MethodIndex int
 	HasContext  bool
 	HasError    bool
-  HasSelected bool
+	HasSelected bool
 	ArgsPacker  *packer.StructPacker
 	ValueExec   Resolvable
 	TraceLabel  string
