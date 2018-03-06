@@ -283,7 +283,6 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 		in = in[1:]
 	}
 
-	// NOTE: we're passing selected.Selection[], not checking the specific type due to resolvable <-> selected circular dependency
 	hasSelected := len(in) > 0 && in[0] == selectedType
 	if hasSelected {
 		in = in[1:]
