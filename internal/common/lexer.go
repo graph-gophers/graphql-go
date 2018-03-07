@@ -20,7 +20,7 @@ type Ident struct {
 	Loc  errors.Location
 }
 
-func New(sc *scanner.Scanner) *Lexer {
+func NewLexer(sc *scanner.Scanner) *Lexer {
 	l := &Lexer{sc: sc}
 	l.Consume()
 	return l

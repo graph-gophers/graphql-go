@@ -154,13 +154,14 @@ func New() *Schema {
 	return s
 }
 
+// Parse the schema string.
 func (s *Schema) Parse(schemaString string) error {
 	sc := &scanner.Scanner{
 		Mode: scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats | scanner.ScanStrings,
 	}
 	sc.Init(strings.NewReader(schemaString))
 
-	l := common.New(sc)
+	l := common.NewLexer(sc)
 	err := l.CatchSyntaxError(func() {
 		parseSchema(s, l)
 	})
@@ -316,7 +317,7 @@ func parseSchema(s *Schema, l *common.Lexer) {
 			}
 			l.ConsumeToken('}')
 		case "type":
-			obj := parseObjectDecl(l)
+			obj := parseObjectDeclaration(l)
 			obj.Desc = desc
 			s.Types[obj.Name] = obj
 			s.objects = append(s.objects, obj)
@@ -351,22 +352,26 @@ func parseSchema(s *Schema, l *common.Lexer) {
 	}
 }
 
-func parseObjectDecl(l *common.Lexer) *Object {
-	o := &Object{}
-	o.Name = l.ConsumeIdent()
+func parseObjectDeclaration(l *common.Lexer) *Object {
+	object := &Object{Name: l.ConsumeIdent()}
+
 	if l.Peek() == scanner.Ident {
 		l.ConsumeKeyword("implements")
-		for {
-			o.interfaceNames = append(o.interfaceNames, l.ConsumeIdent())
-			if l.Peek() == '{' {
-				break
+
+		for l.Peek() != '{' {
+			object.interfaceNames = append(object.interfaceNames, l.ConsumeIdent())
+
+			if l.Peek() == '&' {
+				l.ConsumeToken('&')
 			}
 		}
 	}
+
 	l.ConsumeToken('{')
-	o.Fields = parseFields(l)
+	object.Fields = parseFields(l)
 	l.ConsumeToken('}')
-	return o
+
+	return object
 }
 
 func parseInterfaceDecl(l *common.Lexer) *Interface {

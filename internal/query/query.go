@@ -100,7 +100,7 @@ func Parse(queryString string) (*Document, *errors.QueryError) {
 	}
 	sc.Init(strings.NewReader(queryString))
 
-	l := common.New(sc)
+	l := common.NewLexer(sc)
 	var doc *Document
 	err := l.CatchSyntaxError(func() {
 		doc = parseDocument(l)
