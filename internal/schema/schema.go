@@ -9,10 +9,38 @@ import (
 	"github.com/graph-gophers/graphql-go/internal/common"
 )
 
+// Schema represents a GraphQL service's collective type system capabilities.
+// A schema is defined in terms of the types and directives it supports as well as the root
+// operation types for each kind of operation: `query`, `mutation`, and `subscription`.
+//
+// For a more formal definition, read the relevant section in the specification:
+//
+// http://facebook.github.io/graphql/draft/#sec-Schema
 type Schema struct {
+	// EntryPoints determines the place in the type system where `query`, `mutation`, and
+	// `subscription` operations begin.
+	//
+	// http://facebook.github.io/graphql/draft/#sec-Root-Operation-Types
+	//
+	// NOTE: The specification refers to this concept as "Root Operation Types".
+	// TODO: Rename the `EntryPoints` field to `RootOperationTypes` to align with spec terminology.
 	EntryPoints map[string]NamedType
-	Types       map[string]NamedType
-	Directives  map[string]*DirectiveDecl
+
+	// Types are the fundamental unit of any GraphQL schema.
+	// There are six kinds of named types, and two wrapping types.
+	//
+	// http://facebook.github.io/graphql/draft/#sec-Types
+	Types map[string]NamedType
+
+	// TODO: Type extensions?
+	// http://facebook.github.io/graphql/draft/#sec-Type-Extensions
+
+	// Directives are used to annotate various parts of a GraphQL document as an indicator that they
+	// should be evaluated differently by a validator, executor, or client tool such as a code
+	// generator.
+	//
+	// http://facebook.github.io/graphql/draft/#sec-Type-System.Directives
+	Directives map[string]*DirectiveDecl
 
 	entryPointNames map[string]string
 	objects         []*Object
@@ -20,65 +48,124 @@ type Schema struct {
 	enums           []*Enum
 }
 
+// Resolve a named type in the schema by its name.
 func (s *Schema) Resolve(name string) common.Type {
 	return s.Types[name]
 }
 
+// NamedType represents a type with a name.
+//
+// http://facebook.github.io/graphql/draft/#NamedType
 type NamedType interface {
 	common.Type
 	TypeName() string
 	Description() string
 }
 
+// Scalar types represent primitive leaf values (e.g. a string or an integer) in a GraphQL type
+// system.
+//
+// GraphQL responses take the form of a hierarchical tree; the leaves on these trees are GraphQL
+// scalars.
+//
+// http://facebook.github.io/graphql/draft/#sec-Scalars
 type Scalar struct {
 	Name string
 	Desc string
+	// TODO: Add a list of directives?
 }
 
+// Object types represent a list of named fields, each of which yield a value of a specific type.
+//
+// GraphQL queries are hierarchical and composed, describing a tree of information.
+// While Scalar types describe the leaf values of these hierarchical types, Objects describe the
+// intermediate levels.
+//
+// http://facebook.github.io/graphql/draft/#sec-Objects
 type Object struct {
 	Name       string
 	Interfaces []*Interface
 	Fields     FieldList
 	Desc       string
+	// TODO: Add a list of directives?
 
 	interfaceNames []string
 }
 
+// Interface types represent a list of named fields and their arguments.
+//
+// GraphQL objects can then implement these interfaces which requires that the object type will
+// define all fields defined by those interfaces.
+//
+// http://facebook.github.io/graphql/draft/#sec-Interfaces
 type Interface struct {
 	Name          string
 	PossibleTypes []*Object
-	Fields        FieldList
+	Fields        FieldList // NOTE: the spec refers to this as `FieldsDefinition`.
 	Desc          string
+	// TODO: Add a list of directives?
 }
 
+// Union types represent objects that could be one of a list of GraphQL object types, but provides no
+// guaranteed fields between those types.
+//
+// They also differ from interfaces in that object types declare what interfaces they implement, but
+// are not aware of what unions contain them.
+//
+// http://facebook.github.io/graphql/draft/#sec-Unions
 type Union struct {
 	Name          string
-	PossibleTypes []*Object
+	PossibleTypes []*Object // NOTE: the spec refers to this as `UnionMemberTypes`.
 	Desc          string
+	// TODO: Add a list of directives?
 
 	typeNames []string
 }
 
+// Enum types describe a set of possible values.
+//
+// Like scalar types, Enum types also represent leaf values in a GraphQL type system.
+//
+// http://facebook.github.io/graphql/draft/#sec-Enums
 type Enum struct {
 	Name   string
-	Values []*EnumValue
+	Values []*EnumValue // NOTE: the spec refers to this as `EnumValuesDefinition`.
 	Desc   string
+	// TODO: Add a list of directives?
 }
 
+// EnumValue types are unique values that may be serialized as a string: the name of the
+// represented value.
+//
+// http://facebook.github.io/graphql/draft/#EnumValueDefinition
 type EnumValue struct {
 	Name       string
 	Directives common.DirectiveList
 	Desc       string
+	// TODO: Add a list of directives?
 }
 
+// InputObject types define a set of input fields; the input fields are either scalars, enums, or
+// other input objects.
+//
+// This allows arguments to accept arbitrarily complex structs.
+//
+// http://facebook.github.io/graphql/draft/#sec-Input-Objects
 type InputObject struct {
 	Name   string
 	Desc   string
 	Values common.InputValueList
+	// TODO: Add a list of directives?
 }
 
+// FieldsList is a list of an Object's Fields.
+//
+// http://facebook.github.io/graphql/draft/#FieldsDefinition
 type FieldList []*Field
 
+// Get iterates over the field list, returning a pointer-to-Field when the field name matches the
+// provided `name` arguement.
+// Returns nil when no field was found by that name.
 func (l FieldList) Get(name string) *Field {
 	for _, f := range l {
 		if f.Name == name {
@@ -88,6 +175,7 @@ func (l FieldList) Get(name string) *Field {
 	return nil
 }
 
+// Names returns a string slice of the field names in the FieldList.
 func (l FieldList) Names() []string {
 	names := make([]string, len(l))
 	for i, f := range l {
@@ -96,6 +184,7 @@ func (l FieldList) Names() []string {
 	return names
 }
 
+// http://facebook.github.io/graphql/draft/#sec-Type-System.Directives
 type DirectiveDecl struct {
 	Name string
 	Desc string
@@ -131,14 +220,17 @@ func (t *Union) Description() string       { return t.Desc }
 func (t *Enum) Description() string        { return t.Desc }
 func (t *InputObject) Description() string { return t.Desc }
 
+// Field is a conceptual function which yields values.
+// http://facebook.github.io/graphql/draft/#FieldDefinition
 type Field struct {
 	Name       string
-	Args       common.InputValueList
+	Args       common.InputValueList // NOTE: the spec refers to this as `ArgumentsDefinition`.
 	Type       common.Type
 	Directives common.DirectiveList
 	Desc       string
 }
 
+// New initializes an instance of Schema.
 func New() *Schema {
 	s := &Schema{
 		entryPointNames: make(map[string]string),
