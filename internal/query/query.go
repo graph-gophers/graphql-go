@@ -5,8 +5,8 @@ import (
 	"strings"
 	"text/scanner"
 
-	"github.com/neelance/graphql-go/errors"
-	"github.com/neelance/graphql-go/internal/common"
+	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/internal/common"
 )
 
 type Document struct {
@@ -100,7 +100,7 @@ func Parse(queryString string) (*Document, *errors.QueryError) {
 	}
 	sc.Init(strings.NewReader(queryString))
 
-	l := common.New(sc)
+	l := common.NewLexer(sc)
 	var doc *Document
 	err := l.CatchSyntaxError(func() {
 		doc = parseDocument(l)

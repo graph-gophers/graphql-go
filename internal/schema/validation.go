@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/neelance/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/errors"
 )
 
 func validateEntryPointName(s *Schema, entryPoint *EntryPoint) error {
@@ -15,7 +15,7 @@ func validateEntryPointName(s *Schema, entryPoint *EntryPoint) error {
 	case "query", "mutation", "subscription":
 		if prev, ok := s.entryPointNames[name]; ok {
 			return &errors.QueryError{
-				Message:   fmt.Sprintf(`%q type provided more than once`, name),
+				Message:   fmt.Sprintf(`%q operation provided more than once`, name),
 				Locations: []errors.Location{prev.Loc, entryPoint.Loc},
 			}
 		}

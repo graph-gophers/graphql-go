@@ -1,4 +1,4 @@
-package tests
+package validation_test
 
 import (
 	"os"
@@ -8,10 +8,10 @@ import (
 
 	"encoding/json"
 
-	"github.com/neelance/graphql-go/errors"
-	"github.com/neelance/graphql-go/internal/query"
-	"github.com/neelance/graphql-go/internal/schema"
-	"github.com/neelance/graphql-go/internal/validation"
+	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/internal/query"
+	"github.com/graph-gophers/graphql-go/internal/schema"
+	"github.com/graph-gophers/graphql-go/internal/validation"
 )
 
 type Test struct {
@@ -22,7 +22,7 @@ type Test struct {
 	Errors []*errors.QueryError
 }
 
-func TestAll(t *testing.T) {
+func TestValidate(t *testing.T) {
 	f, err := os.Open("testdata/tests.json")
 	if err != nil {
 		t.Fatal(err)

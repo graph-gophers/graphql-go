@@ -1,1 +1,3 @@
-/internal/tests/testdata/graphql-js
+/internal/validation/testdata/graphql-js
+/internal/validation/testdata/node_modules
+/vendor

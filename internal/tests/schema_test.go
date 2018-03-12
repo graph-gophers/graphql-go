@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/neelance/graphql-go/errors"
-	"github.com/neelance/graphql-go/internal/schema"
+	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/internal/schema"
 )
 
 func TestParse(t *testing.T) {
@@ -68,7 +68,7 @@ type Mutation {
 }
 `,
 			err: &errors.QueryError{
-				Message: `"query" type provided more than once`,
+				Message: `"query" operation provided more than once`,
 				Locations: []errors.Location{
 					{Line: 2, Column: 3},
 					{Line: 4, Column: 3},

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"text/scanner"
 
-	"github.com/neelance/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/errors"
 )
 
 type syntaxError string
@@ -20,7 +20,7 @@ type Ident struct {
 	Loc  errors.Location
 }
 
-func New(sc *scanner.Scanner) *Lexer {
+func NewLexer(sc *scanner.Scanner) *Lexer {
 	l := &Lexer{sc: sc}
 	l.Consume()
 	return l
