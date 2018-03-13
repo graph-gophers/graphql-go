@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"reflect"
 	"strconv"
 	"testing"
 
 	graphql "github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/errors"
 )
 
 // Test is a GraphQL test case to be used with RunTest(s).
@@ -18,7 +20,7 @@ type Test struct {
 	OperationName  string
 	Variables      map[string]interface{}
 	ExpectedResult string
-	ErrorExpected  bool
+	ExpectedErrors []*errors.QueryError
 }
 
 // RunTests runs the given GraphQL test cases as subtests.
@@ -41,24 +43,16 @@ func RunTest(t *testing.T, test *Test) {
 		test.Context = context.Background()
 	}
 	result := test.Schema.Exec(test.Context, test.Query, test.OperationName, test.Variables)
-	if len(result.Errors) != 0 {
-		if !test.ErrorExpected {
-			t.Fatal(result.Errors[0])
-		}
-	} else {
-		if test.ErrorExpected {
-			t.Fatal("error expected")
-		}
+	checkErrors(t, test.ExpectedErrors, result.Errors)
 
-		got := formatJSON(t, result.Data)
+	got := formatJSON(t, result.Data)
 
-		want := formatJSON(t, []byte(test.ExpectedResult))
+	want := formatJSON(t, []byte(test.ExpectedResult))
 
-		if !bytes.Equal(got, want) {
-			t.Logf("got:  %s", got)
-			t.Logf("want: %s", want)
-			t.Fail()
-		}
+	if !bytes.Equal(got, want) {
+		t.Logf("got:  %s", got)
+		t.Logf("want: %s", want)
+		t.Fail()
 	}
 }
 
@@ -72,4 +66,29 @@ func formatJSON(t *testing.T, data []byte) []byte {
 		t.Fatal(err)
 	}
 	return formatted
+}
+
+func checkErrors(t *testing.T, expected, actual []*errors.QueryError) {
+	expectedCount, actualCount := len(expected), len(actual)
+	if expectedCount > 0 {
+		if expectedCount != actualCount {
+			t.Fatalf("unexpected number of errors: got %d, want %d", expectedCount, actualCount)
+		}
+
+		for i, want := range expected {
+			got := actual[i]
+
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("unexpected error: got %+v, want %+v", got, want)
+			}
+		}
+	}
+
+	for _, err := range actual {
+		t.Errorf("unexpected error: '%s'", err)
+	}
+
+	if actualCount > 0 {
+		t.Fatal("got unexpected errors")
+	}
 }
