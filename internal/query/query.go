@@ -114,6 +114,7 @@ func Parse(queryString string) (*Document, *errors.QueryError) {
 
 func parseDocument(l *common.Lexer) *Document {
 	d := &Document{}
+	l.Consume()
 	for l.Peek() != scanner.EOF {
 		if l.Peek() == '{' {
 			op := &Operation{Type: Query, Loc: l.Location()}

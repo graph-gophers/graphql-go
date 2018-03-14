@@ -396,6 +396,8 @@ func resolveInputObject(s *Schema, values common.InputValueList) error {
 }
 
 func parseSchema(s *Schema, l *common.Lexer) {
+	l.Consume()
+
 	for l.Peek() != scanner.EOF {
 		desc := l.DescComment()
 		switch x := l.ConsumeIdent(); x {
