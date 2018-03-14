@@ -118,9 +118,8 @@ func (b *Builder) makeNonNullPacker(schemaType common.Type, reflectType reflect.
 		}, nil
 
 	case *schema.Enum:
-		want := reflect.TypeOf("")
-		if reflectType != want {
-			return nil, fmt.Errorf("wrong type, expected %s", want)
+		if reflectType.Kind() != reflect.String {
+			return nil, fmt.Errorf("wrong type, expected %s", reflect.String)
 		}
 		return &ValuePacker{
 			ValueType: reflectType,
