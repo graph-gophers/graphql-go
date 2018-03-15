@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 
+	"errors"
+
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 	"github.com/graph-gophers/graphql-go/internal/schema"
@@ -13,10 +15,11 @@ import (
 
 type Schema struct {
 	schema.Schema
-	Query        Resolvable
-	Mutation     Resolvable
+	Query            Resolvable
+	Mutation         Resolvable
 	Subscription Resolvable
-	Resolver     reflect.Value
+	QueryResolver    reflect.Value
+	MutationResolver reflect.Value
 }
 
 type Resolvable interface {
@@ -58,16 +61,33 @@ func (*Scalar) isResolvable() {}
 func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 	b := newBuilder(s)
 
-	var query, mutation, subscription Resolvable
+	root := reflect.ValueOf(resolver)
+
+	var (
+		query, mutation, subscription                 Resolvable
+		queryResolver, mutationResolver reflect.Value
+	)
 
 	if t, ok := s.EntryPoints["query"]; ok {
-		if err := b.assignExec(&query, t, reflect.TypeOf(resolver)); err != nil {
+		rFunc := root.MethodByName("Query")
+		if !rFunc.IsValid() {
+			return nil, errors.New("not found query resolver")
+		}
+
+		queryResolver = rFunc.Call(nil)[0]
+		if err := b.assignExec(&query, t, queryResolver.Type()); err != nil {
 			return nil, err
 		}
 	}
 
 	if t, ok := s.EntryPoints["mutation"]; ok {
-		if err := b.assignExec(&mutation, t, reflect.TypeOf(resolver)); err != nil {
+		rFunc := root.MethodByName("Mutation")
+		if !rFunc.IsValid() {
+			return nil, errors.New("not found mutation resolver")
+		}
+
+		mutationResolver = rFunc.Call(nil)[0]
+		if err := b.assignExec(&mutation, t, mutationResolver.Type()); err != nil {
 			return nil, err
 		}
 	}
@@ -83,11 +103,12 @@ func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 	}
 
 	return &Schema{
-		Schema:       *s,
-		Resolver:     reflect.ValueOf(resolver),
-		Query:        query,
-		Mutation:     mutation,
-		Subscription: subscription,
+		Schema:           *s,
+		QueryResolver:    queryResolver,
+		MutationResolver: mutationResolver,
+		Query:            query,
+		Mutation:         mutation,
+		Subscription:     subscription,
 	}, nil
 }
 
