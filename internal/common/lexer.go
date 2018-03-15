@@ -78,34 +78,6 @@ func (l *Lexer) Consume() {
 	}
 }
 
-// consumeComment consumes all characters from `#` to the first encountered line terminator.
-// The characters are appended to `l.descComment`.
-func (l *Lexer) consumeComment() {
-	if l.next != '#' {
-		return
-	}
-
-	// TODO: count and trim whitespace so we can dedent any following lines.
-	if l.sc.Peek() == ' ' {
-		l.sc.Next()
-	}
-
-	if l.descComment != "" {
-		// TODO: use a bytes.Buffer or strings.Builder instead of this.
-		l.descComment += "\n"
-	}
-
-	for {
-		next := l.sc.Next()
-		if next == '\r' || next == '\n' || next == scanner.EOF {
-			break
-		}
-
-		// TODO: use a bytes.Buffer or strings.Build instead of this.
-		l.descComment += string(next)
-	}
-}
-
 func (l *Lexer) ConsumeIdent() string {
 	name := l.sc.TokenText()
 	l.ConsumeToken(scanner.Ident)
@@ -151,5 +123,33 @@ func (l *Lexer) Location() errors.Location {
 	return errors.Location{
 		Line:   l.sc.Line,
 		Column: l.sc.Column,
+	}
+}
+
+// consumeComment consumes all characters from `#` to the first encountered line terminator.
+// The characters are appended to `l.descComment`.
+func (l *Lexer) consumeComment() {
+	if l.next != '#' {
+		return
+	}
+
+	// TODO: count and trim whitespace so we can dedent any following lines.
+	if l.sc.Peek() == ' ' {
+		l.sc.Next()
+	}
+
+	if l.descComment != "" {
+		// TODO: use a bytes.Buffer or strings.Builder instead of this.
+		l.descComment += "\n"
+	}
+
+	for {
+		next := l.sc.Next()
+		if next == '\r' || next == '\n' || next == scanner.EOF {
+			break
+		}
+
+		// TODO: use a bytes.Buffer or strings.Build instead of this.
+		l.descComment += string(next)
 	}
 }
