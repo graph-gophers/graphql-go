@@ -1,9 +1,7 @@
 package common_test
 
 import (
-	"strings"
 	"testing"
-	"text/scanner"
 
 	"github.com/graph-gophers/graphql-go/internal/common"
 )
@@ -27,21 +25,14 @@ world: String!
 }}
 
 func TestConsume(t *testing.T) {
-	setup := func(t *testing.T, def string) *common.Lexer {
-		t.Helper()
-
-		sc := &scanner.Scanner{
-			Mode: scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats | scanner.ScanStrings,
-		}
-		sc.Init(strings.NewReader(def))
-		return common.NewLexer(sc)
-	}
-
 	for _, test := range consumeTests {
 		t.Run(test.description, func(t *testing.T) {
-			lex := setup(t, test.definition)
+			lex := common.NewLexer(test.definition)
 
-			lex.Consume()
+			err := lex.CatchSyntaxError(lex.Consume)
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			if test.expected != lex.DescComment() {
 				t.Errorf("wanted: %q\ngot: %q", test.expected, lex.DescComment())

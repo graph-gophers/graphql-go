@@ -2,7 +2,6 @@ package schema
 
 import (
 	"fmt"
-	"strings"
 	"text/scanner"
 
 	"github.com/graph-gophers/graphql-go/errors"
@@ -248,15 +247,9 @@ func New() *Schema {
 
 // Parse the schema string.
 func (s *Schema) Parse(schemaString string) error {
-	sc := &scanner.Scanner{
-		Mode: scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats | scanner.ScanStrings,
-	}
-	sc.Init(strings.NewReader(schemaString))
+	l := common.NewLexer(schemaString)
 
-	l := common.NewLexer(sc)
-	err := l.CatchSyntaxError(func() {
-		parseSchema(s, l)
-	})
+	err := l.CatchSyntaxError(func() { parseSchema(s, l) })
 	if err != nil {
 		return err
 	}

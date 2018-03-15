@@ -1,9 +1,7 @@
 package schema
 
 import (
-	"strings"
 	"testing"
-	"text/scanner"
 
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
@@ -160,12 +158,7 @@ func compareObjects(t *testing.T, expected, actual *Object) {
 func setup(t *testing.T, def string) *common.Lexer {
 	t.Helper()
 
-	sc := &scanner.Scanner{
-		Mode: scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats | scanner.ScanStrings,
-	}
-	sc.Init(strings.NewReader(def))
-
-	lex := common.NewLexer(sc)
+	lex := common.NewLexer(def)
 	lex.Consume()
 
 	return lex

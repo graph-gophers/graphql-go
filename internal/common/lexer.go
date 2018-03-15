@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"strings"
 	"text/scanner"
 
 	"github.com/graph-gophers/graphql-go/errors"
@@ -20,7 +21,12 @@ type Ident struct {
 	Loc  errors.Location
 }
 
-func NewLexer(sc *scanner.Scanner) *Lexer {
+func NewLexer(s string) *Lexer {
+	sc := &scanner.Scanner{
+		Mode: scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats | scanner.ScanStrings,
+	}
+	sc.Init(strings.NewReader(s))
+
 	return &Lexer{sc: sc}
 }
 
