@@ -9,6 +9,34 @@ import (
 	"github.com/graph-gophers/graphql-go/internal/common"
 )
 
+func TestParseInterfaceDef(t *testing.T) {
+	type testCase struct {
+		description string
+		definition  string
+		expected    *Interface
+		err         *errors.QueryError
+	}
+
+	tests := []testCase{{
+		description: "Parses simple interface",
+		definition:  "Greeting { field: String }",
+		expected:    &Interface{Name: "Greeting", Fields: []*Field{&Field{Name: "field"}}},
+	}}
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			var actual *Interface
+			lex := setup(t, test.definition)
+
+			parse := func() { actual = parseInterfaceDef(lex) }
+			err := lex.CatchSyntaxError(parse)
+
+			compareErrors(t, test.err, err)
+			compareInterfaces(t, test.expected, actual)
+		})
+	}
+}
+
 // TestParseObjectDef tests the logic for parsing object types from the schema definition as
 // written in `parseObjectDef()`.
 func TestParseObjectDef(t *testing.T) {
@@ -37,22 +65,10 @@ func TestParseObjectDef(t *testing.T) {
 		expected:    &Object{Name: "Hello", interfaceNames: []string{"Wo", "rld"}},
 	}}
 
-	setup := func(def string) *common.Lexer {
-		sc := &scanner.Scanner{
-			Mode: scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats | scanner.ScanStrings,
-		}
-		sc.Init(strings.NewReader(def))
-
-		lex := common.NewLexer(sc)
-		lex.Consume()
-
-		return lex
-	}
-
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			var actual *Object
-			lex := setup(test.definition)
+			lex := setup(t, test.definition)
 
 			parse := func() { actual = parseObjectDef(lex) }
 			err := lex.CatchSyntaxError(parse)
@@ -81,6 +97,34 @@ func compareErrors(t *testing.T, expected, actual *errors.QueryError) {
 	}
 }
 
+func compareInterfaces(t *testing.T, expected, actual *Interface) {
+	t.Helper()
+
+	// TODO: We can probably extract this switch statement into its own function.
+	switch {
+	case expected == nil && actual == nil:
+		return
+	case expected == nil && actual != nil:
+		t.Fatalf("wanted nil, got an unexpected result: %#v", actual)
+	case expected != nil && actual == nil:
+		t.Fatalf("wanted non-nil result, got nil")
+	}
+
+	if expected.Name != actual.Name {
+		t.Errorf("wrong interface name: want %q, got %q", expected.Name, actual.Name)
+	}
+
+	if len(expected.Fields) != len(actual.Fields) {
+		t.Fatalf("wanted %d field definitions, got %d", len(expected.Fields), len(actual.Fields))
+	}
+
+	for i, f := range expected.Fields {
+		if f.Name != actual.Fields[i].Name {
+			t.Errorf("fields[%d]: wrong field name: want %q, got %q", i, f.Name, actual.Fields[i].Name)
+		}
+	}
+}
+
 func compareObjects(t *testing.T, expected, actual *Object) {
 	t.Helper()
 
@@ -88,9 +132,9 @@ func compareObjects(t *testing.T, expected, actual *Object) {
 	case expected == nil && expected == actual:
 		return
 	case expected == nil && actual != nil:
-		t.Fatalf("got an unexpected object: %#v", actual)
+		t.Fatalf("wanted nil, got an unexpected result: %#v", actual)
 	case expected != nil && actual == nil:
-		t.Fatalf("wanted non-nil object, got nil")
+		t.Fatalf("wanted non-nil result, got nil")
 	}
 
 	if expected.Name != actual.Name {
@@ -111,4 +155,18 @@ func compareObjects(t *testing.T, expected, actual *Object) {
 			t.Errorf("wrong interface name: want %q, got %q", expectedName, actualName)
 		}
 	}
+}
+
+func setup(t *testing.T, def string) *common.Lexer {
+	t.Helper()
+
+	sc := &scanner.Scanner{
+		Mode: scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats | scanner.ScanStrings,
+	}
+	sc.Init(strings.NewReader(def))
+
+	lex := common.NewLexer(sc)
+	lex.Consume()
+
+	return lex
 }

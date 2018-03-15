@@ -14,6 +14,15 @@ type parseTestCase struct {
 }
 
 var parseTests = []parseTestCase{{
+	description: "Parses interface definition",
+	sdl:         "interface Greeting { message: String! }",
+	expected: &schema.Schema{
+		Types: map[string]schema.NamedType{
+			"Greeting": &schema.Interface{
+				Name:   "Greeting",
+				Fields: []*schema.Field{{Name: "message"}},
+			}},
+	}}, {
 	description: "Parses type with description string",
 	sdl: `
 	"Single line description."
@@ -25,10 +34,8 @@ var parseTests = []parseTestCase{{
 			"Type": &schema.Object{
 				Name: "Type",
 				Desc: "Single line description.",
-			},
-		},
-	},
-}, {
+			}},
+	}}, {
 	description: "Parses type with multi-line description string",
 	sdl: `
 	"""
@@ -42,10 +49,8 @@ var parseTests = []parseTestCase{{
 			"Type": &schema.Object{
 				Name: "Type",
 				Desc: "Multi-line description.",
-			},
-		},
-	},
-}, {
+			}},
+	}}, {
 	description: "Parses type with multi-line description and ignores comments",
 	sdl: `
 	"""
@@ -60,10 +65,9 @@ var parseTests = []parseTestCase{{
 			"Type": &schema.Object{
 				Name: "Type",
 				Desc: "Multi-line description with ignored comments.",
-			},
-		},
-	},
-}}
+			}},
+	}},
+}
 
 func TestParse(t *testing.T) {
 	setup := func(t *testing.T) *schema.Schema {

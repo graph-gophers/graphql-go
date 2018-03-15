@@ -450,6 +450,7 @@ func parseSchema(s *Schema, l *common.Lexer) {
 			s.Directives[directive.Name] = directive
 
 		default:
+			// TODO: Add support for type extensions.
 			l.SyntaxError(fmt.Sprintf(`unexpected %q, expecting "schema", "type", "enum", "interface", "union", "input", "scalar" or "directive"`, x))
 		}
 	}
