@@ -15,7 +15,7 @@ type Schema struct {
 	schema.Schema
 	Query            Resolvable
 	Mutation         Resolvable
-	Subscription Resolvable
+	Subscription     Resolvable
 	QueryResolver    reflect.Value
 	MutationResolver reflect.Value
 }
@@ -68,31 +68,31 @@ func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 	b := newBuilder(s)
 
 	var (
-		query, mutation, subscription                 Resolvable
-		queryResolver, mutationResolver reflect.Value
+		query, mutation, subscription   Resolvable
+		queryResolver, mutationResolver interface{}
 	)
 
 	sqr, isSeparateQueryResolver := resolver.(QueryResolver)
 	if isSeparateQueryResolver {
-		queryResolver = reflect.ValueOf(sqr.Query())
+		queryResolver = sqr.Query()
 	} else {
-		queryResolver = reflect.ValueOf(resolver)
+		queryResolver = resolver
 	}
 	smr, isSeparateMutationResolver := resolver.(MutationResolver)
 	if isSeparateMutationResolver {
-		mutationResolver = reflect.ValueOf(smr.Mutation())
+		mutationResolver = smr.Mutation()
 	} else {
-		mutationResolver = reflect.ValueOf(resolver)
+		mutationResolver = resolver
 	}
 
 	if t, ok := s.EntryPoints["query"]; ok {
-		if err := b.assignExec(&query, t, queryResolver.Type()); err != nil {
+		if err := b.assignExec(&query, t, reflect.TypeOf(queryResolver)); err != nil {
 			return nil, err
 		}
 	}
 
 	if t, ok := s.EntryPoints["mutation"]; ok {
-		if err := b.assignExec(&mutation, t, mutationResolver.Type()); err != nil {
+		if err := b.assignExec(&mutation, t, reflect.TypeOf(mutationResolver)); err != nil {
 			return nil, err
 		}
 	}
@@ -109,8 +109,8 @@ func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 
 	return &Schema{
 		Schema:           *s,
-		QueryResolver:    queryResolver,
-		MutationResolver: mutationResolver,
+		QueryResolver:    reflect.ValueOf(queryResolver),
+		MutationResolver: reflect.ValueOf(mutationResolver),
 		Query:            query,
 		Mutation:         mutation,
 		Subscription:     subscription,
@@ -207,7 +207,7 @@ func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type) (Resolv
 		return e, nil
 
 	default:
-		panic("invalid type: " + t.String())
+		panic("invalid type")
 	}
 }
 
