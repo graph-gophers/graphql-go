@@ -18,10 +18,11 @@ var consumeTests = []consumeTestCase{{
 
 # Comment line 1
 # Comment line 2
+,,,,,, # Commas are insignificant
 type Hello {
-world: String!
+	world: String!
 }`,
-	expected: "Comment line 1\nComment line 2",
+	expected: "Comment line 1\nComment line 2\nCommas are insignificant",
 }}
 
 func TestConsume(t *testing.T) {
@@ -35,7 +36,7 @@ func TestConsume(t *testing.T) {
 			}
 
 			if test.expected != lex.DescComment() {
-				t.Errorf("wanted: %q\ngot: %q", test.expected, lex.DescComment())
+				t.Errorf("wrong description value:\nwant: %q\ngot : %q", test.expected, lex.DescComment())
 			}
 		})
 	}
