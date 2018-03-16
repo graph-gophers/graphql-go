@@ -6,8 +6,6 @@ import (
 	"reflect"
 	"strings"
 
-	"errors"
-
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 	"github.com/graph-gophers/graphql-go/internal/schema"
@@ -58,35 +56,42 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
+type QueryResolver interface {
+	Query() interface{}
+}
+
+type MutationResolver interface {
+	Mutation() interface{}
+}
+
 func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 	b := newBuilder(s)
-
-	root := reflect.ValueOf(resolver)
 
 	var (
 		query, mutation, subscription                 Resolvable
 		queryResolver, mutationResolver reflect.Value
 	)
 
-	if t, ok := s.EntryPoints["query"]; ok {
-		rFunc := root.MethodByName("Query")
-		if !rFunc.IsValid() {
-			return nil, errors.New("not found query resolver")
-		}
+	sqr, isSeparateQueryResolver := resolver.(QueryResolver)
+	if isSeparateQueryResolver {
+		queryResolver = reflect.ValueOf(sqr.Query())
+	} else {
+		queryResolver = reflect.ValueOf(resolver)
+	}
+	smr, isSeparateMutationResolver := resolver.(MutationResolver)
+	if isSeparateMutationResolver {
+		mutationResolver = reflect.ValueOf(smr.Mutation())
+	} else {
+		mutationResolver = reflect.ValueOf(resolver)
+	}
 
-		queryResolver = rFunc.Call(nil)[0]
+	if t, ok := s.EntryPoints["query"]; ok {
 		if err := b.assignExec(&query, t, queryResolver.Type()); err != nil {
 			return nil, err
 		}
 	}
 
 	if t, ok := s.EntryPoints["mutation"]; ok {
-		rFunc := root.MethodByName("Mutation")
-		if !rFunc.IsValid() {
-			return nil, errors.New("not found mutation resolver")
-		}
-
-		mutationResolver = rFunc.Call(nil)[0]
 		if err := b.assignExec(&mutation, t, mutationResolver.Type()); err != nil {
 			return nil, err
 		}

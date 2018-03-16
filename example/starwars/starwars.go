@@ -288,11 +288,11 @@ type RootResolver struct{}
 type QueryResolver struct{}
 type MutationResolver struct{}
 
-func (r *RootResolver) Query() *QueryResolver {
+func (r *RootResolver) Query() interface{} {
 	return &QueryResolver{}
 }
 
-func (r *RootResolver) Mutation() *MutationResolver {
+func (r *RootResolver) Mutation() interface{} {
 	return &MutationResolver{}
 }
 
