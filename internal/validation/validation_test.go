@@ -1,4 +1,4 @@
-package tests
+package validation_test
 
 import (
 	"os"
@@ -22,7 +22,7 @@ type Test struct {
 	Errors []*errors.QueryError
 }
 
-func TestAll(t *testing.T) {
+func TestValidate(t *testing.T) {
 	f, err := os.Open("testdata/tests.json")
 	if err != nil {
 		t.Fatal(err)
