@@ -61,7 +61,7 @@ func (r *timeResolver) AddHour(args struct{ Time graphql.Time }) graphql.Time {
 	return graphql.Time{Time: args.Time.Add(time.Hour)}
 }
 
-var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
+var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{}, nil)
 
 func TestHelloWorld(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
@@ -74,7 +74,7 @@ func TestHelloWorld(t *testing.T) {
 				type Query {
 					hello: String!
 				}
-			`, &helloWorldResolver1{}),
+			`, &helloWorldResolver1{}, nil),
 			Query: `
 				{
 					hello
@@ -96,7 +96,7 @@ func TestHelloWorld(t *testing.T) {
 				type Query {
 					hello: String!
 				}
-			`, &helloWorldResolver2{}),
+			`, &helloWorldResolver2{}, nil),
 			Query: `
 				{
 					hello
@@ -122,7 +122,7 @@ func TestHelloSnake(t *testing.T) {
 				type Query {
 					hello_html: String!
 				}
-			`, &helloSnakeResolver1{}),
+			`, &helloSnakeResolver1{}, nil),
 			Query: `
 				{
 					hello_html
@@ -144,7 +144,7 @@ func TestHelloSnake(t *testing.T) {
 				type Query {
 					hello_html: String!
 				}
-			`, &helloSnakeResolver2{}),
+			`, &helloSnakeResolver2{}, nil),
 			Query: `
 				{
 					hello_html
@@ -170,7 +170,7 @@ func TestHelloSnakeArguments(t *testing.T) {
 				type Query {
 					say_hello(full_name: String!): String!
 				}
-			`, &helloSnakeResolver1{}),
+			`, &helloSnakeResolver1{}, nil),
 			Query: `
 				{
 					say_hello(full_name: "Rob Pike")
@@ -192,7 +192,7 @@ func TestHelloSnakeArguments(t *testing.T) {
 				type Query {
 					say_hello(full_name: String!): String!
 				}
-			`, &helloSnakeResolver2{}),
+			`, &helloSnakeResolver2{}, nil),
 			Query: `
 				{
 					say_hello(full_name: "Rob Pike")
@@ -606,7 +606,7 @@ func TestDeprecatedDirective(t *testing.T) {
 					b: Int! @deprecated
 					c: Int! @deprecated(reason: "We don't like it")
 				}
-			`, &testDeprecatedDirectiveResolver{}),
+			`, &testDeprecatedDirectiveResolver{}, nil),
 			Query: `
 				{
 					__type(name: "Query") {
@@ -650,7 +650,7 @@ func TestDeprecatedDirective(t *testing.T) {
 					B @deprecated
 					C @deprecated(reason: "We don't like it")
 				}
-			`, &testDeprecatedDirectiveResolver{}),
+			`, &testDeprecatedDirectiveResolver{}, nil),
 			Query: `
 				{
 					__type(name: "Test") {
@@ -1441,7 +1441,7 @@ func TestMutationOrder(t *testing.T) {
 				type Mutation {
 					changeTheNumber(newNumber: Int!): Query
 				}
-			`, &theNumberResolver{}),
+			`, &theNumberResolver{}, nil),
 			Query: `
 				mutation {
 					first: changeTheNumber(newNumber: 1) {
@@ -1485,7 +1485,7 @@ func TestTime(t *testing.T) {
 				}
 
 				scalar Time
-			`, &timeResolver{}),
+			`, &timeResolver{}, nil),
 			Query: `
 				query($t: Time!) {
 					a: addHour(time: $t)
@@ -1520,7 +1520,7 @@ func TestUnexportedMethod(t *testing.T) {
 		type Mutation {
 			changeTheNumber(newNumber: Int!): Int!
 		}
-	`, &resolverWithUnexportedMethod{})
+	`, &resolverWithUnexportedMethod{}, nil)
 	if err == nil {
 		t.Error("error expected")
 	}
@@ -1541,7 +1541,7 @@ func TestUnexportedField(t *testing.T) {
 		type Mutation {
 			changeTheNumber(newNumber: Int!): Int!
 		}
-	`, &resolverWithUnexportedField{})
+	`, &resolverWithUnexportedField{}, nil)
 	if err == nil {
 		t.Error("error expected")
 	}
@@ -1648,7 +1648,7 @@ func TestInput(t *testing.T) {
 			Option1
 			Option2
 		}
-	`, &inputResolver{})
+	`, &inputResolver{}, nil)
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: coercionSchema,

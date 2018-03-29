@@ -2,9 +2,8 @@ package graphql
 
 import (
 	"context"
-	"fmt"
-
 	"encoding/json"
+	"fmt"
 
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
