@@ -192,7 +192,12 @@ func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *p
 				return err
 			}
 		} else {
-			result = f.resolver.Field(f.field.FieldIndex)
+			// TODO extract out unwrapping ptr logic to a common place
+			res := f.resolver
+			if res.Kind() == reflect.Ptr {
+				res = res.Elem()
+			}
+			result = res.Field(f.field.FieldIndex)
 		}
 
 		return nil

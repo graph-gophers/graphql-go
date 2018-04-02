@@ -1,12 +1,10 @@
 package schema
 
-import "github.com/graph-gophers/graphql-go/config"
-
 var Meta *Schema
 
 func init() {
 	Meta = &Schema{} // bootstrap
-	Meta = New(config.Default())
+	Meta = New()
 	if err := Meta.Parse(metaSrc); err != nil {
 		panic(err)
 	}

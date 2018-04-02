@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"text/scanner"
 
-	"github.com/graph-gophers/graphql-go/config"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
 )
@@ -47,7 +46,7 @@ type Schema struct {
 	unions          []*Union
 	enums           []*Enum
 
-	Config *config.Config
+	UseFieldResolvers bool
 }
 
 // Resolve a named type in the schema by its name.
@@ -233,12 +232,11 @@ type Field struct {
 }
 
 // New initializes an instance of Schema.
-func New(config *config.Config) *Schema {
+func New() *Schema {
 	s := &Schema{
 		entryPointNames: make(map[string]string),
 		Types:           make(map[string]NamedType),
 		Directives:      make(map[string]*DirectiveDecl),
-		Config:          config,
 	}
 	for n, t := range Meta.Types {
 		s.Types[n] = t

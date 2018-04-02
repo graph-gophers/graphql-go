@@ -5,14 +5,15 @@ import (
 	"net/http"
 
 	"github.com/graph-gophers/graphql-go"
-	"github.com/graph-gophers/graphql-go/example/starwars"
+	"github.com/graph-gophers/graphql-go/example/social"
 	"github.com/graph-gophers/graphql-go/relay"
 )
 
 var schema *graphql.Schema
 
 func init() {
-	schema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
+	opts := []graphql.SchemaOpt{graphql.UseFieldResolvers(), graphql.MaxParallelism(20)}
+	schema = graphql.MustParseSchema(social.Schema, &social.Resolver{}, opts...)
 }
 
 func main() {
@@ -22,7 +23,7 @@ func main() {
 
 	http.Handle("/query", &relay.Handler{Schema: schema})
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":9011", nil))
 }
 
 var page = []byte(`

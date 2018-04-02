@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/graph-gophers/graphql-go/config"
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 	"github.com/graph-gophers/graphql-go/internal/schema"
@@ -57,15 +56,9 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-// TODO figure out a better way to handle passed config
-// use this to save passed config in order to use it in functions or later
-// this approach avoids updating signature of many functions
-var conf *config.Config
-
 func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 
 	b := newBuilder(s)
-	conf = s.Config
 
 	var query, mutation Resolvable
 
@@ -208,7 +201,8 @@ func makeScalarExec(t *schema.Scalar, resolverType reflect.Type) (Resolvable, er
 	return &Scalar{}, nil
 }
 
-func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, possibleTypes []*schema.Object, nonNull bool, resolverType reflect.Type) (*Object, error) {
+func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, possibleTypes []*schema.Object,
+	nonNull bool, resolverType reflect.Type) (*Object, error) {
 
 	if !nonNull {
 		if resolverType.Kind() != reflect.Ptr && resolverType.Kind() != reflect.Interface {
@@ -219,19 +213,21 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 	methodHasReceiver := resolverType.Kind() != reflect.Interface
 
 	Fields := make(map[string]*Field)
+	rt := unwrapPtr(resolverType)
 	for _, f := range fields {
 		methodIndex := -1
 		fieldIndex := -1
-		rt := unwrapPtr(resolverType)
 
 		/**
-		 * 1) Use resolver type's method for
-		 *		1.1) __Type and __Schema requests
-		 *		1.2) or when field has arguments
-		 *		1.3) or it is configured to use method
+		 * 1) Use resolver type's method when
+		 *	1.1) __Type and __Schema requests
+		 *	1.2) Or field has arguments
+		 *	1.3) Or it is configured to use method
+		 *	1.4) Or it is an interface
 		 * 2) Otherwise use resolver type's field
 		 */
-		if isResolverSchemaOrType(rt) == true || len(f.Args) > 0 || conf.UseResolverMethods == true {
+		if isResolverSchemaOrType(rt) == true || len(f.Args) > 0 ||
+			b.schema.UseFieldResolvers == false || rt.Kind() == reflect.Interface {
 			methodIndex = findMethod(resolverType, f.Name)
 		} else {
 			fieldIndex = findField(rt, f.Name)
@@ -259,22 +255,29 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 		Fields[f.Name] = fe
 	}
 
+	/**
+	 * Check type assertions when
+	 *	1) __Type and __Schema requests
+	 *	2) Or it is configured to use method
+	 */
 	typeAssertions := make(map[string]*TypeAssertion)
-	for _, impl := range possibleTypes {
-		methodIndex := findMethod(resolverType, "To"+impl.Name)
-		if methodIndex == -1 {
-			return nil, fmt.Errorf("%s does not resolve %q: missing method %q to convert to %q", resolverType, typeName, "To"+impl.Name, impl.Name)
+	if isResolverSchemaOrType(rt) == true || b.schema.UseFieldResolvers == false {
+		for _, impl := range possibleTypes {
+			methodIndex := findMethod(resolverType, "To"+impl.Name)
+			if methodIndex == -1 {
+				return nil, fmt.Errorf("%s does not resolve %q: missing method %q to convert to %q", resolverType, typeName, "To"+impl.Name, impl.Name)
+			}
+			if resolverType.Method(methodIndex).Type.NumOut() != 2 {
+				return nil, fmt.Errorf("%s does not resolve %q: method %q should return a value and a bool indicating success", resolverType, typeName, "To"+impl.Name)
+			}
+			a := &TypeAssertion{
+				MethodIndex: methodIndex,
+			}
+			if err := b.assignExec(&a.TypeExec, impl, resolverType.Method(methodIndex).Type.Out(0)); err != nil {
+				return nil, err
+			}
+			typeAssertions[impl.Name] = a
 		}
-		if resolverType.Method(methodIndex).Type.NumOut() != 2 {
-			return nil, fmt.Errorf("%s does not resolve %q: method %q should return a value and a bool indicating success", resolverType, typeName, "To"+impl.Name)
-		}
-		a := &TypeAssertion{
-			MethodIndex: methodIndex,
-		}
-		if err := b.assignExec(&a.TypeExec, impl, resolverType.Method(methodIndex).Type.Out(0)); err != nil {
-			return nil, err
-		}
-		typeAssertions[impl.Name] = a
 	}
 
 	return &Object{
@@ -294,6 +297,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 	var hasError bool
 	var hasContext bool
 
+	// Validate resolver method only when there is one
 	if methodIndex != -1 {
 		in := make([]reflect.Type, m.Type.NumIn())
 		for i := range in {
