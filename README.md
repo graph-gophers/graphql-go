@@ -1,45 +1,24 @@
-# graphql-go
+# graphql-go [![Sourcegraph](https://sourcegraph.com/github.com/graph-gophers/graphql-go/-/badge.svg)](https://sourcegraph.com/github.com/graph-gophers/graphql-go?badge) [![Build Status](https://semaphoreci.com/api/v1/graph-gophers/graphql-go/branches/master/badge.svg)](https://semaphoreci.com/graph-gophers/graphql-go) [![GoDoc](https://godoc.org/github.com/graph-gophers/graphql-go?status.svg)](https://godoc.org/github.com/graph-gophers/graphql-go)
 
-[![Sourcegraph](https://sourcegraph.com/github.com/graph-gophers/graphql-go/-/badge.svg)](https://sourcegraph.com/github.com/graph-gophers/graphql-go?badge)
-[![Build Status](https://semaphoreci.com/api/v1/graph-gophers/graphql-go/branches/master/badge.svg)](https://semaphoreci.com/graph-gophers/graphql-go)
-[![GoDoc](https://godoc.org/github.com/graph-gophers/graphql-go?status.svg)](https://godoc.org/github.com/graph-gophers/graphql-go)
+The goal of this to provide full support of the [GraphQL draft specification](https://facebook.github.io/graphql/draft) with a set of idiomatic, easy to use Go packages.
 
-## Status
+While still under heavy development (`internal` APIs are almost certainly subject to change), this library is 
+safe for production use.
 
-### Update: March 1, 2018
+## Features
 
-This project has transferred ownership from `github.com/neelance/graphql-go` to
-`github.com/graph-gophers/graphql-go`, which will enable us to maintain and evolve the
-library [@neelance](https://github.com/neelance) created, and let him focus on WebAssembly / Go development.
+- minimal API
+- support for `context.Context`
+- support for the `OpenTracing` standard
+- schema type-checking against resolvers
+- resolvers are matched to the schema based on method sets (can resolve a GraphQL schema with a Go interface or Go struct).
+- handles panics in resolvers
+- parallel execution of resolvers
 
-I'm super grateful to @neelance for all his work blazing the trail
-with `graphql-go`, and I'm ecstatic to work with the community to continue
-improving this library.
+## Roadmap
 
-I'm going to help address issues, review and merge changes, and continue development with
-the same ethos as we started.
-
-The immediate goal remains—full support of the GraphQL specification.
-
-- Tony (@tonyghita)
-
-The project is under heavy development. It is stable enough so we use it in production at [Sourcegraph](https://sourcegraph.com), but expect changes.
-
-## Goals
-
-* [ ] full support of [GraphQL spec (October 2016)](https://facebook.github.io/graphql/)
-  * [ ] propagation of `null` on resolver errors
-  * [x] everything else
-* [x] minimal API
-* [x] support for context.Context and OpenTracing
-* [x] early error detection at application startup by type-checking if the given resolver matches the schema
-* [x] resolvers are purely based on method sets (e.g. it's up to you if you want to resolve a GraphQL interface with a Go interface or a Go struct)
-* [ ] nice error messages (no internal panics, even with an invalid schema or resolver; please file a bug if you see an internal panic)
-  * [x] nice errors on resolver validation
-  * [ ] nice errors on all invalid schemas
-  * [ ] nice errors on all invalid queries
-* [x] panic handling (a panic in a resolver should not take down the whole app)
-* [x] parallel execution of resolvers
+We're trying out the GitHub Project feature to manage `graphql-go`'s [development roadmap](https://github.com/graph-gophers/graphql-go/projects/1).
+Feedback is welcome and appreciated.
 
 ## (Some) Documentation
 
@@ -75,7 +54,7 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 
 ### Community Examples
 
-[tonyghita/graphql-go-example](https://github.com/tonyghita/graphql-go-example)
+[tonyghita/graphql-go-example](https://github.com/tonyghita/graphql-go-example) - A more "productionized" version of the Star Wars API example given in this repository.
 
 [deltaskelta/graphql-go-pets-example](https://github.com/deltaskelta/graphql-go-pets-example) - graphql-go resolving against a sqlite database
 
