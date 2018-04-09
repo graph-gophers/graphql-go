@@ -10,58 +10,66 @@ import (
 	"github.com/graph-gophers/graphql-go/gqltesting"
 )
 
-type helloWorldResolver1 struct{}
+type helloWorldQueryResolver1 struct{}
+type helloWorldMutationResolver1 struct{}
 
-func (r *helloWorldResolver1) Hello() string {
+func (r *helloWorldQueryResolver1) Hello() string {
 	return "Hello world!"
 }
 
-type helloWorldResolver2 struct{}
+type helloWorldQueryResolver2 struct{}
+type helloWorldMutationResolver2 struct{}
 
-func (r *helloWorldResolver2) Hello(ctx context.Context) (string, error) {
+func (r *helloWorldQueryResolver2) Hello(ctx context.Context) (string, error) {
 	return "Hello world!", nil
 }
 
-type helloSnakeResolver1 struct{}
+type helloSnakeQueryResolver1 struct{}
+type helloSnakeMutationResolver1 struct{}
 
-func (r *helloSnakeResolver1) HelloHTML() string {
+func (r *helloSnakeQueryResolver1) HelloHTML() string {
 	return "Hello snake!"
 }
 
-func (r *helloSnakeResolver1) SayHello(args struct{ FullName string }) string {
+func (r *helloSnakeQueryResolver1) SayHello(args struct{ FullName string }) string {
 	return "Hello " + args.FullName + "!"
 }
 
-type helloSnakeResolver2 struct{}
+type helloSnakeQueryResolver2 struct{}
+type helloSnakeMutationResolver2 struct{}
 
-func (r *helloSnakeResolver2) HelloHTML(ctx context.Context) (string, error) {
+func (r *helloSnakeQueryResolver2) HelloHTML(ctx context.Context) (string, error) {
 	return "Hello snake!", nil
 }
 
-func (r *helloSnakeResolver2) SayHello(ctx context.Context, args struct{ FullName string }) (string, error) {
+func (r *helloSnakeQueryResolver2) SayHello(ctx context.Context, args struct{ FullName string }) (string, error) {
 	return "Hello " + args.FullName + "!", nil
 }
 
-type theNumberResolver struct {
+type theNumberQueryResolver struct {
 	number int32
 }
 
-func (r *theNumberResolver) TheNumber() int32 {
+type theNumberMutationResolver struct {
+	number int32
+}
+
+func (r *theNumberQueryResolver) TheNumber() int32 {
 	return r.number
 }
 
-func (r *theNumberResolver) ChangeTheNumber(args struct{ NewNumber int32 }) *theNumberResolver {
-	r.number = args.NewNumber
-	return r
+func (r *theNumberMutationResolver) ChangeTheNumber(args struct{ NewNumber int32 }) *theNumberQueryResolver {
+	return &theNumberQueryResolver{args.NewNumber}
 }
 
-type timeResolver struct{}
+type timeQueryResolver struct{}
+type timeMutationResolver struct{}
 
-func (r *timeResolver) AddHour(args struct{ Time graphql.Time }) graphql.Time {
+func (r *timeQueryResolver) AddHour(args struct{ Time graphql.Time }) graphql.Time {
 	return graphql.Time{Time: args.Time.Add(time.Hour)}
 }
 
-var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
+var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.QueryResolver{}, &starwars.MutationResolver{})
 
 func TestHelloWorld(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
@@ -74,7 +82,7 @@ func TestHelloWorld(t *testing.T) {
 				type Query {
 					hello: String!
 				}
-			`, &helloWorldResolver1{}),
+			`, &helloWorldQueryResolver1{}, &helloWorldMutationResolver1{}),
 			Query: `
 				{
 					hello
@@ -96,7 +104,7 @@ func TestHelloWorld(t *testing.T) {
 				type Query {
 					hello: String!
 				}
-			`, &helloWorldResolver2{}),
+			`, &helloWorldQueryResolver2{}, &helloWorldMutationResolver2{}),
 			Query: `
 				{
 					hello
@@ -122,7 +130,7 @@ func TestHelloSnake(t *testing.T) {
 				type Query {
 					hello_html: String!
 				}
-			`, &helloSnakeResolver1{}),
+			`, &helloSnakeQueryResolver1{}, &helloSnakeMutationResolver1{}),
 			Query: `
 				{
 					hello_html
@@ -144,7 +152,7 @@ func TestHelloSnake(t *testing.T) {
 				type Query {
 					hello_html: String!
 				}
-			`, &helloSnakeResolver2{}),
+			`, &helloSnakeQueryResolver2{}, &helloSnakeMutationResolver2{}),
 			Query: `
 				{
 					hello_html
@@ -170,7 +178,7 @@ func TestHelloSnakeArguments(t *testing.T) {
 				type Query {
 					say_hello(full_name: String!): String!
 				}
-			`, &helloSnakeResolver1{}),
+			`, &helloSnakeQueryResolver1{}, &helloSnakeMutationResolver1{}),
 			Query: `
 				{
 					say_hello(full_name: "Rob Pike")
@@ -192,7 +200,7 @@ func TestHelloSnakeArguments(t *testing.T) {
 				type Query {
 					say_hello(full_name: String!): String!
 				}
-			`, &helloSnakeResolver2{}),
+			`, &helloSnakeQueryResolver2{}, &helloSnakeMutationResolver2{}),
 			Query: `
 				{
 					say_hello(full_name: "Rob Pike")
@@ -579,17 +587,18 @@ func TestIncludeDirective(t *testing.T) {
 	})
 }
 
-type testDeprecatedDirectiveResolver struct{}
+type testDeprecatedDirectiveQueryResolver struct{}
+type testDeprecatedDirectiveMutationResolver struct{}
 
-func (r *testDeprecatedDirectiveResolver) A() int32 {
+func (r *testDeprecatedDirectiveQueryResolver) A() int32 {
 	return 0
 }
 
-func (r *testDeprecatedDirectiveResolver) B() int32 {
+func (r *testDeprecatedDirectiveQueryResolver) B() int32 {
 	return 0
 }
 
-func (r *testDeprecatedDirectiveResolver) C() int32 {
+func (r *testDeprecatedDirectiveQueryResolver) C() int32 {
 	return 0
 }
 
@@ -606,7 +615,7 @@ func TestDeprecatedDirective(t *testing.T) {
 					b: Int! @deprecated
 					c: Int! @deprecated(reason: "We don't like it")
 				}
-			`, &testDeprecatedDirectiveResolver{}),
+			`, &testDeprecatedDirectiveQueryResolver{}, &testDeprecatedDirectiveMutationResolver{}),
 			Query: `
 				{
 					__type(name: "Query") {
@@ -650,7 +659,7 @@ func TestDeprecatedDirective(t *testing.T) {
 					B @deprecated
 					C @deprecated(reason: "We don't like it")
 				}
-			`, &testDeprecatedDirectiveResolver{}),
+			`, &testDeprecatedDirectiveQueryResolver{}, &testDeprecatedDirectiveMutationResolver{}),
 			Query: `
 				{
 					__type(name: "Test") {
@@ -1441,7 +1450,7 @@ func TestMutationOrder(t *testing.T) {
 				type Mutation {
 					changeTheNumber(newNumber: Int!): Query
 				}
-			`, &theNumberResolver{}),
+			`, &theNumberQueryResolver{}, &theNumberMutationResolver{}),
 			Query: `
 				mutation {
 					first: changeTheNumber(newNumber: 1) {
@@ -1485,7 +1494,7 @@ func TestTime(t *testing.T) {
 				}
 
 				scalar Time
-			`, &timeResolver{}),
+			`, &timeQueryResolver{}, &timeMutationResolver{}),
 			Query: `
 				query($t: Time!) {
 					a: addHour(time: $t)
@@ -1505,9 +1514,10 @@ func TestTime(t *testing.T) {
 	})
 }
 
-type resolverWithUnexportedMethod struct{}
+type resolverWithUnexportedMethodQuery struct{}
+type resolverWithUnexportedMethodMutation struct{}
 
-func (r *resolverWithUnexportedMethod) changeTheNumber(args struct{ NewNumber int32 }) int32 {
+func (r *resolverWithUnexportedMethodMutation) changeTheNumber(args struct{ NewNumber int32 }) int32 {
 	return args.NewNumber
 }
 
@@ -1520,15 +1530,16 @@ func TestUnexportedMethod(t *testing.T) {
 		type Mutation {
 			changeTheNumber(newNumber: Int!): Int!
 		}
-	`, &resolverWithUnexportedMethod{})
+	`, &resolverWithUnexportedMethodQuery{}, &resolverWithUnexportedMethodMutation{})
 	if err == nil {
 		t.Error("error expected")
 	}
 }
 
-type resolverWithUnexportedField struct{}
+type resolverWithUnexportedFieldQuery struct{}
+type resolverWithUnexportedFieldMutation struct{}
 
-func (r *resolverWithUnexportedField) ChangeTheNumber(args struct{ newNumber int32 }) int32 {
+func (r *resolverWithUnexportedFieldMutation) ChangeTheNumber(args struct{ newNumber int32 }) int32 {
 	return args.newNumber
 }
 
@@ -1541,35 +1552,36 @@ func TestUnexportedField(t *testing.T) {
 		type Mutation {
 			changeTheNumber(newNumber: Int!): Int!
 		}
-	`, &resolverWithUnexportedField{})
+	`, &resolverWithUnexportedFieldQuery{}, &resolverWithUnexportedFieldMutation{})
 	if err == nil {
 		t.Error("error expected")
 	}
 }
 
-type inputResolver struct{}
+type inputQueryResolver struct{}
+type inputMutationResolver struct{}
 
-func (r *inputResolver) Int(args struct{ Value int32 }) int32 {
+func (r *inputQueryResolver) Int(args struct{ Value int32 }) int32 {
 	return args.Value
 }
 
-func (r *inputResolver) Float(args struct{ Value float64 }) float64 {
+func (r *inputQueryResolver) Float(args struct{ Value float64 }) float64 {
 	return args.Value
 }
 
-func (r *inputResolver) String(args struct{ Value string }) string {
+func (r *inputQueryResolver) String(args struct{ Value string }) string {
 	return args.Value
 }
 
-func (r *inputResolver) Boolean(args struct{ Value bool }) bool {
+func (r *inputQueryResolver) Boolean(args struct{ Value bool }) bool {
 	return args.Value
 }
 
-func (r *inputResolver) Nullable(args struct{ Value *int32 }) *int32 {
+func (r *inputQueryResolver) Nullable(args struct{ Value *int32 }) *int32 {
 	return args.Value
 }
 
-func (r *inputResolver) List(args struct{ Value []*struct{ V int32 } }) []int32 {
+func (r *inputQueryResolver) List(args struct{ Value []*struct{ V int32 } }) []int32 {
 	l := make([]int32, len(args.Value))
 	for i, entry := range args.Value {
 		l[i] = entry.V
@@ -1577,7 +1589,7 @@ func (r *inputResolver) List(args struct{ Value []*struct{ V int32 } }) []int32 
 	return l
 }
 
-func (r *inputResolver) NullableList(args struct{ Value *[]*struct{ V int32 } }) *[]*int32 {
+func (r *inputQueryResolver) NullableList(args struct{ Value *[]*struct{ V int32 } }) *[]*int32 {
 	if args.Value == nil {
 		return nil
 	}
@@ -1590,11 +1602,11 @@ func (r *inputResolver) NullableList(args struct{ Value *[]*struct{ V int32 } })
 	return &l
 }
 
-func (r *inputResolver) Enum(args struct{ Value string }) string {
+func (r *inputQueryResolver) Enum(args struct{ Value string }) string {
 	return args.Value
 }
 
-func (r *inputResolver) NullableEnum(args struct{ Value *string }) *string {
+func (r *inputQueryResolver) NullableEnum(args struct{ Value *string }) *string {
 	return args.Value
 }
 
@@ -1602,7 +1614,7 @@ type recursive struct {
 	Next *recursive
 }
 
-func (r *inputResolver) Recursive(args struct{ Value *recursive }) int32 {
+func (r *inputQueryResolver) Recursive(args struct{ Value *recursive }) int32 {
 	n := int32(0)
 	v := args.Value
 	for v != nil {
@@ -1612,7 +1624,7 @@ func (r *inputResolver) Recursive(args struct{ Value *recursive }) int32 {
 	return n
 }
 
-func (r *inputResolver) ID(args struct{ Value graphql.ID }) graphql.ID {
+func (r *inputQueryResolver) ID(args struct{ Value graphql.ID }) graphql.ID {
 	return args.Value
 }
 
@@ -1648,7 +1660,7 @@ func TestInput(t *testing.T) {
 			Option1
 			Option2
 		}
-	`, &inputResolver{})
+	`, &inputQueryResolver{}, &inputMutationResolver{})
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: coercionSchema,

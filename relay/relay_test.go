@@ -10,7 +10,7 @@ import (
 	"github.com/graph-gophers/graphql-go/relay"
 )
 
-var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
+var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.QueryResolver{}, &starwars.MutationResolver{})
 
 func TestServeHTTP(t *testing.T) {
 	w := httptest.NewRecorder()

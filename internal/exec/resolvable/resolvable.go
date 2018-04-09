@@ -11,11 +11,17 @@ import (
 	"github.com/graph-gophers/graphql-go/internal/schema"
 )
 
+type Resolvers struct {
+	QueryResolver interface{}
+	MutationResolver interface{}
+}
+
 type Schema struct {
 	schema.Schema
 	Query    Resolvable
 	Mutation Resolvable
-	Resolver reflect.Value
+	ResolverQuery reflect.Value
+	ResolverMutation reflect.Value
 }
 
 type Resolvable interface {
@@ -54,19 +60,19 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
+func ApplyResolver(s *schema.Schema, resolver Resolvers) (*Schema, error) {
 	b := newBuilder(s)
 
 	var query, mutation Resolvable
 
 	if t, ok := s.EntryPoints["query"]; ok {
-		if err := b.assignExec(&query, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&query, t, reflect.TypeOf(resolver.QueryResolver)); err != nil {
 			return nil, err
 		}
 	}
 
 	if t, ok := s.EntryPoints["mutation"]; ok {
-		if err := b.assignExec(&mutation, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&mutation, t, reflect.TypeOf(resolver.MutationResolver)); err != nil {
 			return nil, err
 		}
 	}
@@ -77,7 +83,8 @@ func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 
 	return &Schema{
 		Schema:   *s,
-		Resolver: reflect.ValueOf(resolver),
+		ResolverQuery: reflect.ValueOf(resolver.QueryResolver),
+		ResolverMutation: reflect.ValueOf(resolver.MutationResolver),
 		Query:    query,
 		Mutation: mutation,
 	}, nil
