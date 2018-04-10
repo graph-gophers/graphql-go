@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/graph-gophers/graphql-go/errors"
@@ -24,41 +23,40 @@ func TestValidateEntryPointName(t *testing.T) {
 	}
 
 	testCases := []struct {
-		entryPoint *EntryPoint
-		err        error
+		entryPoint string
+		err        *errors.QueryError
 	}{
 		{
-			entryPoint: &EntryPoint{Name: "subscription", Type: "Subscription", Loc: errors.Location{Line: 3, Column: 6}},
+			entryPoint: "subscription: Subscription",
 		},
 		{
-			entryPoint: &EntryPoint{Name: "foo", Type: "Query", Loc: errors.Location{Line: 322, Column: 3}},
+			entryPoint: "foo: Query",
 			err: &errors.QueryError{
-				Message:   `unexpected "foo", expected "query", "mutation" or "subscription"`,
-				Locations: []errors.Location{{Line: 322, Column: 3}},
+				Message: `syntax error: unexpected "foo", expected "query", "mutation" or "subscription"`,
 			},
 		},
 		{
-			entryPoint: &EntryPoint{Name: "query", Type: "Query", Loc: errors.Location{Line: 322, Column: 6}},
+			entryPoint: "query: Query",
 			err: &errors.QueryError{
-				Message:   `"query" operation provided more than once`,
-				Locations: []errors.Location{{Line: 1, Column: 6}, {Line: 322, Column: 6}},
+				Message: `syntax error: "query" provided more than once (line 1, column 6)`,
 			},
 		},
 	}
 
 	for _, test := range testCases {
-		err := validateEntryPointName(schema, test.entryPoint)
-		if !reflect.DeepEqual(err, test.err) {
-			t.Errorf("wrong error\nexpected: %v\ngot:      %v", test.err, err)
-		}
+		_, l := setup(t, test.entryPoint)
+		err := l.CatchSyntaxError(func() {
+			validateEntryPointName(schema, l)
+		})
+		compareErrors(t, test.err, err)
 	}
 }
 
 func TestValidateTypeName(t *testing.T) {
 	testCases := []struct {
 		schema    *Schema
-		namedType NamedType
-		err       error
+		namedType string
+		err       *errors.QueryError
 	}{
 		{
 			schema: &Schema{
@@ -67,7 +65,7 @@ func TestValidateTypeName(t *testing.T) {
 					"Time": &Scalar{Name: "Time", Loc: errors.Location{Line: 2, Column: 8}},
 				},
 			},
-			namedType: &Object{Name: "Baz", Loc: errors.Location{Line: 322, Column: 6}},
+			namedType: "Baz",
 		},
 		{
 			schema: &Schema{
@@ -76,13 +74,9 @@ func TestValidateTypeName(t *testing.T) {
 					"Baz": &Object{Name: "Baz", Loc: errors.Location{Line: 2, Column: 6}},
 				},
 			},
-			namedType: &Object{
-				Name: "Foo",
-				Loc:  errors.Location{Line: 322, Column: 6},
-			},
+			namedType: "Foo",
 			err: &errors.QueryError{
-				Message:   `"Foo" defined more than once`,
-				Locations: []errors.Location{{Line: 1, Column: 6}, {Line: 322, Column: 6}},
+				Message: `syntax error: "Foo" defined more than once (line 1, column 6)`,
 			},
 		},
 		{
@@ -91,67 +85,52 @@ func TestValidateTypeName(t *testing.T) {
 					"Time": &Scalar{Name: "Time", Loc: errors.Location{Line: 1, Column: 8}},
 				},
 			},
-			namedType: &Scalar{
-				Name: "Time",
-				Loc:  errors.Location{Line: 322, Column: 8},
-			},
+			namedType: "Time",
 			err: &errors.QueryError{
-				Message:   `"Time" defined more than once`,
-				Locations: []errors.Location{{Line: 1, Column: 8}, {Line: 322, Column: 8}},
+				Message: `syntax error: "Time" defined more than once (line 1, column 8)`,
 			},
 		},
 		{
-			schema: &Schema{},
-			namedType: &Scalar{
-				Name: "Boolean",
-				Loc:  errors.Location{Line: 322, Column: 8},
-			},
+			schema:    &Schema{},
+			namedType: "Boolean",
 			err: &errors.QueryError{
-				Message:   `built-in type "Boolean" redefined`,
-				Locations: []errors.Location{{Line: 322, Column: 8}},
+				Message: `syntax error: built-in type "Boolean" redefined`,
 			},
 		},
 		{
-			schema: &Schema{},
-			namedType: &Object{
-				Name: "String",
-				Loc:  errors.Location{Line: 322, Column: 6},
-			},
+			schema:    &Schema{},
+			namedType: "String",
 			err: &errors.QueryError{
-				Message:   `built-in type "String" redefined`,
-				Locations: []errors.Location{{Line: 322, Column: 6}},
+				Message: `syntax error: built-in type "String" redefined`,
 			},
 		},
 		{
-			schema: &Schema{},
-			namedType: &Object{
-				Name: "__Foo",
-				Loc:  errors.Location{Line: 322, Column: 6},
-			},
+			schema:    &Schema{},
+			namedType: "__Foo",
 			err: &errors.QueryError{
-				Message:   `"__Foo" must not begin with "__", reserved for introspection types`,
-				Locations: []errors.Location{{Line: 322, Column: 6}},
+				Message: `syntax error: "__Foo" must not begin with "__", reserved for introspection types`,
 			},
 		},
 	}
 
 	for _, test := range testCases {
-		err := validateTypeName(test.schema, test.namedType)
-		if !reflect.DeepEqual(err, test.err) {
-			t.Errorf("wrong error\nexpected: %v\ngot:      %v", test.err, err)
-		}
+		_, l := setup(t, test.namedType)
+		err := l.CatchSyntaxError(func() {
+			validateTypeName(test.schema, l)
+		})
+		compareErrors(t, test.err, err)
 	}
 }
 
 func TestValidateDirectiveName(t *testing.T) {
 	testCases := []struct {
 		schema    *Schema
-		directive *DirectiveDecl
-		err       error
+		directive string
+		err       *errors.QueryError
 	}{
 		{
 			schema:    &Schema{},
-			directive: &DirectiveDecl{Name: "ignore", Loc: errors.Location{Line: 322, Column: 12}},
+			directive: "ignore",
 		},
 		{
 			schema: &Schema{
@@ -159,34 +138,32 @@ func TestValidateDirectiveName(t *testing.T) {
 					"ignore": {Name: "ignore", Loc: errors.Location{Line: 1, Column: 12}},
 				},
 			},
-			directive: &DirectiveDecl{Name: "ignore", Loc: errors.Location{Line: 322, Column: 12}},
+			directive: "ignore",
 			err: &errors.QueryError{
-				Message:   `"ignore" defined more than once`,
-				Locations: []errors.Location{{Line: 1, Column: 12}, {Line: 322, Column: 12}},
+				Message: `syntax error: "ignore" defined more than once (line 1, column 12)`,
 			},
 		},
 		{
 			schema:    &Schema{},
-			directive: &DirectiveDecl{Name: "deprecated", Loc: errors.Location{Line: 322, Column: 12}},
+			directive: "deprecated",
 			err: &errors.QueryError{
-				Message:   `built-in directive "deprecated" redefined`,
-				Locations: []errors.Location{{Line: 322, Column: 12}},
+				Message: `syntax error: built-in directive "deprecated" redefined`,
 			},
 		},
 		{
 			schema:    &Schema{},
-			directive: &DirectiveDecl{Name: "__foo", Loc: errors.Location{Line: 322, Column: 12}},
+			directive: "__foo",
 			err: &errors.QueryError{
-				Message:   `"__foo" must not begin with "__", reserved for introspection types`,
-				Locations: []errors.Location{{Line: 322, Column: 12}},
+				Message: `syntax error: "__foo" must not begin with "__", reserved for introspection types`,
 			},
 		},
 	}
 
 	for _, test := range testCases {
-		err := validateDirectiveName(test.schema, test.directive)
-		if !reflect.DeepEqual(err, test.err) {
-			t.Errorf("wrong error\nexpected: %v\ngot:      %v", test.err, err)
-		}
+		_, l := setup(t, test.directive)
+		err := l.CatchSyntaxError(func() {
+			validateDirectiveName(test.schema, l)
+		})
+		compareErrors(t, test.err, err)
 	}
 }

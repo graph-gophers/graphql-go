@@ -4,82 +4,54 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/internal/common"
 )
 
-func validateEntryPointName(s *Schema, entryPoint *EntryPoint) error {
+func validateEntryPointName(s *Schema, l *common.Lexer) {
 	if s == Meta {
-		return nil
+		return
 	}
-	switch name := entryPoint.Name; name {
+
+	switch name := l.PeekIdent(); name {
 	case "query", "mutation", "subscription":
 		if prev, ok := s.entryPointNames[name]; ok {
-			return &errors.QueryError{
-				Message:   fmt.Sprintf(`%q operation provided more than once`, name),
-				Locations: []errors.Location{prev.Loc, entryPoint.Loc},
-			}
+			l.SyntaxError(fmt.Sprintf(`%q provided more than once %s`, name, prev.Loc))
 		}
 	default:
-		return &errors.QueryError{
-			Message:   fmt.Sprintf(`unexpected %q, expected "query", "mutation" or "subscription"`, name),
-			Locations: []errors.Location{entryPoint.Loc},
-		}
+		l.SyntaxError(fmt.Sprintf(`unexpected %q, expected "query", "mutation" or "subscription"`, name))
 	}
-	return nil
 }
 
-func validateTypeName(s *Schema, t NamedType) error {
+func validateTypeName(s *Schema, l *common.Lexer) {
 	if s == Meta {
-		return nil
+		return
 	}
-	name := t.TypeName()
-	if err := validatePrefix(name, t.Location()); err != nil {
-		return err
-	}
+	name := l.PeekIdent()
+	validatePrefix(name, l)
 	if _, ok := Meta.Types[name]; ok {
-		return &errors.QueryError{
-			Message:   fmt.Sprintf(`built-in type %q redefined`, name),
-			Locations: []errors.Location{t.Location()},
-		}
+		l.SyntaxError(fmt.Sprintf(`built-in type %q redefined`, name))
 	}
 	if prev, ok := s.Types[name]; ok {
-		return &errors.QueryError{
-			Message:   fmt.Sprintf(`%q defined more than once`, name),
-			Locations: []errors.Location{prev.Location(), t.Location()},
-		}
+		l.SyntaxError(fmt.Sprintf(`%q defined more than once %s`, name, prev.Location()))
 	}
-	return nil
 }
 
-func validateDirectiveName(s *Schema, directive *DirectiveDecl) error {
+func validateDirectiveName(s *Schema, l *common.Lexer) {
 	if s == Meta {
-		return nil
+		return
 	}
-	name := directive.Name
-	if err := validatePrefix(name, directive.Loc); err != nil {
-		return err
-	}
+	name := l.PeekIdent()
+	validatePrefix(name, l)
 	if _, ok := Meta.Directives[name]; ok {
-		return &errors.QueryError{
-			Message:   fmt.Sprintf(`built-in directive %q redefined`, name),
-			Locations: []errors.Location{directive.Loc},
-		}
+		l.SyntaxError(fmt.Sprintf(`built-in directive %q redefined`, name))
 	}
 	if prev, ok := s.Directives[name]; ok {
-		return &errors.QueryError{
-			Message:   fmt.Sprintf("%q defined more than once", name),
-			Locations: []errors.Location{prev.Loc, directive.Loc},
-		}
+		l.SyntaxError(fmt.Sprintf(`%q defined more than once %s`, name, prev.Loc))
 	}
-	return nil
 }
 
-func validatePrefix(name string, loc errors.Location) error {
+func validatePrefix(name string, l *common.Lexer) {
 	if strings.HasPrefix(name, "__") {
-		return &errors.QueryError{
-			Message:   fmt.Sprintf(`%q must not begin with "__", reserved for introspection types`, name),
-			Locations: []errors.Location{loc},
-		}
+		l.SyntaxError(fmt.Sprintf(`%q must not begin with "__", reserved for introspection types`, name))
 	}
-	return nil
 }

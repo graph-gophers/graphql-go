@@ -50,7 +50,7 @@ func TestValidate(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			errs := validation.Validate(schemas[test.Schema], d)
+			errs := validation.Validate(schemas[test.Schema], d, 0)
 			got := []*errors.QueryError{}
 			for _, err := range errs {
 				if err.Rule == test.Rule {

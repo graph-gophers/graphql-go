@@ -2,7 +2,6 @@ package schema
 
 import (
 	"fmt"
-	"strings"
 	"text/scanner"
 
 	"github.com/graph-gophers/graphql-go/errors"
@@ -269,19 +268,9 @@ func New() *Schema {
 
 // Parse the schema string.
 func (s *Schema) Parse(schemaString string) error {
-	sc := &scanner.Scanner{
-		Mode: scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats | scanner.ScanStrings,
-	}
-	sc.Init(strings.NewReader(schemaString))
+	l := common.NewLexer(schemaString)
 
-	l := common.NewLexer(sc)
-	var err error
-	syntaxErr := l.CatchSyntaxError(func() {
-		err = parseSchema(s, l)
-	})
-	if syntaxErr != nil {
-		return syntaxErr
-	}
+	err := l.CatchSyntaxError(func() { parseSchema(s, l) })
 	if err != nil {
 		return err
 	}
@@ -418,85 +407,74 @@ func resolveInputObject(s *Schema, values common.InputValueList) error {
 	return nil
 }
 
-func parseSchema(s *Schema, l *common.Lexer) error {
+func parseSchema(s *Schema, l *common.Lexer) {
+	l.Consume()
+
 	for l.Peek() != scanner.EOF {
 		desc := l.DescComment()
 		switch x := l.ConsumeIdent(); x {
+
 		case "schema":
 			l.ConsumeToken('{')
 			for l.Peek() != '}' {
+				validateEntryPointName(s, l)
 				ident := l.ConsumeIdentWithLoc()
 				name := ident.Name
 				l.ConsumeToken(':')
 				typ := l.ConsumeIdent()
 				entryPoint := &EntryPoint{Name: name, Type: typ, Loc: ident.Loc}
-				if err := validateEntryPointName(s, entryPoint); err != nil {
-					return err
-				}
 				s.entryPointNames[name] = entryPoint
 			}
 			l.ConsumeToken('}')
+
 		case "type":
-			obj := parseObjectDeclaration(l)
+			obj := parseObjectDef(s, l)
 			obj.Desc = desc
-			if err := validateTypeName(s, obj); err != nil {
-				return err
-			}
 			s.Types[obj.Name] = obj
 			s.objects = append(s.objects, obj)
+
 		case "interface":
-			intf := parseInterfaceDecl(l)
-			intf.Desc = desc
-			if err := validateTypeName(s, intf); err != nil {
-				return err
-			}
-			s.Types[intf.Name] = intf
+			iface := parseInterfaceDef(s, l)
+			iface.Desc = desc
+			s.Types[iface.Name] = iface
 		case "union":
-			union := parseUnionDecl(l)
+			union := parseUnionDef(s, l)
 			union.Desc = desc
-			if err := validateTypeName(s, union); err != nil {
-				return err
-			}
 			s.Types[union.Name] = union
 			s.unions = append(s.unions, union)
+
 		case "enum":
-			enum := parseEnumDecl(l)
+			enum := parseEnumDef(s, l)
 			enum.Desc = desc
-			if err := validateTypeName(s, enum); err != nil {
-				return err
-			}
 			s.Types[enum.Name] = enum
 			s.enums = append(s.enums, enum)
+
 		case "input":
-			input := parseInputDecl(l)
+			input := parseInputDef(s, l)
 			input.Desc = desc
-			if err := validateTypeName(s, input); err != nil {
-				return err
-			}
 			s.Types[input.Name] = input
+
 		case "scalar":
+			validateTypeName(s, l)
 			ident := l.ConsumeIdentWithLoc()
 			name := ident.Name
 			scalar := &Scalar{Name: name, Desc: desc, Loc: ident.Loc}
-			if err := validateTypeName(s, scalar); err != nil {
-				return err
-			}
 			s.Types[name] = scalar
+
 		case "directive":
-			directive := parseDirectiveDecl(l)
+			directive := parseDirectiveDef(s, l)
 			directive.Desc = desc
-			if err := validateDirectiveName(s, directive); err != nil {
-				return err
-			}
 			s.Directives[directive.Name] = directive
+
 		default:
+			// TODO: Add support for type extensions.
 			l.SyntaxError(fmt.Sprintf(`unexpected %q, expecting "schema", "type", "enum", "interface", "union", "input", "scalar" or "directive"`, x))
 		}
 	}
-	return nil
 }
 
-func parseObjectDeclaration(l *common.Lexer) *Object {
+func parseObjectDef(s *Schema, l *common.Lexer) *Object {
+	validateTypeName(s, l)
 	ident := l.ConsumeIdentWithLoc()
 	object := &Object{Name: ident.Name, Loc: ident.Loc}
 
@@ -504,43 +482,50 @@ func parseObjectDeclaration(l *common.Lexer) *Object {
 		l.ConsumeKeyword("implements")
 
 		for l.Peek() != '{' {
-			object.interfaceNames = append(object.interfaceNames, l.ConsumeIdent())
-
 			if l.Peek() == '&' {
 				l.ConsumeToken('&')
 			}
+
+			object.interfaceNames = append(object.interfaceNames, l.ConsumeIdent())
 		}
 	}
 
 	l.ConsumeToken('{')
-	object.Fields = parseFields(l)
+	object.Fields = parseFieldsDef(l)
 	l.ConsumeToken('}')
 
 	return object
 }
 
-func parseInterfaceDecl(l *common.Lexer) *Interface {
+func parseInterfaceDef(s *Schema, l *common.Lexer) *Interface {
+	validateTypeName(s, l)
 	ident := l.ConsumeIdentWithLoc()
 	i := &Interface{Name: ident.Name, Loc: ident.Loc}
+
 	l.ConsumeToken('{')
-	i.Fields = parseFields(l)
+	i.Fields = parseFieldsDef(l)
 	l.ConsumeToken('}')
+
 	return i
 }
 
-func parseUnionDecl(l *common.Lexer) *Union {
+func parseUnionDef(s *Schema, l *common.Lexer) *Union {
+	validateTypeName(s, l)
 	ident := l.ConsumeIdentWithLoc()
 	union := &Union{Name: ident.Name, Loc: ident.Loc}
+
 	l.ConsumeToken('=')
 	union.typeNames = []string{l.ConsumeIdent()}
 	for l.Peek() == '|' {
 		l.ConsumeToken('|')
 		union.typeNames = append(union.typeNames, l.ConsumeIdent())
 	}
+
 	return union
 }
 
-func parseInputDecl(l *common.Lexer) *InputObject {
+func parseInputDef(s *Schema, l *common.Lexer) *InputObject {
+	validateTypeName(s, l)
 	ident := l.ConsumeIdentWithLoc()
 	i := &InputObject{Name: ident.Name, Loc: ident.Loc}
 	l.ConsumeToken('{')
@@ -551,25 +536,31 @@ func parseInputDecl(l *common.Lexer) *InputObject {
 	return i
 }
 
-func parseEnumDecl(l *common.Lexer) *Enum {
+func parseEnumDef(s *Schema, l *common.Lexer) *Enum {
+	validateTypeName(s, l)
 	ident := l.ConsumeIdentWithLoc()
 	enum := &Enum{Name: ident.Name, Loc: ident.Loc}
+
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
-		v := &EnumValue{}
-		v.Desc = l.DescComment()
-		v.Name = l.ConsumeIdent()
-		v.Directives = common.ParseDirectives(l)
+		v := &EnumValue{
+			Desc:       l.DescComment(),
+			Name:       l.ConsumeIdent(),
+			Directives: common.ParseDirectives(l),
+		}
+
 		enum.Values = append(enum.Values, v)
 	}
 	l.ConsumeToken('}')
 	return enum
 }
 
-func parseDirectiveDecl(l *common.Lexer) *DirectiveDecl {
+func parseDirectiveDef(s *Schema, l *common.Lexer) *DirectiveDecl {
 	l.ConsumeToken('@')
+	validateDirectiveName(s, l)
 	ident := l.ConsumeIdentWithLoc()
 	d := &DirectiveDecl{Name: ident.Name, Loc: ident.Loc}
+
 	if l.Peek() == '(' {
 		l.ConsumeToken('(')
 		for l.Peek() != ')' {
@@ -578,7 +569,9 @@ func parseDirectiveDecl(l *common.Lexer) *DirectiveDecl {
 		}
 		l.ConsumeToken(')')
 	}
+
 	l.ConsumeKeyword("on")
+
 	for {
 		loc := l.ConsumeIdent()
 		d.Locs = append(d.Locs, loc)
@@ -590,7 +583,7 @@ func parseDirectiveDecl(l *common.Lexer) *DirectiveDecl {
 	return d
 }
 
-func parseFields(l *common.Lexer) FieldList {
+func parseFieldsDef(l *common.Lexer) FieldList {
 	var fields FieldList
 	for l.Peek() != '}' {
 		f := &Field{}

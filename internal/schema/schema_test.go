@@ -1,71 +1,91 @@
-package schema
+package schema_test
 
 import (
-	"strings"
 	"testing"
-	"text/scanner"
 
-	"github.com/graph-gophers/graphql-go/internal/common"
+	"github.com/graph-gophers/graphql-go/internal/schema"
 )
 
-type testCase struct {
+type parseTestCase struct {
 	description string
-	declaration string
-	expected    *Object
+	sdl         string
+	expected    *schema.Schema
+	err         error
 }
 
-func TestParseObjectDeclaration(t *testing.T) {
-	tests := []testCase{
-		{
-			"allows '&' separator",
-			"Alien implements Being & Intelligent { name: String, iq: Int }",
-			&Object{
-				Name:           "Alien",
-				interfaceNames: []string{"Being", "Intelligent"},
-			},
-		},
-		{
-			"allows legacy ',' separator",
-			"Alien implements Being, Intelligent { name: String, iq: Int }",
-			&Object{
-				Name:           "Alien",
-				interfaceNames: []string{"Being", "Intelligent"},
-			},
-		},
+var parseTests = []parseTestCase{{
+	description: "Parses interface definition",
+	sdl:         "interface Greeting { message: String! }",
+	expected: &schema.Schema{
+		Types: map[string]schema.NamedType{
+			"Greeting": &schema.Interface{
+				Name:   "Greeting",
+				Fields: []*schema.Field{{Name: "message"}},
+			}},
+	}}, {
+	description: "Parses type with description string",
+	sdl: `
+	"Single line description."
+	type Type {
+		field: String
+	}`,
+	expected: &schema.Schema{
+		Types: map[string]schema.NamedType{
+			"Type": &schema.Object{
+				Name: "Type",
+				Desc: "Single line description.",
+			}},
+	}}, {
+	description: "Parses type with multi-line description string",
+	sdl: `
+	"""
+	Multi-line description.
+	"""
+	type Type {
+		field: String
+	}`,
+	expected: &schema.Schema{
+		Types: map[string]schema.NamedType{
+			"Type": &schema.Object{
+				Name: "Type",
+				Desc: "Multi-line description.",
+			}},
+	}}, {
+	description: "Parses type with multi-line description and ignores comments",
+	sdl: `
+	"""
+	Multi-line description with ignored comments.
+	"""
+	# This comment should be ignored.
+	type Type {
+		field: String
+	}`,
+	expected: &schema.Schema{
+		Types: map[string]schema.NamedType{
+			"Type": &schema.Object{
+				Name: "Type",
+				Desc: "Multi-line description with ignored comments.",
+			}},
+	}},
+}
+
+func TestParse(t *testing.T) {
+	setup := func(t *testing.T) *schema.Schema {
+		t.Helper()
+		return schema.New()
 	}
 
-	setup := func(schema string) *common.Lexer {
-		sc := &scanner.Scanner{
-			Mode: scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats | scanner.ScanStrings,
-		}
-		sc.Init(strings.NewReader(schema))
-		return common.NewLexer(sc)
-	}
-
-	for _, test := range tests {
+	for _, test := range parseTests {
 		t.Run(test.description, func(t *testing.T) {
-			lex := setup(test.declaration)
-			var actual *Object
+			t.Skip("TODO: add support for descriptions")
+			schema := setup(t)
 
-			parse := func() { actual = parseObjectDeclaration(lex) }
-			if err := lex.CatchSyntaxError(parse); err != nil {
+			err := schema.Parse(test.sdl)
+			if err != nil {
 				t.Fatal(err)
 			}
 
-			if test.expected.Name != actual.Name {
-				t.Errorf("wrong object name: want %q, got %q", test.expected.Name, actual.Name)
-			}
-
-			if len(test.expected.interfaceNames) != len(actual.interfaceNames) {
-				t.Fatalf("wrong number of interface names: want %s, got %s", test.expected.interfaceNames, actual.interfaceNames)
-			}
-
-			for i, expectedName := range test.expected.interfaceNames {
-				actualName := actual.interfaceNames[i]
-				if expectedName != actualName {
-					t.Errorf("wrong interface name: want %q, got %q", expectedName, actualName)
-				}
-			}
+			// TODO: verify schema is the same as expected.
 		})
 	}
 }
