@@ -1547,6 +1547,13 @@ func TestUnexportedField(t *testing.T) {
 	}
 }
 
+type Enum string
+
+const (
+	EnumOption1 Enum = "Option1"
+	EnumOption2 Enum = "Option2"
+)
+
 type inputResolver struct{}
 
 func (r *inputResolver) Int(args struct{ Value int32 }) int32 {
@@ -1590,11 +1597,19 @@ func (r *inputResolver) NullableList(args struct{ Value *[]*struct{ V int32 } })
 	return &l
 }
 
-func (r *inputResolver) Enum(args struct{ Value string }) string {
+func (r *inputResolver) EnumString(args struct{ Value string }) string {
 	return args.Value
 }
 
-func (r *inputResolver) NullableEnum(args struct{ Value *string }) *string {
+func (r *inputResolver) NullableEnumString(args struct{ Value *string }) *string {
+	return args.Value
+}
+
+func (r *inputResolver) Enum(args struct{ Value Enum }) Enum {
+	return args.Value
+}
+
+func (r *inputResolver) NullableEnum(args struct{ Value *Enum }) *Enum {
 	return args.Value
 }
 
@@ -1630,6 +1645,8 @@ func TestInput(t *testing.T) {
 			nullable(value: Int): Int
 			list(value: [Input!]!): [Int!]!
 			nullableList(value: [Input]): [Int]
+			enumString(value: Enum!): Enum!
+			nullableEnumString(value: Enum): Enum
 			enum(value: Enum!): Enum!
 			nullableEnum(value: Enum): Enum
 			recursive(value: RecursiveInput!): Int!
@@ -1665,6 +1682,9 @@ func TestInput(t *testing.T) {
 					list2: list(value: {v: 42})
 					nullableList1: nullableList(value: [{v: 41}, null, {v: 43}])
 					nullableList2: nullableList(value: null)
+					enumString(value: Option1)
+					nullableEnumString1: nullableEnum(value: Option1)
+					nullableEnumString2: nullableEnum(value: null)
 					enum(value: Option2)
 					nullableEnum1: nullableEnum(value: Option2)
 					nullableEnum2: nullableEnum(value: null)
@@ -1686,6 +1706,9 @@ func TestInput(t *testing.T) {
 					"list2": [42],
 					"nullableList1": [41, null, 43],
 					"nullableList2": null,
+					"enumString": "Option1",
+					"nullableEnumString1": "Option1",
+					"nullableEnumString2": null,
 					"enum": "Option2",
 					"nullableEnum1": "Option2",
 					"nullableEnum2": null,
