@@ -349,6 +349,11 @@ func unmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
 		case int:
 			return float64(input), nil
 		}
+
+	case reflect.String:
+		if reflect.TypeOf(input).ConvertibleTo(typ) {
+			return reflect.ValueOf(input).Convert(typ).Interface(), nil
+		}
 	}
 
 	return nil, fmt.Errorf("incompatible type")

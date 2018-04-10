@@ -1547,6 +1547,13 @@ func TestUnexportedField(t *testing.T) {
 	}
 }
 
+type Enum string
+
+const (
+	EnumOption1 Enum = "Option1"
+	EnumOption2 Enum = "Option2"
+)
+
 type inputResolver struct{}
 
 func (r *inputResolver) Int(args struct{ Value int32 }) int32 {
@@ -1590,11 +1597,11 @@ func (r *inputResolver) NullableList(args struct{ Value *[]*struct{ V int32 } })
 	return &l
 }
 
-func (r *inputResolver) Enum(args struct{ Value string }) string {
+func (r *inputResolver) Enum(args struct{ Value Enum }) Enum {
 	return args.Value
 }
 
-func (r *inputResolver) NullableEnum(args struct{ Value *string }) *string {
+func (r *inputResolver) NullableEnum(args struct{ Value *Enum }) *Enum {
 	return args.Value
 }
 
