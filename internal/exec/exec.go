@@ -173,22 +173,33 @@ func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *p
 			return errors.Errorf("%s", err) // don't execute any more resolvers if context got cancelled
 		}
 
-		var in []reflect.Value
-		if f.field.HasContext {
-			in = append(in, reflect.ValueOf(traceCtx))
+		if f.field.MethodIndex != -1 {
+			var in []reflect.Value
+			if f.field.HasContext {
+				in = append(in, reflect.ValueOf(traceCtx))
+			}
+			if f.field.ArgsPacker != nil {
+				in = append(in, f.field.PackedArgs)
+			}
+
+			callOut := f.resolver.Method(f.field.MethodIndex).Call(in)
+			result = callOut[0]
+			if f.field.HasError && !callOut[1].IsNil() {
+				resolverErr := callOut[1].Interface().(error)
+				err := errors.Errorf("%s", resolverErr)
+				err.Path = path.toSlice()
+				err.ResolverError = resolverErr
+				return err
+			}
+		} else {
+			// TODO extract out unwrapping ptr logic to a common place
+			res := f.resolver
+			if res.Kind() == reflect.Ptr {
+				res = res.Elem()
+			}
+			result = res.Field(f.field.FieldIndex)
 		}
-		if f.field.ArgsPacker != nil {
-			in = append(in, f.field.PackedArgs)
-		}
-		callOut := f.resolver.Method(f.field.MethodIndex).Call(in)
-		result = callOut[0]
-		if f.field.HasError && !callOut[1].IsNil() {
-			resolverErr := callOut[1].Interface().(error)
-			err := errors.Errorf("%s", resolverErr)
-			err.Path = path.toSlice()
-			err.ResolverError = resolverErr
-			return err
-		}
+
 		return nil
 	}()
 
@@ -201,7 +212,6 @@ func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *p
 		f.out.WriteString("null") // TODO handle non-nil
 		return
 	}
-
 	r.execSelectionSet(traceCtx, f.sels, f.field.Type, path, result, f.out)
 }
 

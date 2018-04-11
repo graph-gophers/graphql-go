@@ -45,6 +45,8 @@ type Schema struct {
 	objects         []*Object
 	unions          []*Union
 	enums           []*Enum
+
+	UseFieldResolvers bool
 }
 
 // Resolve a named type in the schema by its name.

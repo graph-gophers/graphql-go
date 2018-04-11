@@ -2,9 +2,8 @@ package graphql
 
 import (
 	"context"
-	"fmt"
-
 	"encoding/json"
+	"fmt"
 
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
@@ -72,6 +71,13 @@ type Schema struct {
 
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
 type SchemaOpt func(*Schema)
+
+// Specifies whether to use struct field resolvers
+func UseFieldResolvers() SchemaOpt {
+	return func(s *Schema) {
+		s.schema.UseFieldResolvers = true
+	}
+}
 
 // MaxDepth specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
 func MaxDepth(n int) SchemaOpt {
