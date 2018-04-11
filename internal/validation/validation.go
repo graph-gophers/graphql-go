@@ -204,6 +204,11 @@ func validateMaxDepth(c *opContext, sels []query.Selection, depth int) bool {
 		case *query.FragmentSpread:
 			// Depth is not checked because fragments resolve to other fields which are checked.
 			frag := c.doc.Fragments.Get(sel.Name.Name)
+			if frag == nil {
+				// In case of unknown fragment (invalid request), ignore max depth evaluation
+				c.addErr(sel.Loc, "MaxDepthEvaluationError", "Unknown fragment %q. Unable to evaluate depth.", sel.Name.Name)
+				continue
+			}
 			// Depth is not incremented because fragments have the same depth as surrounding fields
 			exceededMaxDepth = exceededMaxDepth || validateMaxDepth(c, frag.Selections, depth)
 		}

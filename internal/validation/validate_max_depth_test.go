@@ -63,10 +63,11 @@ const (
 )
 
 type maxDepthTestCase struct {
-	name    string
-	query   string
-	depth   int
-	failure bool
+	name           string
+	query          string
+	depth          int
+	failure        bool
+	expectedErrors []string
 }
 
 func (tc maxDepthTestCase) Run(t *testing.T, s *schema.Schema) {
@@ -77,6 +78,24 @@ func (tc maxDepthTestCase) Run(t *testing.T, s *schema.Schema) {
 		}
 
 		errs := Validate(s, doc, tc.depth)
+		if len(tc.expectedErrors) > 0 {
+			if len(errs) > 0 {
+				for _, expected := range tc.expectedErrors {
+					found := false
+					for _, err := range errs {
+						if err.Rule == expected {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected error %v is missing", expected)
+					}
+				}
+			} else {
+				t.Errorf("expected errors [%v] are missing", tc.expectedErrors)
+			}
+		}
 		if (len(errs) > 0) != tc.failure {
 			t.Errorf("expected failure: %t, actual errors (%d): %v", tc.failure, len(errs), errs)
 		}
@@ -289,6 +308,41 @@ func TestMaxDepthFragmentSpreads(t *testing.T) {
 			}`,
 			depth:   6,
 			failure: true,
+		},
+	} {
+		tc.Run(t, s)
+	}
+}
+
+func TestMaxDepthUnknownFragmentSpreads(t *testing.T) {
+	s := schema.New()
+
+	err := s.Parse(interfaceSimple)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []maxDepthTestCase{
+		{
+			name: "maxDepthUnknownFragment",
+			query: `query {        # depth 0
+				characters {         # depth 1
+				  id                 # depth 2
+				  name               # depth 2
+				  friends {          # depth 2
+					friends {        # depth 3
+						friends {    # depth 4
+						  friends {  # depth 5
+							...unknownFragment # depth 6
+						  }
+						}
+					}
+				  }
+				}
+			}`,
+			depth:          6,
+			failure:        true,
+			expectedErrors: []string{"MaxDepthEvaluationError"},
 		},
 	} {
 		tc.Run(t, s)
