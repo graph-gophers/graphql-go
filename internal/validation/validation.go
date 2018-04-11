@@ -142,10 +142,10 @@ func Validate(s *schema.Schema, doc *query.Document, maxDepth int) []*errors.Que
 
 		t := unwrapType(resolveType(c, &frag.On))
 		// continue even if t is nil
-		if t != nil && !canBeFragment(t) {
+		/*if t != nil && !canBeFragment(t) {
 			c.addErr(frag.On.Loc, "FragmentsOnCompositeTypes", "Fragment %q cannot condition on non composite type %q.", frag.Name.Name, t)
 			continue
-		}
+		}*/
 
 		validateSelectionSet(opc, frag.Selections, t)
 
@@ -204,6 +204,11 @@ func validateMaxDepth(c *opContext, sels []query.Selection, depth int) bool {
 		case *query.FragmentSpread:
 			// Depth is not checked because fragments resolve to other fields which are checked.
 			frag := c.doc.Fragments.Get(sel.Name.Name)
+			if frag == nil {
+				// In case of unknown fragment (invalid request), ignore max depth evaluation
+				c.addErr(sel.Loc, "MaxDepthEvaluationError", "Unknown fragment %q. Unable to evaluate depth.", sel.Name.Name)
+				continue
+			}
 			// Depth is not incremented because fragments have the same depth as surrounding fields
 			exceededMaxDepth = exceededMaxDepth || validateMaxDepth(c, frag.Selections, depth)
 		}
