@@ -142,10 +142,10 @@ func Validate(s *schema.Schema, doc *query.Document, maxDepth int) []*errors.Que
 
 		t := unwrapType(resolveType(c, &frag.On))
 		// continue even if t is nil
-		/*if t != nil && !canBeFragment(t) {
+		if t != nil && !canBeFragment(t) {
 			c.addErr(frag.On.Loc, "FragmentsOnCompositeTypes", "Fragment %q cannot condition on non composite type %q.", frag.Name.Name, t)
 			continue
-		}*/
+		}
 
 		validateSelectionSet(opc, frag.Selections, t)
 
