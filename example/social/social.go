@@ -3,6 +3,7 @@ package social
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 const Schema = `
@@ -21,6 +22,8 @@ const Schema = `
 		role: Role!
 	}
 
+	scalar Time	
+
 	type User implements Admin {
 		id: ID!
 		name: String!
@@ -29,6 +32,7 @@ const Schema = `
 		phone: String!
 		address: [String!]
 		friends(page: Pagination): [User]
+		createdAt: Time!
 	}
 
 	input Pagination {
@@ -54,13 +58,14 @@ type admin interface {
 }
 
 type user struct {
-	Id      string
-	Name    string
-	Role    string
-	Email   string
-	Phone   string
-	Address *[]string
-	Friends *[]*user
+	Id        string
+	Name      string
+	Role      string
+	Email     string
+	Phone     string
+	Address   *[]string
+	Friends   *[]*user
+	CreatedAt time.Time
 }
 
 func (u user) IdResolver() string {
@@ -100,36 +105,40 @@ func (u user) FriendsResolver(args struct{ Page *page }) (*[]*user, error) {
 
 var users = []*user{
 	{
-		Id:      "0x01",
-		Name:    "Albus Dumbledore",
-		Role:    "ADMIN",
-		Email:   "Albus@hogwarts.com",
-		Phone:   "000-000-0000",
-		Address: &[]string{"Office @ Hogwarts", "where Horcruxes are"},
+		Id:        "0x01",
+		Name:      "Albus Dumbledore",
+		Role:      "ADMIN",
+		Email:     "Albus@hogwarts.com",
+		Phone:     "000-000-0000",
+		Address:   &[]string{"Office @ Hogwarts", "where Horcruxes are"},
+		CreatedAt: time.Now(),
 	},
 	{
-		Id:      "0x02",
-		Name:    "Harry Potter",
-		Role:    "USER",
-		Email:   "harry@hogwarts.com",
-		Phone:   "000-000-0001",
-		Address: &[]string{"123 dorm room @ Hogwarts", "456 random place"},
+		Id:        "0x02",
+		Name:      "Harry Potter",
+		Role:      "USER",
+		Email:     "harry@hogwarts.com",
+		Phone:     "000-000-0001",
+		Address:   &[]string{"123 dorm room @ Hogwarts", "456 random place"},
+		CreatedAt: time.Now(),
 	},
 	{
-		Id:      "0x03",
-		Name:    "Hermione Granger",
-		Role:    "USER",
-		Email:   "hermione@hogwarts.com",
-		Phone:   "000-000-0011",
-		Address: &[]string{"233 dorm room @ Hogwarts", "786 @ random place"},
+		Id:        "0x03",
+		Name:      "Hermione Granger",
+		Role:      "USER",
+		Email:     "hermione@hogwarts.com",
+		Phone:     "000-000-0011",
+		Address:   &[]string{"233 dorm room @ Hogwarts", "786 @ random place"},
+		CreatedAt: time.Now(),
 	},
 	{
-		Id:      "0x04",
-		Name:    "Ronald Weasley",
-		Role:    "USER",
-		Email:   "ronald@hogwarts.com",
-		Phone:   "000-000-0111",
-		Address: &[]string{"411 dorm room @ Hogwarts", "981 @ random place"},
+		Id:        "0x04",
+		Name:      "Ronald Weasley",
+		Role:      "USER",
+		Email:     "ronald@hogwarts.com",
+		Phone:     "000-000-0111",
+		Address:   &[]string{"411 dorm room @ Hogwarts", "981 @ random place"},
+		CreatedAt: time.Now(),
 	},
 }
 

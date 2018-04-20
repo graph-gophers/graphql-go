@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
@@ -192,6 +193,8 @@ func makeScalarExec(t *schema.Scalar, resolverType reflect.Type) (Resolvable, er
 		implementsType = t.Name == "String" || t.Name == "ID"
 	case *bool:
 		implementsType = t.Name == "Boolean"
+	case *time.Time:
+		implementsType = t.Name == "Time"
 	case packer.Unmarshaler:
 		implementsType = r.ImplementsGraphQLType(t.Name)
 	}
