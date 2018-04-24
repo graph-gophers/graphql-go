@@ -3,6 +3,7 @@ package social
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -14,6 +15,7 @@ const Schema = `
 	type Query {
 		admin(id: ID!, role: Role = ADMIN): Admin!
 		user(id: ID!): User!
+        search(text: String!): [SearchResult]!
 	}
 	
 	interface Admin {
@@ -44,6 +46,8 @@ const Schema = `
 		ADMIN
 		USER
 	}
+
+	union SearchResult = User
 `
 
 type page struct {
@@ -55,6 +59,15 @@ type admin interface {
 	IdResolver() string
 	NameResolver() string
 	RoleResolver() string
+}
+
+type searchResult struct {
+	result interface{}
+}
+
+func (r *searchResult) ToUser() (*user, bool) {
+	res, ok := r.result.(*user)
+	return res, ok
 }
 
 type user struct {
@@ -175,4 +188,14 @@ func (r *Resolver) User(ctx context.Context, args struct{ Id string }) (user, er
 	}
 	err := fmt.Errorf("user with id=%s does not exist", args.Id)
 	return user{}, err
+}
+
+func (r *Resolver) Search(ctx context.Context, args struct{ Text string }) ([]*searchResult, error) {
+	var result []*searchResult
+	for _, usr := range users {
+		if strings.Contains(usr.Name, args.Text) {
+			result = append(result, &searchResult{usr})
+		}
+	}
+	return result, nil
 }
