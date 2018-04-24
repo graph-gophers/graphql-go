@@ -221,14 +221,12 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 		methodIndex := -1
 		fieldIndex := -1
 
-		/**
-		 * 1) Use resolver type's method when
-		 *	1.1) __Type and __Schema requests
-		 *	1.2) Or field has arguments
-		 *	1.3) Or it is configured to use method
-		 *	1.4) Or it is an interface
-		 * 2) Otherwise use resolver type's field
-		 */
+		// 1) Use resolver type's method when
+		//	1.1) __Type and __Schema requests
+		// 	1.2) Or field has arguments
+		//	1.3) Or it is configured to use method
+		//	1.4) Or it is an interface
+		// 2) Otherwise use resolver type's field
 		if isResolverSchemaOrType(rt) == true || len(f.Args) > 0 ||
 			b.schema.UseFieldResolvers == false || rt.Kind() == reflect.Interface {
 			methodIndex = findMethod(resolverType, f.Name)
@@ -258,13 +256,11 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 		Fields[f.Name] = fe
 	}
 
-	/**
-	 * Check type assertions when
-	 *	1) __Type and __Schema requests
-	 *	2) Or it is configured to use method
-	 */
+	// Check type assertions when
+	//	1) it is configured to use method
+	//	2) Or resolver is not an interface type
 	typeAssertions := make(map[string]*TypeAssertion)
-	if isResolverSchemaOrType(rt) == true || b.schema.UseFieldResolvers == false {
+	if b.schema.UseFieldResolvers == false || resolverType.Kind() != reflect.Interface {
 		for _, impl := range possibleTypes {
 			methodIndex := findMethod(resolverType, "To"+impl.Name)
 			if methodIndex == -1 {
