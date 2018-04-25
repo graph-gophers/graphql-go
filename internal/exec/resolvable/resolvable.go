@@ -13,9 +13,10 @@ import (
 
 type Schema struct {
 	schema.Schema
-	Query    Resolvable
-	Mutation Resolvable
-	Resolver reflect.Value
+	Query        Resolvable
+	Mutation     Resolvable
+	Subscription Resolvable
+	Resolver     reflect.Value
 }
 
 type Resolvable interface {
@@ -57,7 +58,7 @@ func (*Scalar) isResolvable() {}
 func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 	b := newBuilder(s)
 
-	var query, mutation Resolvable
+	var query, mutation, subscription Resolvable
 
 	if t, ok := s.EntryPoints["query"]; ok {
 		if err := b.assignExec(&query, t, reflect.TypeOf(resolver)); err != nil {
@@ -71,15 +72,22 @@ func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 		}
 	}
 
+	if t, ok := s.EntryPoints["subscription"]; ok {
+		if err := b.assignExec(&subscription, t, reflect.TypeOf(resolver)); err != nil {
+			return nil, err
+		}
+	}
+
 	if err := b.finish(); err != nil {
 		return nil, err
 	}
 
 	return &Schema{
-		Schema:   *s,
-		Resolver: reflect.ValueOf(resolver),
-		Query:    query,
-		Mutation: mutation,
+		Schema:       *s,
+		Resolver:     reflect.ValueOf(resolver),
+		Query:        query,
+		Mutation:     mutation,
+		Subscription: subscription,
 	}, nil
 }
 
@@ -284,14 +292,19 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 		return nil, fmt.Errorf("too many parameters")
 	}
 
-	if m.Type.NumOut() > 2 {
+	maxNumOfReturns := 2
+	if m.Type.NumOut() < maxNumOfReturns-1 {
+		return nil, fmt.Errorf("too few return values")
+	}
+
+	if m.Type.NumOut() > maxNumOfReturns {
 		return nil, fmt.Errorf("too many return values")
 	}
 
-	hasError := m.Type.NumOut() == 2
+	hasError := m.Type.NumOut() == maxNumOfReturns
 	if hasError {
-		if m.Type.Out(1) != errorType {
-			return nil, fmt.Errorf(`must have "error" as its second return value`)
+		if m.Type.Out(maxNumOfReturns-1) != errorType {
+			return nil, fmt.Errorf(`must have "error" as its last return value`)
 		}
 	}
 
@@ -304,7 +317,12 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 		HasError:    hasError,
 		TraceLabel:  fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name),
 	}
-	if err := b.assignExec(&fe.ValueExec, f.Type, m.Type.Out(0)); err != nil {
+
+	out := m.Type.Out(0)
+	if typeName == "Subscription" && out.Kind() == reflect.Chan {
+		out = m.Type.Out(0).Elem()
+	}
+	if err := b.assignExec(&fe.ValueExec, f.Type, out); err != nil {
 		return nil, err
 	}
 	return fe, nil
