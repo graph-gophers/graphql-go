@@ -75,12 +75,7 @@ func formatJSON(data []byte) ([]byte, error) {
 }
 
 func checkErrors(t *testing.T, expected, actual []*errors.QueryError) {
-	expectedCount, actualCount := len(expected), len(actual)
-
-	if expectedCount != actualCount {
-		t.Fatalf("unexpected number of errors: got %d, want %d", actualCount, expectedCount)
-	}
-
+	expectedCount := len(expected)
 	if expectedCount > 0 {
 		for i, want := range expected {
 			got := actual[i]
