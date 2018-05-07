@@ -2,9 +2,9 @@ package graphql
 
 import (
 	"context"
-	stdErrors "errors"
+	"errors"
 
-	"github.com/graph-gophers/graphql-go/errors"
+	qerrors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec"
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
@@ -21,7 +21,7 @@ import (
 // as possible (not immediately).
 func (s *Schema) Subscribe(ctx context.Context, queryString string, operationName string, variables map[string]interface{}) (<-chan *Response, error) {
 	if s.res == nil {
-		return nil, stdErrors.New("schema created without resolver, can not subscribe")
+		return nil, errors.New("schema created without resolver, can not subscribe")
 	}
 	return s.subscribe(ctx, queryString, operationName, variables, s.res), nil
 }
@@ -29,7 +29,7 @@ func (s *Schema) Subscribe(ctx context.Context, queryString string, operationNam
 func (s *Schema) subscribe(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, res *resolvable.Schema) <-chan *Response {
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
-		return sendAndReturnClosed(&Response{Errors: []*errors.QueryError{qErr}})
+		return sendAndReturnClosed(&Response{Errors: []*qerrors.QueryError{qErr}})
 	}
 
 	validationFinish := s.validationTracer.TraceValidation()
@@ -41,12 +41,12 @@ func (s *Schema) subscribe(ctx context.Context, queryString string, operationNam
 
 	op, err := getOperation(doc, operationName)
 	if err != nil {
-		return sendAndReturnClosed(&Response{Errors: []*errors.QueryError{errors.Errorf("%s", err)}})
+		return sendAndReturnClosed(&Response{Errors: []*qerrors.QueryError{qerrors.Errorf("%s", err)}})
 	}
 
 	// TODO: Move to validation.Validate?
 	if op.Type != query.Subscription {
-		return sendAndReturnClosed(&Response{Errors: []*errors.QueryError{errors.Errorf("%s: %s", "subscription unavailable for operation of type", op.Type)}})
+		return sendAndReturnClosed(&Response{Errors: []*qerrors.QueryError{qerrors.Errorf("%s: %s", "subscription unavailable for operation of type", op.Type)}})
 	}
 
 	r := &exec.Request{
@@ -63,7 +63,7 @@ func (s *Schema) subscribe(ctx context.Context, queryString string, operationNam
 	for _, v := range op.Vars {
 		t, err := common.ResolveType(v.Type, s.schema.Resolve)
 		if err != nil {
-			return sendAndReturnClosed(&Response{Errors: []*errors.QueryError{err}})
+			return sendAndReturnClosed(&Response{Errors: []*qerrors.QueryError{err}})
 		}
 		varTypes[v.Name.Name] = introspection.WrapType(t)
 	}

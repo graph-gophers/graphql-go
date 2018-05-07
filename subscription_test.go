@@ -3,11 +3,11 @@ package graphql_test
 import (
 	"context"
 	"encoding/json"
-	stdErrors "errors"
+	"errors"
 	"testing"
 
 	graphql "github.com/graph-gophers/graphql-go"
-	"github.com/graph-gophers/graphql-go/errors"
+	qerrors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/gqltesting"
 )
 
@@ -22,7 +22,7 @@ func (r *helloResolver) Hello() string {
 	return "Hello world!"
 }
 
-var resolverErr = stdErrors.New("resolver error")
+var resolverErr = errors.New("resolver error")
 
 type helloSaidResolver struct {
 	err      error
@@ -106,7 +106,7 @@ func TestSchemaSubscribe(t *testing.T) {
 							}
 						}
 					`),
-					Errors: []*errors.QueryError{errors.Errorf("%s", resolverErr)},
+					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", resolverErr)},
 				},
 				{
 					Data: json.RawMessage(`
@@ -125,7 +125,7 @@ func TestSchemaSubscribe(t *testing.T) {
 			Query:  `invalid graphQL query`,
 			ExpectedResults: []gqltesting.TestResponse{
 				{
-					Errors: []*errors.QueryError{errors.Errorf("%s", `syntax error: unexpected "invalid", expecting "fragment" (line 1, column 9)`)},
+					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", `syntax error: unexpected "invalid", expecting "fragment" (line 1, column 9)`)},
 				},
 			},
 		},
@@ -139,7 +139,7 @@ func TestSchemaSubscribe(t *testing.T) {
 			`,
 			ExpectedResults: []gqltesting.TestResponse{
 				{
-					Errors: []*errors.QueryError{errors.Errorf("%s: %s", "subscription unavailable for operation of type", "QUERY")},
+					Errors: []*qerrors.QueryError{qerrors.Errorf("%s: %s", "subscription unavailable for operation of type", "QUERY")},
 				},
 			},
 		},
@@ -157,7 +157,7 @@ func TestSchemaSubscribe(t *testing.T) {
 			`,
 			ExpectedResults: []gqltesting.TestResponse{
 				{
-					Errors: []*errors.QueryError{errors.Errorf("%s", resolverErr)},
+					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", resolverErr)},
 				},
 			},
 		},
@@ -171,7 +171,7 @@ func TestSchemaSubscribe(t *testing.T) {
 		      }
 				}
 			`,
-			ExpectedErr: stdErrors.New("schema created without resolver, can not subscribe"),
+			ExpectedErr: errors.New("schema created without resolver, can not subscribe"),
 		},
 	})
 }
