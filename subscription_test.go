@@ -84,8 +84,8 @@ func TestSchemaSubscribe(t *testing.T) {
 			Query: `
 				subscription onHelloSaid {
 					helloSaid {
-            msg
-          }
+						msg
+					}
 				}
 			`,
 			ExpectedResults: []gqltesting.TestResponse{
@@ -151,8 +151,8 @@ func TestSchemaSubscribe(t *testing.T) {
 			Query: `
 				subscription onHelloSaid {
 					helloSaid {
-		        msg
-		      }
+						msg
+					}
 				}
 			`,
 			ExpectedResults: []gqltesting.TestResponse{
@@ -167,8 +167,8 @@ func TestSchemaSubscribe(t *testing.T) {
 			Query: `
 				subscription onHelloSaid {
 					helloSaid {
-		        msg
-		      }
+						msg
+					}
 				}
 			`,
 			ExpectedErr: errors.New("schema created without resolver, can not subscribe"),
@@ -177,18 +177,18 @@ func TestSchemaSubscribe(t *testing.T) {
 }
 
 const schema = `
-  schema {
-    subscription: Subscription,
+	schema {
+		subscription: Subscription,
 		query: Query
-  }
+	}
 
-  type Subscription {
-    helloSaid: HelloSaidEvent!
-  }
+	type Subscription {
+		helloSaid: HelloSaidEvent!
+	}
 
-  type HelloSaidEvent {
-    msg: String!
-  }
+	type HelloSaidEvent {
+		msg: String!
+	}
 
 	type Query {
 		hello: String!
