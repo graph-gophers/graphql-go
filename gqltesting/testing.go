@@ -78,7 +78,7 @@ func checkErrors(t *testing.T, expected, actual []*errors.QueryError) {
 	expectedCount, actualCount := len(expected), len(actual)
 
 	if expectedCount != actualCount {
-		t.Fatalf("unexpected number of errors: got %d, want %d", expectedCount, actualCount)
+		t.Fatalf("unexpected number of errors: got %d, want %d", actualCount, expectedCount)
 	}
 
 	if expectedCount > 0 {
