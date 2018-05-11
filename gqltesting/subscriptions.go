@@ -69,12 +69,19 @@ func RunSubscribe(t *testing.T, test *TestSubscription) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := formatJSON(t, resData)
+		got, err := formatJSON(resData)
+		if err != nil {
+			t.Fatalf("got: invalid JSON: %s", err)
+		}
+
 		expectedData, err := expected.Data.MarshalJSON()
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := formatJSON(t, expectedData)
+		want, err := formatJSON(expectedData)
+		if err != nil {
+			t.Fatalf("got: invalid JSON: %s", err)
+		}
 
 		if !bytes.Equal(got, want) {
 			t.Logf("got:  %s", got)
