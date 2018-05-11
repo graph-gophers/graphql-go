@@ -2,10 +2,12 @@ package graphql_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/graph-gophers/graphql-go"
+	gqlerrors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/example/starwars"
 	"github.com/graph-gophers/graphql-go/gqltesting"
 )
@@ -53,6 +55,14 @@ func (r *theNumberResolver) TheNumber() int32 {
 func (r *theNumberResolver) ChangeTheNumber(args struct{ NewNumber int32 }) *theNumberResolver {
 	r.number = args.NewNumber
 	return r
+}
+
+func (r *theNumberResolver) FailOnEven(args struct{ NewNumber int32 }) (*theNumberResolver, error) {
+	if args.NewNumber%2 == 0 {
+		return nil, fmt.Errorf("Even number %d", args.NewNumber)
+	}
+	r.number = args.NewNumber
+	return r, nil
 }
 
 type timeResolver struct{}
@@ -1468,6 +1478,78 @@ func TestMutationOrder(t *testing.T) {
 					}
 				}
 			`,
+		},
+	})
+}
+
+func TestErrors(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+					mutation: Mutation
+				}
+
+				type Query {
+					theNumber: Int!
+					failOnEven(newNumber: Int!): Query
+				}
+
+				type Mutation {
+					changeTheNumber(newNumber: Int!): Query
+				}
+			`, &theNumberResolver{}),
+			Query: `
+				query {
+					failOnEven(newNumber: 2) {
+						theNumber
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"failOnEven": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				gqlerrors.Errorf("Even number 2"),
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+					mutation: Mutation
+				}
+
+				type Query {
+					theNumber: Int!
+					failOnEven(newNumber: Int!): Query
+				}
+
+				type Mutation {
+					changeTheNumber(newNumber: Int!): Query
+				}
+			`, &theNumberResolver{},
+				graphql.ErrorHandler(func(err error) *gqlerrors.QueryError {
+					return gqlerrors.Errorf("Prefix - %s", err)
+				})),
+			Query: `
+				query {
+					failOnEven(newNumber: 2) {
+						theNumber
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"failOnEven": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				gqlerrors.Errorf("Prefix - Even number %d", 2),
+			},
 		},
 	})
 }

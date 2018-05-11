@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"reflect"
 	"strconv"
 	"testing"
 
@@ -84,8 +83,7 @@ func checkErrors(t *testing.T, expected, actual []*errors.QueryError) {
 	if expectedCount > 0 {
 		for i, want := range expected {
 			got := actual[i]
-
-			if !reflect.DeepEqual(got, want) {
+			if got.Message != want.Message {
 				t.Fatalf("unexpected error: got %+v, want %+v", got, want)
 			}
 		}
