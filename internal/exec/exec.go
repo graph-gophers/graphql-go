@@ -198,8 +198,6 @@ func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *p
 
 	if err != nil {
 		r.AddError(err)
-		f.out.WriteString("null") // TODO handle non-nil
-		return
 	}
 
 	r.execSelectionSet(traceCtx, f.sels, f.field.Type, path, result, f.out)
