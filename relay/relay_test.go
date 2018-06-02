@@ -34,3 +34,28 @@ func TestServeHTTP(t *testing.T) {
 		t.Fatalf("Invalid response. Expected [%s], but instead got [%s]", expectedResponse, actualResponse)
 	}
 }
+
+func TestServeHTTPWithGraphqli(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/graphql", nil)
+	r.Header.Add("Accept", "text/html")
+	h := relay.Handler{Schema: starwarsSchema, Graphqli: true}
+
+	h.ServeHTTP(w, r)
+
+	if w.Code != 200 {
+		t.Fatalf("Expected status code 200, got %d.", w.Code)
+	}
+
+	actualContentType := w.Header().Get("Content-Type")
+	expectedContentType := "text/html; charset=utf-8"
+	if actualContentType != expectedContentType {
+		t.Fatalf("Invalid content-type. Expected [%s], but instead got [%s]", expectedContentType, actualContentType)
+	}
+
+	actualResponse := w.Body.String()
+	expectedResponse := string(relay.GraphqliPage)
+	if string(relay.GraphqliPage) != actualResponse {
+		t.Fatalf("Invalid response. Expected [%s], but instead got [%s]", expectedResponse, actualResponse)
+	}
+}
