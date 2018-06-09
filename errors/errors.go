@@ -17,6 +17,16 @@ type Location struct {
 	Column int `json:"column"`
 }
 
+// ErrorHandler describes a function that converts an error to a QueryError
+type ErrorHandler func(error) *QueryError
+
+// DefaultErrorHandler returns the default error handler
+func DefaultErrorHandler() ErrorHandler {
+	return func(err error) *QueryError {
+		return Errorf("%s", err)
+	}
+}
+
 func (a Location) Before(b Location) bool {
 	return a.Line < b.Line || (a.Line == b.Line && a.Column < b.Column)
 }

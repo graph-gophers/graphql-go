@@ -29,6 +29,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		tracer:           trace.OpenTracingTracer{},
 		validationTracer: trace.NoopValidationTracer{},
 		logger:           &log.DefaultLogger{},
+		errorHandler:     errors.DefaultErrorHandler(),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -68,6 +69,7 @@ type Schema struct {
 	tracer           trace.Tracer
 	validationTracer trace.ValidationTracer
 	logger           log.Logger
+	errorHandler     errors.ErrorHandler
 }
 
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
@@ -105,6 +107,13 @@ func ValidationTracer(tracer trace.ValidationTracer) SchemaOpt {
 func Logger(logger log.Logger) SchemaOpt {
 	return func(s *Schema) {
 		s.logger = logger
+	}
+}
+
+// ErrorHandler is used to translate resolver errors into errors.QueryError
+func ErrorHandler(handler errors.ErrorHandler) SchemaOpt {
+	return func(s *Schema) {
+		s.errorHandler = handler
 	}
 }
 
@@ -160,9 +169,10 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 			Vars:   variables,
 			Schema: s.schema,
 		},
-		Limiter: make(chan struct{}, s.maxParallelism),
-		Tracer:  s.tracer,
-		Logger:  s.logger,
+		Limiter:      make(chan struct{}, s.maxParallelism),
+		Tracer:       s.tracer,
+		Logger:       s.logger,
+		ErrorHandler: s.errorHandler,
 	}
 	varTypes := make(map[string]*introspection.Type)
 	for _, v := range op.Vars {

@@ -19,9 +19,10 @@ import (
 
 type Request struct {
 	selected.Request
-	Limiter chan struct{}
-	Tracer  trace.Tracer
-	Logger  log.Logger
+	Limiter      chan struct{}
+	Tracer       trace.Tracer
+	Logger       log.Logger
+	ErrorHandler errors.ErrorHandler
 }
 
 func (r *Request) handlePanic(ctx context.Context) {
@@ -170,7 +171,7 @@ func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *p
 		}
 
 		if err := traceCtx.Err(); err != nil {
-			return errors.Errorf("%s", err) // don't execute any more resolvers if context got cancelled
+			return r.ErrorHandler(err) // don't execute any more resolvers if context got cancelled
 		}
 
 		var in []reflect.Value
@@ -184,7 +185,7 @@ func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *p
 		result = callOut[0]
 		if f.field.HasError && !callOut[1].IsNil() {
 			resolverErr := callOut[1].Interface().(error)
-			err := errors.Errorf("%s", resolverErr)
+			err := r.ErrorHandler(resolverErr)
 			err.Path = path.toSlice()
 			err.ResolverError = resolverErr
 			return err
