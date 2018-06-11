@@ -6,7 +6,7 @@ import "bytes"
 var Meta *Schema
 
 func init() {
-	Meta = &Schema{}
+	Meta = &Schema{} //bootstrap
 	Meta = New()
 	if err := Meta.Parse(metaSchemaString()); err != nil {
 		panic(err)
