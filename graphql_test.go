@@ -2,6 +2,7 @@ package graphql_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -1554,6 +1555,43 @@ const (
 	EnumOption2 StringEnum = "Option2"
 )
 
+type IntEnum int
+
+const (
+	IntEnum0 IntEnum = iota
+	IntEnum1
+)
+
+func (e IntEnum) String() string {
+	switch int(e) {
+	case 0:
+		return "Int0"
+	case 1:
+		return "Int1"
+	default:
+		return "IntN"
+	}
+}
+
+func (IntEnum) ImplementsGraphQLType(name string) bool {
+	return name == "IntEnum"
+}
+
+func (e *IntEnum) UnmarshalGraphQL(input interface{}) error {
+	if str, ok := input.(string); ok {
+		switch str {
+		case "Int0":
+			*e = IntEnum(0)
+		case "Int1":
+			*e = IntEnum(1)
+		default:
+			*e = IntEnum(-1)
+		}
+		return nil
+	}
+	return fmt.Errorf("wrong type for IntEnum: %T", input)
+}
+
 type inputResolver struct{}
 
 func (r *inputResolver) Int(args struct{ Value int32 }) int32 {
@@ -1613,6 +1651,22 @@ func (r *inputResolver) NullableStringEnum(args struct{ Value *StringEnum }) *St
 	return args.Value
 }
 
+func (r *inputResolver) IntEnumValue(args struct{ Value string }) string {
+	return args.Value
+}
+
+func (r *inputResolver) NullableIntEnumValue(args struct{ Value *string }) *string {
+	return args.Value
+}
+
+func (r *inputResolver) IntEnum(args struct{ Value IntEnum }) IntEnum {
+	return args.Value
+}
+
+func (r *inputResolver) NullableIntEnum(args struct{ Value *IntEnum }) *IntEnum {
+	return args.Value
+}
+
 type recursive struct {
 	Next *recursive
 }
@@ -1649,6 +1703,10 @@ func TestInput(t *testing.T) {
 			nullableStringEnumValue(value: StringEnum): StringEnum
 			stringEnum(value: StringEnum!): StringEnum!
 			nullableStringEnum(value: StringEnum): StringEnum
+			intEnumValue(value: IntEnum!): IntEnum!
+			nullableIntEnumValue(value: IntEnum): IntEnum
+			intEnum(value: IntEnum!): IntEnum!
+			nullableIntEnum(value: IntEnum): IntEnum
 			recursive(value: RecursiveInput!): Int!
 			id(value: ID!): ID!
 		}
@@ -1664,6 +1722,11 @@ func TestInput(t *testing.T) {
 		enum StringEnum {
 			Option1
 			Option2
+		}
+
+		enum IntEnum {
+			Int0
+			Int1
 		}
 	`, &inputResolver{})
 	gqltesting.RunTests(t, []*gqltesting.Test{
@@ -1688,6 +1751,12 @@ func TestInput(t *testing.T) {
 					stringEnum(value: Option2)
 					nullableStringEnum1: nullableStringEnum(value: Option2)
 					nullableStringEnum2: nullableStringEnum(value: null)
+					intEnumValue(value: Int1)
+					nullableIntEnumValue1: nullableIntEnumValue(value: Int1)
+					nullableIntEnumValue2: nullableIntEnumValue(value: null)
+					intEnum(value: Int1)
+					nullableIntEnum1: nullableIntEnum(value: Int1)
+					nullableIntEnum2: nullableIntEnum(value: null)
 					recursive(value: {next: {next: {}}})
 					intID: id(value: 1234)
 					strID: id(value: "1234")
@@ -1712,6 +1781,12 @@ func TestInput(t *testing.T) {
 					"stringEnum": "Option2",
 					"nullableStringEnum1": "Option2",
 					"nullableStringEnum2": null,
+					"intEnumValue": "Int1",
+					"nullableIntEnumValue1": "Int1",
+					"nullableIntEnumValue2": null,
+					"intEnum": "Int1",
+					"nullableIntEnum1": "Int1",
+					"nullableIntEnum2": null,
 					"recursive": 3,
 					"intID": "1234",
 					"strID": "1234"
