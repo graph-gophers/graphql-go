@@ -1547,11 +1547,11 @@ func TestUnexportedField(t *testing.T) {
 	}
 }
 
-type Enum string
+type StringEnum string
 
 const (
-	EnumOption1 Enum = "Option1"
-	EnumOption2 Enum = "Option2"
+	EnumOption1 StringEnum = "Option1"
+	EnumOption2 StringEnum = "Option2"
 )
 
 type inputResolver struct{}
@@ -1597,19 +1597,19 @@ func (r *inputResolver) NullableList(args struct{ Value *[]*struct{ V int32 } })
 	return &l
 }
 
-func (r *inputResolver) EnumString(args struct{ Value string }) string {
+func (r *inputResolver) StringEnumValue(args struct{ Value string }) string {
 	return args.Value
 }
 
-func (r *inputResolver) NullableEnumString(args struct{ Value *string }) *string {
+func (r *inputResolver) NullableStringEnumValue(args struct{ Value *string }) *string {
 	return args.Value
 }
 
-func (r *inputResolver) Enum(args struct{ Value Enum }) Enum {
+func (r *inputResolver) StringEnum(args struct{ Value StringEnum }) StringEnum {
 	return args.Value
 }
 
-func (r *inputResolver) NullableEnum(args struct{ Value *Enum }) *Enum {
+func (r *inputResolver) NullableStringEnum(args struct{ Value *StringEnum }) *StringEnum {
 	return args.Value
 }
 
@@ -1645,10 +1645,10 @@ func TestInput(t *testing.T) {
 			nullable(value: Int): Int
 			list(value: [Input!]!): [Int!]!
 			nullableList(value: [Input]): [Int]
-			enumString(value: Enum!): Enum!
-			nullableEnumString(value: Enum): Enum
-			enum(value: Enum!): Enum!
-			nullableEnum(value: Enum): Enum
+			stringEnumValue(value: StringEnum!): StringEnum!
+			nullableStringEnumValue(value: StringEnum): StringEnum
+			stringEnum(value: StringEnum!): StringEnum!
+			nullableStringEnum(value: StringEnum): StringEnum
 			recursive(value: RecursiveInput!): Int!
 			id(value: ID!): ID!
 		}
@@ -1661,7 +1661,7 @@ func TestInput(t *testing.T) {
 			next: RecursiveInput
 		}
 
-		enum Enum {
+		enum StringEnum {
 			Option1
 			Option2
 		}
@@ -1682,12 +1682,12 @@ func TestInput(t *testing.T) {
 					list2: list(value: {v: 42})
 					nullableList1: nullableList(value: [{v: 41}, null, {v: 43}])
 					nullableList2: nullableList(value: null)
-					enumString(value: Option1)
-					nullableEnumString1: nullableEnum(value: Option1)
-					nullableEnumString2: nullableEnum(value: null)
-					enum(value: Option2)
-					nullableEnum1: nullableEnum(value: Option2)
-					nullableEnum2: nullableEnum(value: null)
+					stringEnumValue(value: Option1)
+					nullableStringEnumValue1: nullableStringEnum(value: Option1)
+					nullableStringEnumValue2: nullableStringEnum(value: null)
+					stringEnum(value: Option2)
+					nullableStringEnum1: nullableStringEnum(value: Option2)
+					nullableStringEnum2: nullableStringEnum(value: null)
 					recursive(value: {next: {next: {}}})
 					intID: id(value: 1234)
 					strID: id(value: "1234")
@@ -1706,12 +1706,12 @@ func TestInput(t *testing.T) {
 					"list2": [42],
 					"nullableList1": [41, null, 43],
 					"nullableList2": null,
-					"enumString": "Option1",
-					"nullableEnumString1": "Option1",
-					"nullableEnumString2": null,
-					"enum": "Option2",
-					"nullableEnum1": "Option2",
-					"nullableEnum2": null,
+					"stringEnumValue": "Option1",
+					"nullableStringEnumValue1": "Option1",
+					"nullableStringEnumValue2": null,
+					"stringEnum": "Option2",
+					"nullableStringEnum1": "Option2",
+					"nullableStringEnum2": null,
 					"recursive": 3,
 					"intID": "1234",
 					"strID": "1234"
