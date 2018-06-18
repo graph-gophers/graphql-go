@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 
 	graphql "github.com/graph-gophers/graphql-go"
@@ -85,7 +85,7 @@ func checkErrors(t *testing.T, expected, actual []*errors.QueryError) {
 		for i, want := range expected {
 			got := actual[i]
 
-			if !reflect.DeepEqual(got, want) {
+			if !strings.EqualFold(got.Message, want.Message) {
 				t.Fatalf("unexpected error: got %+v, want %+v", got, want)
 			}
 		}
