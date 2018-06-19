@@ -86,7 +86,7 @@ func checkErrors(t *testing.T, expected, actual []*errors.QueryError) {
 			got := actual[i]
 
 			if !reflect.DeepEqual(got, want) {
-				t.Fatalf("unexpected error: got %+v, want %+v", got, want)
+				t.Fatalf("unexpected error: got %#v, want %#v", got, want)
 			}
 		}
 
