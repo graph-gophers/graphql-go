@@ -45,7 +45,7 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *query.O
 	func() {
 		defer r.handlePanic(ctx)
 		sels := selected.ApplyOperation(&r.Request, s, op)
-		r.execSelections(ctx, sels, nil, s.Resolver, &out, op.Type == query.Mutation)
+		r.execSelections(ctx, sels, nil, s.Resolver, &out, op.Type == query.Mutation, false)
 	}()
 
 	if err := ctx.Err(); err != nil {
@@ -62,7 +62,7 @@ type fieldToExec struct {
 	out      *bytes.Buffer
 }
 
-func (r *Request) execSelections(ctx context.Context, sels []selected.Selection, path *pathSegment, resolver reflect.Value, out *bytes.Buffer, serially bool) {
+func (r *Request) execSelections(ctx context.Context, sels []selected.Selection, path *pathSegment, resolver reflect.Value, out *bytes.Buffer, serially bool, isNonNull bool) {
 	async := !serially && selected.HasAsyncSel(sels)
 
 	var fields []*fieldToExec
@@ -80,25 +80,51 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 			}(f)
 		}
 		wg.Wait()
+	} else {
+		for _, f := range fields {
+			f.out = new(bytes.Buffer)
+			execFieldSelection(ctx, r, f, &pathSegment{path, f.field.Alias}, true)
+		}
 	}
 
-	out.WriteByte('{')
-	for i, f := range fields {
-		if i > 0 {
-			out.WriteByte(',')
+	//                              | nullable field | non-nullable field
+	// -------------------------------------------------------------------------------
+	// non-nullable child has error | print null     | print nothing, wait for parent to print null
+	//  no non-nullable child error | print output   | print output
+
+	childHasError := false
+	for _, f := range fields {
+		if _, nonNullChild := f.field.Type.(*common.NonNull); nonNullChild && r.SubPathHasError((&pathSegment{path, f.field.Alias}).toSlice()) {
+			childHasError = true
+			break
 		}
-		out.WriteByte('"')
-		out.WriteString(f.field.Alias)
-		out.WriteByte('"')
-		out.WriteByte(':')
-		if async {
-			out.Write(f.out.Bytes())
-			continue
-		}
-		f.out = out
-		execFieldSelection(ctx, r, f, &pathSegment{path, f.field.Alias}, false)
 	}
-	out.WriteByte('}')
+
+	// If the child has no error, we simply write out the results
+	if !childHasError {
+		out.WriteByte('{')
+		for i, f := range fields {
+			if i > 0 {
+				out.WriteByte(',')
+			}
+			out.WriteByte('"')
+			out.WriteString(f.field.Alias)
+			out.WriteByte('"')
+			out.WriteByte(':')
+			out.Write(f.out.Bytes())
+		}
+		out.WriteByte('}')
+		return
+	}
+
+	// We exit early in the non-null case because we want the parent to write out its response instead
+	// and an error has already been set, indicating to the parent that it should become null
+	if isNonNull {
+		return
+	}
+
+	// If there's an error and the current field is nullable, we write out a null
+	out.Write([]byte("null"))
 }
 
 func collectFieldsToResolve(sels []selected.Selection, resolver reflect.Value, fields *[]*fieldToExec, fieldByAlias map[string]*fieldToExec) {
@@ -206,7 +232,11 @@ func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *p
 
 	if err != nil {
 		r.AddError(err)
-		f.out.WriteString("null") // TODO handle non-nil
+		// Note that we write null here, but if this resolver is non-nullable and we've added an error,
+		// its parent ignores this output. We write the null here anyway just in case because
+		// we don't make decisions about the nullability of fields until the parent detects an error
+		// somewhere within the child's tree
+		f.out.WriteString("null")
 		return
 	}
 
@@ -226,7 +256,7 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 			return
 		}
 
-		r.execSelections(ctx, sels, path, resolver, out, false)
+		r.execSelections(ctx, sels, path, resolver, out, false, nonNull)
 		return
 	}
 
