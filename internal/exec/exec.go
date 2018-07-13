@@ -209,7 +209,8 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 	t, nonNull := unwrapNonNull(typ)
 	switch t := t.(type) {
 	case *schema.Object, *schema.Interface, *schema.Union:
-		if resolver.Kind() == reflect.Ptr && resolver.IsNil() {
+		// a reflect.Value of a nil interface will show up as an Invalid value
+		if resolver.Kind() == reflect.Invalid || ((resolver.Kind() == reflect.Ptr || resolver.Kind() == reflect.Interface) && resolver.IsNil()) {
 			if nonNull {
 				panic(errors.Errorf("got nil for non-null %q", t))
 			}
