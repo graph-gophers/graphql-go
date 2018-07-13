@@ -154,6 +154,13 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		return &Response{Errors: []*errors.QueryError{errors.Errorf("%s", err)}}
 	}
 
+	// Fill in variables with the defaults from the operation
+	for _, v := range op.Vars {
+		if _, ok := variables[v.Name.Name]; !ok && v.Default != nil {
+			variables[v.Name.Name] = v.Default.Value(nil)
+		}
+	}
+
 	r := &exec.Request{
 		Request: selected.Request{
 			Doc:    doc,
