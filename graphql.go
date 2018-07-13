@@ -155,6 +155,9 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	}
 
 	// Fill in variables with the defaults from the operation
+	if variables == nil {
+		variables = make(map[string]interface{}, len(op.Vars))
+	}
 	for _, v := range op.Vars {
 		if _, ok := variables[v.Name.Name]; !ok && v.Default != nil {
 			variables[v.Name.Name] = v.Default.Value(nil)
