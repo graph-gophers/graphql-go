@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	graphql "github.com/graph-gophers/graphql-go"
+	errs "github.com/graph-gophers/graphql-go/errors"
 )
 
 func MarshalID(kind string, spec interface{}) graphql.ID {
@@ -44,7 +45,8 @@ func UnmarshalSpec(id graphql.ID, v interface{}) error {
 }
 
 type Handler struct {
-	Schema *graphql.Schema
+	Schema        *graphql.Schema
+	ErrorCallback func([]*errs.QueryError)
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +61,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := h.Schema.Exec(r.Context(), params.Query, params.OperationName, params.Variables)
+	if len(response.Errors) > 0 && h.ErrorCallback != nil {
+		h.ErrorCallback(response.Errors)
+	}
 	responseJSON, err := json.Marshal(response)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
