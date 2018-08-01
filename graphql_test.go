@@ -683,6 +683,24 @@ func TestDeprecatedDirective(t *testing.T) {
 	})
 }
 
+type testDeprecatedArgsResolver struct{}
+
+func (r *testDeprecatedArgsResolver) A(ctx context.Context, args struct{ B *string }) int32 {
+	return 0
+}
+
+func TestDeprecatedArgs(t *testing.T) {
+	graphql.MustParseSchema(`
+		schema {
+			query: Query
+		}
+
+		type Query {
+			a(b: String @deprecated): Int!
+		}
+	`, &testDeprecatedArgsResolver{})
+}
+
 func TestInlineFragments(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
