@@ -61,7 +61,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 	async := !serially && selected.HasAsyncSel(sels)
 
 	var fields []*fieldToExec
-	collectFieldsToResolve(sels, resolver, &fields, make(map[string]*fieldToExec))
+	collectFieldsToResolve(ctx, sels, resolver, &fields, make(map[string]*fieldToExec))
 
 	if async {
 		var wg sync.WaitGroup
@@ -96,7 +96,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 	out.WriteByte('}')
 }
 
-func collectFieldsToResolve(sels []selected.Selection, resolver reflect.Value, fields *[]*fieldToExec, fieldByAlias map[string]*fieldToExec) {
+func collectFieldsToResolve(ctx context.Context, sels []selected.Selection, resolver reflect.Value, fields *[]*fieldToExec, fieldByAlias map[string]*fieldToExec) {
 	for _, sel := range sels {
 		switch sel := sel.(type) {
 		case *selected.SchemaField:
@@ -112,16 +112,16 @@ func collectFieldsToResolve(sels []selected.Selection, resolver reflect.Value, f
 			sf := &selected.SchemaField{
 				Field:       resolvable.MetaFieldTypename,
 				Alias:       sel.Alias,
-				FixedResult: reflect.ValueOf(typeOf(sel, resolver)),
+				FixedResult: reflect.ValueOf(typeOf(ctx, sel, resolver)),
 			}
 			*fields = append(*fields, &fieldToExec{field: sf, resolver: resolver})
 
 		case *selected.TypeAssertion:
-			out := resolver.Method(sel.MethodIndex).Call(nil)
+			out := invokeTypeAssertion(ctx, resolver.Method(sel.MethodIndex))
 			if !out[1].Bool() {
 				continue
 			}
-			collectFieldsToResolve(sel.Sels, out[0], fields, fieldByAlias)
+			collectFieldsToResolve(ctx, sel.Sels, out[0], fields, fieldByAlias)
 
 		default:
 			panic("unreachable")
@@ -129,17 +129,25 @@ func collectFieldsToResolve(sels []selected.Selection, resolver reflect.Value, f
 	}
 }
 
-func typeOf(tf *selected.TypenameField, resolver reflect.Value) string {
+func typeOf(ctx context.Context, tf *selected.TypenameField, resolver reflect.Value) string {
 	if len(tf.TypeAssertions) == 0 {
 		return tf.Name
 	}
 	for name, a := range tf.TypeAssertions {
-		out := resolver.Method(a.MethodIndex).Call(nil)
+		out := invokeTypeAssertion(ctx, resolver.Method(a.MethodIndex))
 		if out[1].Bool() {
 			return name
 		}
 	}
 	return ""
+}
+
+func invokeTypeAssertion(ctx context.Context, method reflect.Value) []reflect.Value {
+	vars := []reflect.Value{}
+	if method.Type().NumIn() >= 1 {
+		vars = append(vars, reflect.ValueOf(ctx))
+	}
+	return method.Call(vars)
 }
 
 func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *pathSegment, applyLimiter bool) {
@@ -270,7 +278,7 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 		v := resolver.Interface()
 		data, err := json.Marshal(v)
 		if err != nil {
-			panic(errors.Errorf("could not marshal %v: %s", v, err))
+			panic(errors.Errorf("could not marshal %v", v))
 		}
 		out.Write(data)
 
