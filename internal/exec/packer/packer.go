@@ -325,7 +325,10 @@ func unmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
 	if reflect.TypeOf(input) == typ {
 		return input, nil
 	}
-
+	if typ.String() == "time.Time" {
+		return convertStringToTime(input.(string))
+	}
+	
 	switch typ.Kind() {
 	case reflect.Int32:
 		switch input := input.(type) {
@@ -351,9 +354,6 @@ func unmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
 		}
 
 	case reflect.String:
-		if _, ok := input.(time.Time); ok {
-			return convertStringToTime(input.(string))
-		}
 		if reflect.TypeOf(input).ConvertibleTo(typ) {
 			return reflect.ValueOf(input).Convert(typ).Interface(), nil
 		}
