@@ -5,7 +5,7 @@ import (
 	"math"
 	"reflect"
 	"strings"
-
+	"time"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/schema"
@@ -325,7 +325,9 @@ func unmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
 	if reflect.TypeOf(input) == typ {
 		return input, nil
 	}
-
+	if typ.String() == "time.Time" {
+		return convertStringToTime(input.(string))
+	}
 	switch typ.Kind() {
 	case reflect.Int32:
 		switch input := input.(type) {
@@ -357,6 +359,10 @@ func unmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
 	}
 
 	return nil, fmt.Errorf("incompatible type")
+}
+
+func convertStringToTime(timeString string) (interface{}, error) {
+	return time.Parse(time.RFC3339, timeString)
 }
 
 func unwrapNonNull(t common.Type) (common.Type, bool) {
