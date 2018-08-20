@@ -351,12 +351,19 @@ func unmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
 		}
 
 	case reflect.String:
+		if _, ok := input.(time.Time); ok {
+			return convertStringToTime(input.(string))
+		}
 		if reflect.TypeOf(input).ConvertibleTo(typ) {
 			return reflect.ValueOf(input).Convert(typ).Interface(), nil
 		}
 	}
 
 	return nil, fmt.Errorf("incompatible type")
+}
+
+func convertStringToTime(timeString string) (interface{}, error){
+	return time.Parse(time.RFC3339, timeString)
 }
 
 func unwrapNonNull(t common.Type) (common.Type, bool) {
