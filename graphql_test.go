@@ -1631,11 +1631,15 @@ func (r *inputResolver) ID(args struct{ Value graphql.ID }) graphql.ID {
 	return args.Value
 }
 
+func (r *inputResolver) InputTime(args struct{ Value struct{T time.Time} }) graphql.Time {
+	return graphql.Time{args.Value.T}
+}
 func TestInput(t *testing.T) {
 	coercionSchema := graphql.MustParseSchema(`
 		schema {
 			query: Query
 		}
+		scalar Time
 
 		type Query {
 			int(value: Int!): Int!
@@ -1651,8 +1655,11 @@ func TestInput(t *testing.T) {
 			nullableEnum(value: Enum): Enum
 			recursive(value: RecursiveInput!): Int!
 			id(value: ID!): ID!
+			inputTime(value: TimeInput!): Time!
 		}
-
+		input TimeInput{
+			t: Time!
+		}
 		input Input {
 			v: Int!
 		}
@@ -1691,6 +1698,7 @@ func TestInput(t *testing.T) {
 					recursive(value: {next: {next: {}}})
 					intID: id(value: 1234)
 					strID: id(value: "1234")
+					timeInput: inputTime(value: {t : "2018-08-22T11:34:55Z"})
 				}
 			`,
 			ExpectedResult: `
@@ -1714,7 +1722,8 @@ func TestInput(t *testing.T) {
 					"nullableEnum2": null,
 					"recursive": 3,
 					"intID": "1234",
-					"strID": "1234"
+					"strID": "1234",
+					"timeInput": "2018-08-22T11:34:55Z"
 				}
 			`,
 		},
