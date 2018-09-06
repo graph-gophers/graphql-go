@@ -84,7 +84,7 @@ type Scalar struct {
 type Object struct {
 	Name       string
 	Interfaces []*Interface
-	Fields     FieldList
+	Fields     FieldList `json:"fields"`
 	Desc       string
 	// TODO: Add a list of directives?
 
@@ -222,11 +222,11 @@ func (t *InputObject) Description() string { return t.Desc }
 // Field is a conceptual function which yields values.
 // http://facebook.github.io/graphql/draft/#FieldDefinition
 type Field struct {
-	Name       string
-	Args       common.InputValueList // NOTE: the spec refers to this as `ArgumentsDefinition`.
+	Name       string `json:"name"`
+	Args       common.InputValueList `json:"args"` // NOTE: the spec refers to this as `ArgumentsDefinition`.
 	Type       common.Type
 	Directives common.DirectiveList
-	Desc       string
+	Desc       string `json:"desc"`
 }
 
 // New initializes an instance of Schema.

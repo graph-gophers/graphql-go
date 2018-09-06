@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"github.com/graph-gophers/graphql-go/internal/schema"
 	"text/scanner"
 
 	"github.com/graph-gophers/graphql-go/errors"
@@ -75,6 +76,12 @@ type Field struct {
 	Directives      common.DirectiveList
 	Selections      []Selection
 	SelectionSetLoc errors.Location
+	Schema 			*FieldSchema
+}
+
+type FieldSchema struct {
+	Field  *schema.Field
+	Parent schema.NamedType
 }
 
 type InlineFragment struct {

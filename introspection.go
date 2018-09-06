@@ -4,21 +4,20 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"github.com/graph-gophers/graphql-go/introspection"
 )
 
 // Inspect allows inspection of the given schema.
 func (s *Schema) Inspect() *introspection.Schema {
-	return introspection.WrapSchema(s.schema)
+	return introspection.WrapSchema(s.engine.schema)
 }
 
 // ToJSON encodes the schema in a JSON format used by tools like Relay.
 func (s *Schema) ToJSON() ([]byte, error) {
-	result := s.exec(context.Background(), introspectionQuery, "", nil, &resolvable.Schema{
-		Query:  &resolvable.Object{},
-		Schema: *s.schema,
-	})
+	r := EngineRequest{
+		Query: introspectionQuery,
+	}
+	result := s.engine.Execute(context.Background(), &r, s.resolver)
 	if len(result.Errors) != 0 {
 		panic(result.Errors[0])
 	}

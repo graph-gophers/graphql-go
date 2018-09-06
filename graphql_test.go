@@ -2,6 +2,7 @@ package graphql_test
 
 import (
 	"context"
+	"github.com/graph-gophers/graphql-go/errors"
 	"testing"
 	"time"
 
@@ -1512,18 +1513,27 @@ func (r *resolverWithUnexportedMethod) changeTheNumber(args struct{ NewNumber in
 }
 
 func TestUnexportedMethod(t *testing.T) {
-	_, err := graphql.ParseSchema(`
-		schema {
-			mutation: Mutation
-		}
-
-		type Mutation {
-			changeTheNumber(newNumber: Int!): Int!
-		}
-	`, &resolverWithUnexportedMethod{})
-	if err == nil {
-		t.Error("error expected")
-	}
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					mutation: Mutation
+				}
+		
+				type Mutation {
+					changeTheNumber(newNumber: Int!): Int!
+				}
+			`, &resolverWithUnexportedMethod{}),
+			Query: `
+				mutation {
+					changeTheNumber(newNumber: 1) 
+				}
+			`,
+			ExpectedErrors: []*errors.QueryError{
+				&errors.QueryError{Message:"No resolver found", Locations:[]errors.Location(nil), Path:[]interface {}{"changeTheNumber"}, Rule:"", ResolverError:error(nil)},
+			},
+		},
+	})
 }
 
 type resolverWithUnexportedField struct{}
@@ -1533,18 +1543,27 @@ func (r *resolverWithUnexportedField) ChangeTheNumber(args struct{ newNumber int
 }
 
 func TestUnexportedField(t *testing.T) {
-	_, err := graphql.ParseSchema(`
-		schema {
-			mutation: Mutation
-		}
-
-		type Mutation {
-			changeTheNumber(newNumber: Int!): Int!
-		}
-	`, &resolverWithUnexportedField{})
-	if err == nil {
-		t.Error("error expected")
-	}
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					mutation: Mutation
+				}
+		
+				type Mutation {
+					changeTheNumber(newNumber: Int!): Int!
+				}
+			`, &resolverWithUnexportedField{}),
+			Query: `
+				mutation {
+					changeTheNumber(newNumber: 1) 
+				}
+			`,
+			ExpectedErrors: []*errors.QueryError{
+				&errors.QueryError{Message:"No resolver found", Locations:[]errors.Location(nil), Path:[]interface {}{"changeTheNumber"}, Rule:"", ResolverError:error(nil)},
+			},
+		},
+	})
 }
 
 type Enum string

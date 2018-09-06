@@ -267,6 +267,11 @@ func validateSelection(c *opContext, sel query.Selection, t schema.NamedType) {
 		}
 		c.fieldMap[sel] = fieldInfo{sf: f, parent: t}
 
+		sel.Schema = &query.FieldSchema{
+			Field: f,
+			Parent: t,
+		}
+
 		validateArgumentLiterals(c, sel.Arguments)
 		if f != nil {
 			validateArgumentTypes(c, sel.Arguments, f.Args, sel.Alias.Loc,
