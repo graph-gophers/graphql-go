@@ -4,7 +4,7 @@ import (
 	"github.com/graph-gophers/graphql-go/errors"
 )
 
-type TraceValidationFinishFunc = TraceQueryFinishFunc
+type TraceValidationFinishFunc TraceQueryFinishFunc
 
 type ValidationTracer interface {
 	TraceValidation() TraceValidationFinishFunc
