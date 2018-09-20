@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/tokopedia/graphql-go/errors"
 	"github.com/tokopedia/graphql-go/internal/common"
 	"github.com/tokopedia/graphql-go/internal/exec/packer"
 	"github.com/tokopedia/graphql-go/internal/schema"
@@ -252,6 +253,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 
 var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
+var extnErrorType = reflect.TypeOf((**errors.QueryError)(nil)).Elem()
 
 func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.Method, methodIndex int, methodHasReceiver bool) (*Field, error) {
 	in := make([]reflect.Type, m.Type.NumIn())
@@ -290,8 +292,8 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 
 	hasError := m.Type.NumOut() == 2
 	if hasError {
-		if m.Type.Out(1) != errorType {
-			return nil, fmt.Errorf(`must have "error" as its second return value`)
+		if m.Type.Out(1) != errorType && m.Type.Out(1) != extnErrorType {
+			return nil, fmt.Errorf(`must have "error" or "*errors.QueryError" as its second return value`)
 		}
 	}
 

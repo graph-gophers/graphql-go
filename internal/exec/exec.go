@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	errlib "errors"
 	"reflect"
 	"sync"
 
@@ -183,6 +184,13 @@ func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *p
 		callOut := f.resolver.Method(f.field.MethodIndex).Call(in)
 		result = callOut[0]
 		if f.field.HasError && !callOut[1].IsNil() {
+			extnErr, ok := callOut[1].Interface().(*errors.QueryError)
+			if ok {
+				extnErr.Path = path.toSlice()
+				extnErr.ResolverError = errlib.New(extnErr.Message)
+				return extnErr
+			}
+
 			resolverErr := callOut[1].Interface().(error)
 			err := errors.Errorf("%s", resolverErr)
 			err.Path = path.toSlice()
