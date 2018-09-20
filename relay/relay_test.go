@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/graph-gophers/graphql-go"
-	"github.com/graph-gophers/graphql-go/example/starwars"
-	"github.com/graph-gophers/graphql-go/relay"
+	"github.com/tokopedia/graphql-go"
+	"github.com/tokopedia/graphql-go/example/starwars"
+	"github.com/tokopedia/graphql-go/relay"
 )
 
 var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})

@@ -3,7 +3,7 @@ package common_test
 import (
 	"testing"
 
-	"github.com/graph-gophers/graphql-go/internal/common"
+	"github.com/tokopedia/graphql-go/internal/common"
 )
 
 type consumeTestCase struct {

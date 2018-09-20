@@ -22,12 +22,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/graph-gophers/graphql-go.git"
+    "url": "git+https://github.com/tokopedia/graphql-go.git"
   },
   "author": "",
   "license": "BSD-3-Clause",
   "bugs": {
-    "url": "https://github.com/graph-gophers/graphql-go/issues"
+    "url": "https://github.com/tokopedia/graphql-go/issues"
   },
-  "homepage": "https://github.com/graph-gophers/graphql-go#readme"
+  "homepage": "https://github.com/tokopedia/graphql-go#readme"
 }
