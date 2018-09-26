@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/graph-gophers/graphql-go/internal/common"
-	"github.com/graph-gophers/graphql-go/internal/schema"
-	"github.com/graph-gophers/graphql-go/introspection"
+	"github.com/JoinCAD/graphql-go/internal/common"
+	"github.com/JoinCAD/graphql-go/internal/schema"
+	"github.com/JoinCAD/graphql-go/introspection"
 )
 
 var MetaSchema *Object

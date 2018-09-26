@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"text/scanner"
 
-	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/internal/common"
+	"github.com/JoinCAD/graphql-go/errors"
+	"github.com/JoinCAD/graphql-go/internal/common"
 )
 
 type Document struct {

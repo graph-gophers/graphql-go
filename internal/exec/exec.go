@@ -7,14 +7,14 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/internal/common"
-	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
-	"github.com/graph-gophers/graphql-go/internal/exec/selected"
-	"github.com/graph-gophers/graphql-go/internal/query"
-	"github.com/graph-gophers/graphql-go/internal/schema"
-	"github.com/graph-gophers/graphql-go/log"
-	"github.com/graph-gophers/graphql-go/trace"
+	"github.com/JoinCAD/graphql-go/errors"
+	"github.com/JoinCAD/graphql-go/internal/common"
+	"github.com/JoinCAD/graphql-go/internal/exec/resolvable"
+	"github.com/JoinCAD/graphql-go/internal/exec/selected"
+	"github.com/JoinCAD/graphql-go/internal/query"
+	"github.com/JoinCAD/graphql-go/internal/schema"
+	"github.com/JoinCAD/graphql-go/log"
+	"github.com/JoinCAD/graphql-go/trace"
 )
 
 type Request struct {
