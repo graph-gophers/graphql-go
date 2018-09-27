@@ -16,6 +16,12 @@ func (r *helloWorldResolver1) Hello() string {
 	return "Hello world!"
 }
 
+type helloWorldResolver1Prefixed struct{}
+
+func (r *helloWorldResolver1) ResolverHello() string {
+	return "Hello world!"
+}
+
 type helloWorldResolver2 struct{}
 
 func (r *helloWorldResolver2) Hello(ctx context.Context) (string, error) {
@@ -62,6 +68,56 @@ func (r *timeResolver) AddHour(args struct{ Time graphql.Time }) graphql.Time {
 }
 
 var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
+
+func TestHelloWorldPrefixed(t *testing.T) {
+	rawBasicScheme := `
+	schema {
+		query: Query
+	}
+
+	type Query {
+		hello: String!
+	}
+`
+	basicScheme := graphql.MustParseSchema(rawBasicScheme, &helloWorldResolver1Prefixed{}, graphql.ResolverPrefix("Resolver"))
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: basicScheme,
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!"
+				}
+			`,
+		},
+
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String!
+				}
+			`, &helloWorldResolver2{}),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!"
+				}
+			`,
+		},
+	})
+}
 
 func TestHelloWorld(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
