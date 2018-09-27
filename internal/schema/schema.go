@@ -41,6 +41,11 @@ type Schema struct {
 	// http://facebook.github.io/graphql/draft/#sec-Type-System.Directives
 	Directives map[string]*DirectiveDecl
 
+	// Prefix that used with resolvers.
+	// Allows to have both SomeFieldName and {Prefix}SomeFieldName
+	// without having to use uppercased names
+	ResolverPrefix string
+
 	entryPointNames map[string]string
 	objects         []*Object
 	unions          []*Union

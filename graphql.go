@@ -73,6 +73,14 @@ type Schema struct {
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
 type SchemaOpt func(*Schema)
 
+// ResolverPrefix sets resolver method prefix.
+// This prefix allows you conviniently both have
+func ResolverPrefix(prefix string) SchemaOpt {
+	return func(s *Schema) {
+		s.schema.ResolverPrefix = prefix
+	}
+}
+
 // MaxDepth specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
 func MaxDepth(n int) SchemaOpt {
 	return func(s *Schema) {

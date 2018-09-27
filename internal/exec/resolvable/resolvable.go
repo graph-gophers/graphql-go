@@ -56,6 +56,7 @@ func (*Scalar) isResolvable() {}
 
 func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 	b := newBuilder(s)
+	b.resolverPrefix = s.ResolverPrefix
 
 	var query, mutation Resolvable
 
@@ -84,9 +85,10 @@ func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 }
 
 type execBuilder struct {
-	schema        *schema.Schema
-	resMap        map[typePair]*resMapEntry
-	packerBuilder *packer.Builder
+	schema         *schema.Schema
+	resMap         map[typePair]*resMapEntry
+	packerBuilder  *packer.Builder
+	resolverPrefix string
 }
 
 type typePair struct {
@@ -208,10 +210,10 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 
 	Fields := make(map[string]*Field)
 	for _, f := range fields {
-		methodIndex := findMethod(resolverType, f.Name)
+		methodIndex := findMethod(resolverType, f.Name, b.resolverPrefix)
 		if methodIndex == -1 {
 			hint := ""
-			if findMethod(reflect.PtrTo(resolverType), f.Name) != -1 {
+			if findMethod(reflect.PtrTo(resolverType), f.Name, b.resolverPrefix) != -1 {
 				hint = " (hint: the method exists on the pointer type)"
 			}
 			return nil, fmt.Errorf("%s does not resolve %q: missing method for field %q%s", resolverType, typeName, f.Name, hint)
@@ -227,7 +229,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 
 	typeAssertions := make(map[string]*TypeAssertion)
 	for _, impl := range possibleTypes {
-		methodIndex := findMethod(resolverType, "To"+impl.Name)
+		methodIndex := findMethod(resolverType, "To"+impl.Name, "")
 		if methodIndex == -1 {
 			return nil, fmt.Errorf("%s does not resolve %q: missing method %q to convert to %q", resolverType, typeName, "To"+impl.Name, impl.Name)
 		}
@@ -310,9 +312,19 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 	return fe, nil
 }
 
-func findMethod(t reflect.Type, name string) int {
+func findMethod(t reflect.Type, name string, prefix string) int {
+	strippedName := stripUnderscore(name)
+	// stripped name cannot be changed in the loop, cache it
 	for i := 0; i < t.NumMethod(); i++ {
-		if strings.EqualFold(stripUnderscore(name), stripUnderscore(t.Method(i).Name)) {
+		// if prefix provided, check for it first
+		if len(prefix) > 0 {
+			prefixedName := stripUnderscore(prefix + name)
+
+			if strings.EqualFold(prefixedName, stripUnderscore(t.Method(i).Name)) {
+				return i
+			}
+		}
+		if strings.EqualFold(strippedName, stripUnderscore(t.Method(i).Name)) {
 			return i
 		}
 	}
