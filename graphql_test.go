@@ -18,7 +18,7 @@ func (r *helloWorldResolver1) Hello() string {
 
 type helloWorldResolver1Prefixed struct{}
 
-func (r *helloWorldResolver1) ResolverHello() string {
+func (r *helloWorldResolver1Prefixed) ResolverHello() string {
 	return "Hello world!"
 }
 
