@@ -6,15 +6,15 @@ import (
 	"runtime"
 )
 
-// Logger is the interface used to log panics that occur durring query execution. It is setable via graphql.ParseSchema
+// Logger is the interface used to log panics that occur during query execution. It is settable via graphql.ParseSchema
 type Logger interface {
 	LogPanic(ctx context.Context, value interface{})
 }
 
-// DefaultLogger is the default logger used to log panics that occur durring query execution
+// DefaultLogger is the default logger used to log panics that occur during query execution
 type DefaultLogger struct{}
 
-// LogPanic is used to log recovered panic values that occur durring query execution
+// LogPanic is used to log recovered panic values that occur during query execution
 func (l *DefaultLogger) LogPanic(_ context.Context, value interface{}) {
 	const size = 64 << 10
 	buf := make([]byte, size)
