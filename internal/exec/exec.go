@@ -184,8 +184,9 @@ func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *p
 		callOut := f.resolver.Method(f.field.MethodIndex).Call(in)
 		result = callOut[0]
 		if f.field.HasError && !callOut[1].IsNil() {
-			extnErr, ok := callOut[1].Interface().(*errors.QueryError)
+			graphQLErr, ok := callOut[1].Interface().(errors.GraphQLError)
 			if ok {
+				extnErr := graphQLErr.PrepareExtErr()
 				extnErr.Path = path.toSlice()
 				extnErr.ResolverError = errlib.New(extnErr.Message)
 				return extnErr

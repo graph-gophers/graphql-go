@@ -4,6 +4,10 @@ import (
 	"fmt"
 )
 
+type GraphQLError interface {
+	PrepareExtErr() *QueryError
+}
+
 type QueryError struct {
 	Message       string        `json:"message"`
 	Locations     []Location    `json:"locations,omitempty"`
@@ -77,8 +81,4 @@ func (err *QueryError) AddMoreInfo(moreInfo string) *QueryError {
 func (err *QueryError) AddErrTimestamp(errTime string) *QueryError {
 	err.Extensions.Timestamp = errTime
 	return err
-}
-
-func PrepareExtErr(msg string) *QueryError {
-	return Errorf("%s", msg)
 }
