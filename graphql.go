@@ -101,7 +101,7 @@ func ValidationTracer(tracer trace.ValidationTracer) SchemaOpt {
 	}
 }
 
-// Logger is used to log panics durring query execution. It defaults to exec.DefaultLogger.
+// Logger is used to log panics during query execution. It defaults to exec.DefaultLogger.
 func Logger(logger log.Logger) SchemaOpt {
 	return func(s *Schema) {
 		s.logger = logger

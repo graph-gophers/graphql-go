@@ -63,7 +63,7 @@ func (l *Lexer) Consume() {
 		if l.next == ',' {
 			// Similar to white space and line terminators, commas (',') are used to improve the
 			// legibility of source text and separate lexical tokens but are otherwise syntactically and
-			// semanitcally insignificant within GraphQL documents.
+			// semantically insignificant within GraphQL documents.
 			//
 			// http://facebook.github.io/graphql/draft/#sec-Insignificant-Commas
 			continue
