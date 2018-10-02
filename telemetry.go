@@ -48,7 +48,9 @@ func logOperations(doc *query.Document) []LoggedOperation {
 		if len(inputs) > 0 {
 			args = make(map[string]string)
 			for _, input := range inputs {
-				args[input.Name.Name] = input.Default.String()
+				if input != nil && input.Default != nil {
+					args[input.Name.Name] = input.Default.String()
+				}
 			}
 		}
 
@@ -80,5 +82,11 @@ func (s *Schema) ValidateAndLog(queryString string) ([]*errors.QueryError, []Log
 		return []*errors.QueryError{qErr}, nil
 	}
 
-	return validation.Validate(s.schema, doc, s.maxDepth), logOperations(doc)
+	validationFinish := s.validationTracer.TraceValidation()
+	errs := validation.Validate(s.schema, doc, s.maxDepth)
+	validationFinish(errs)
+	if len(errs) != 0 {
+		return errs, []LoggedOperation{}
+	}
+	return errs, logOperations(doc)
 }
