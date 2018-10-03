@@ -52,13 +52,15 @@ func (l *Lexer) Peek() rune {
 	return l.next
 }
 
-// Consume whitespace and tokens equivalent to whitespace (e.g. commas and comments).
+// ConsumeWhitespace consumes whitespace and tokens equivalent to whitespace (e.g. commas and comments).
 //
 // Consumed comment characters will build the description for the next type or field encountered.
-// The description is available from `DescComment()`, and will be reset every time `Consume()` is
-// executed.
-func (l *Lexer) Consume(allowNewStyleDescription bool) {
-	l.descComment = ""
+// The description is available from `DescComment()`, and will be reset every time `ConsumeWhitespace()` is
+// executed unless l.noCommentsAsDescriptions is set.
+func (l *Lexer) ConsumeWhitespace() {
+	if !l.noCommentsAsDescriptions {
+		l.descComment = ""
+	}
 	for {
 		l.next = l.sc.Scan()
 
@@ -68,27 +70,6 @@ func (l *Lexer) Consume(allowNewStyleDescription bool) {
 			// semantically insignificant within GraphQL documents.
 			//
 			// http://facebook.github.io/graphql/draft/#sec-Insignificant-Commas
-			continue
-		}
-
-		if l.next == scanner.String && allowNewStyleDescription {
-			// Instead of comments, strings are used to encode descriptions in the June 2018 graphql spec.
-			// We can handle both, but there's an option to disable the old comment based descriptions and treat comments
-			// as comments.
-			// Single quote strings are also single line. Triple quote strings can be multi-line. Triple quote strings
-			// whitespace trimmed on both ends.
-			//
-			// http://facebook.github.io/graphql/June2018/#sec-Descriptions
-
-			// a triple quote string is an empty "string" followed by an open quote due to the way the parser treats strings as one token
-			tokenText := l.sc.TokenText()
-			if l.sc.Peek() == '"' {
-				// Consume the third quote
-				l.next = l.sc.Next()
-				l.consumeTripleQuoteComment()
-				continue
-			}
-			l.consumeStringComment(tokenText)
 			continue
 		}
 
@@ -105,6 +86,31 @@ func (l *Lexer) Consume(allowNewStyleDescription bool) {
 
 		break
 	}
+}
+
+// consumeDescription optionally consumes a description based on the June 2018 graphql spec if any are present.
+//
+// Single quote strings are also single line. Triple quote strings can be multi-line. Triple quote strings
+// whitespace trimmed on both ends.
+// If a description is found, consume any following comments as well
+//
+// http://facebook.github.io/graphql/June2018/#sec-Descriptions
+func (l *Lexer) consumeDescription() bool {
+	// If the next token is not a string, we don't consume it
+	if l.next == scanner.String {
+		// a triple quote string is an empty "string" followed by an open quote due to the way the parser treats strings as one token
+		l.descComment = ""
+		tokenText := l.sc.TokenText()
+		if l.sc.Peek() == '"' {
+			// Consume the third quote
+			l.next = l.sc.Next()
+			l.consumeTripleQuoteComment()
+		} else {
+			l.consumeStringComment(tokenText)
+		}
+		return true
+	}
+	return false
 }
 
 func (l *Lexer) ConsumeIdent() string {
@@ -124,12 +130,12 @@ func (l *Lexer) ConsumeKeyword(keyword string) {
 	if l.next != scanner.Ident || l.sc.TokenText() != keyword {
 		l.SyntaxError(fmt.Sprintf("unexpected %q, expecting %q", l.sc.TokenText(), keyword))
 	}
-	l.Consume(true)
+	l.ConsumeWhitespace()
 }
 
 func (l *Lexer) ConsumeLiteral() *BasicLit {
 	lit := &BasicLit{Type: l.next, Text: l.sc.TokenText()}
-	l.Consume(false)
+	l.ConsumeWhitespace()
 	return lit
 }
 
@@ -137,10 +143,15 @@ func (l *Lexer) ConsumeToken(expected rune) {
 	if l.next != expected {
 		l.SyntaxError(fmt.Sprintf("unexpected %q, expecting %s", l.sc.TokenText(), scanner.TokenString(expected)))
 	}
-	l.Consume(false)
+	l.ConsumeWhitespace()
 }
 
 func (l *Lexer) DescComment() string {
+	if l.noCommentsAsDescriptions {
+		if l.consumeDescription() {
+			l.ConsumeWhitespace()
+		}
+	}
 	return l.descComment
 }
 
@@ -167,14 +178,14 @@ func (l *Lexer) consumeTripleQuoteComment() {
 	comment := ""
 	numQuotes := 0
 	for {
-		next := l.sc.Next()
-		if next == '"' {
+		l.next = l.sc.Next()
+		if l.next == '"' {
 			numQuotes++
 		} else {
 			numQuotes = 0
 		}
-		comment += string(next)
-		if numQuotes == 3 || next == scanner.EOF {
+		comment += string(l.next)
+		if numQuotes == 3 || l.next == scanner.EOF {
 			break
 		}
 	}

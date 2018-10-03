@@ -159,7 +159,7 @@ func setup(t *testing.T, def string) *common.Lexer {
 	t.Helper()
 
 	lex := common.NewLexer(def, false)
-	lex.Consume(true)
+	lex.ConsumeWhitespace()
 
 	return lex
 }
