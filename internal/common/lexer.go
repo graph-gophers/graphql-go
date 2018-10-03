@@ -129,7 +129,7 @@ func (l *Lexer) ConsumeKeyword(keyword string) {
 
 func (l *Lexer) ConsumeLiteral() *BasicLit {
 	lit := &BasicLit{Type: l.next, Text: l.sc.TokenText()}
-	l.Consume(true)
+	l.Consume(false)
 	return lit
 }
 
