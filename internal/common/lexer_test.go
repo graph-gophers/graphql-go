@@ -17,12 +17,17 @@ var consumeTests = []consumeTestCase{{
 	definition: `
 
 # Comment line 1
-# Comment line 2
+#Comment line 2
 ,,,,,, # Commas are insignificant
+"New style comments"
+""
+"""
+so " many comments
+"""
 type Hello {
 	world: String!
 }`,
-	expected: "Comment line 1\nComment line 2\nCommas are insignificant",
+	expected: "Comment line 1\nComment line 2\nCommas are insignificant\nNew style comments\n\nso \" many comments",
 }}
 
 func TestConsume(t *testing.T) {
@@ -30,7 +35,7 @@ func TestConsume(t *testing.T) {
 		t.Run(test.description, func(t *testing.T) {
 			lex := common.NewLexer(test.definition)
 
-			err := lex.CatchSyntaxError(lex.Consume)
+			err := lex.CatchSyntaxError(func() { lex.Consume(true) })
 			if err != nil {
 				t.Fatal(err)
 			}

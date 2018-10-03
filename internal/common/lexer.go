@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"text/scanner"
 
@@ -55,7 +56,7 @@ func (l *Lexer) Peek() rune {
 // Consumed comment characters will build the description for the next type or field encountered.
 // The description is available from `DescComment()`, and will be reset every time `Consume()` is
 // executed.
-func (l *Lexer) Consume() {
+func (l *Lexer) Consume(allowNewStyleDescription bool) {
 	l.descComment = ""
 	for {
 		l.next = l.sc.Scan()
@@ -66,6 +67,24 @@ func (l *Lexer) Consume() {
 			// semantically insignificant within GraphQL documents.
 			//
 			// http://facebook.github.io/graphql/draft/#sec-Insignificant-Commas
+			continue
+		}
+
+		if l.next == scanner.String && allowNewStyleDescription {
+			// Instead of comments, strings are used to encode descriptions in the June 2018 graphql spec.
+			// For now we handle both, but in the future we must provide a way to disable including comments in
+			// descriptions to become fully spec compatible.
+			// http://facebook.github.io/graphql/June2018/#sec-Descriptions
+
+			// a triple quote string is an empty "string" followed by an open quote due to the way the parser treats strings as one token
+			tokenText := l.sc.TokenText()
+			if l.sc.Peek() == '"' {
+				// Consume the third quote
+				l.next = l.sc.Next()
+				l.consumeTripleQuoteComment()
+				continue
+			}
+			l.consumeStringComment(tokenText)
 			continue
 		}
 
@@ -101,12 +120,12 @@ func (l *Lexer) ConsumeKeyword(keyword string) {
 	if l.next != scanner.Ident || l.sc.TokenText() != keyword {
 		l.SyntaxError(fmt.Sprintf("unexpected %q, expecting %q", l.sc.TokenText(), keyword))
 	}
-	l.Consume()
+	l.Consume(true)
 }
 
 func (l *Lexer) ConsumeLiteral() *BasicLit {
 	lit := &BasicLit{Type: l.next, Text: l.sc.TokenText()}
-	l.Consume()
+	l.Consume(true)
 	return lit
 }
 
@@ -114,7 +133,7 @@ func (l *Lexer) ConsumeToken(expected rune) {
 	if l.next != expected {
 		l.SyntaxError(fmt.Sprintf("unexpected %q, expecting %s", l.sc.TokenText(), scanner.TokenString(expected)))
 	}
-	l.Consume()
+	l.Consume(false)
 }
 
 func (l *Lexer) DescComment() string {
@@ -132,11 +151,49 @@ func (l *Lexer) Location() errors.Location {
 	}
 }
 
+func (l *Lexer) consumeTripleQuoteComment() {
+	if l.next != '"' {
+		panic("consumeTripleQuoteComment used in wrong context: no third quote?")
+	}
+
+	if l.descComment != "" {
+		l.descComment += "\n"
+	}
+
+	comment := ""
+	numQuotes := 0
+	for {
+		next := l.sc.Next()
+		if next == '"' {
+			numQuotes++
+		} else {
+			numQuotes = 0
+		}
+		comment += string(next)
+		if numQuotes == 3 || next == scanner.EOF {
+			break
+		}
+	}
+	l.descComment += strings.TrimSpace(comment[:len(comment)-numQuotes])
+}
+
+func (l *Lexer) consumeStringComment(str string) {
+	if l.descComment != "" {
+		l.descComment += "\n"
+	}
+
+	value, err := strconv.Unquote(str)
+	if err != nil {
+		panic(err)
+	}
+	l.descComment += value
+}
+
 // consumeComment consumes all characters from `#` to the first encountered line terminator.
 // The characters are appended to `l.descComment`.
 func (l *Lexer) consumeComment() {
 	if l.next != '#' {
-		return
+		panic("consumeComment used in wrong context")
 	}
 
 	// TODO: count and trim whitespace so we can dedent any following lines.
