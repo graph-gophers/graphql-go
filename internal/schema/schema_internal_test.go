@@ -158,7 +158,7 @@ func compareObjects(t *testing.T, expected, actual *Object) {
 func setup(t *testing.T, def string) *common.Lexer {
 	t.Helper()
 
-	lex := common.NewLexer(def)
+	lex := common.NewLexer(def, false)
 	lex.Consume(true)
 
 	return lex

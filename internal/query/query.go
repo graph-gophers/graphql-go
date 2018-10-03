@@ -94,7 +94,7 @@ func (InlineFragment) isSelection() {}
 func (FragmentSpread) isSelection() {}
 
 func Parse(queryString string) (*Document, *errors.QueryError) {
-	l := common.NewLexer(queryString)
+	l := common.NewLexer(queryString, false)
 
 	var doc *Document
 	err := l.CatchSyntaxError(func() { doc = parseDocument(l) })

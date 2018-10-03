@@ -12,9 +12,10 @@ import (
 type syntaxError string
 
 type Lexer struct {
-	sc          *scanner.Scanner
-	next        rune
-	descComment string
+	sc                       *scanner.Scanner
+	next                     rune
+	descComment              string
+	noCommentsAsDescriptions bool
 }
 
 type Ident struct {
@@ -22,13 +23,13 @@ type Ident struct {
 	Loc  errors.Location
 }
 
-func NewLexer(s string) *Lexer {
+func NewLexer(s string, noCommentsAsDescriptions bool) *Lexer {
 	sc := &scanner.Scanner{
 		Mode: scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats | scanner.ScanStrings,
 	}
 	sc.Init(strings.NewReader(s))
 
-	return &Lexer{sc: sc}
+	return &Lexer{sc: sc, noCommentsAsDescriptions: noCommentsAsDescriptions}
 }
 
 func (l *Lexer) CatchSyntaxError(f func()) (errRes *errors.QueryError) {
@@ -72,8 +73,11 @@ func (l *Lexer) Consume(allowNewStyleDescription bool) {
 
 		if l.next == scanner.String && allowNewStyleDescription {
 			// Instead of comments, strings are used to encode descriptions in the June 2018 graphql spec.
-			// For now we handle both, but in the future we must provide a way to disable including comments in
-			// descriptions to become fully spec compatible.
+			// We can handle both, but there's an option to disable the old comment based descriptions and treat comments
+			// as comments.
+			// Single quote strings are also single line. Triple quote strings can be multi-line. Triple quote strings
+			// whitespace trimmed on both ends.
+			//
 			// http://facebook.github.io/graphql/June2018/#sec-Descriptions
 
 			// a triple quote string is an empty "string" followed by an open quote due to the way the parser treats strings as one token
@@ -201,7 +205,7 @@ func (l *Lexer) consumeComment() {
 		l.sc.Next()
 	}
 
-	if l.descComment != "" {
+	if l.descComment != "" && !l.noCommentsAsDescriptions {
 		// TODO: use a bytes.Buffer or strings.Builder instead of this.
 		l.descComment += "\n"
 	}
@@ -212,7 +216,9 @@ func (l *Lexer) consumeComment() {
 			break
 		}
 
-		// TODO: use a bytes.Buffer or strings.Build instead of this.
-		l.descComment += string(next)
+		if !l.noCommentsAsDescriptions {
+			// TODO: use a bytes.Buffer or strings.Build instead of this.
+			l.descComment += string(next)
+		}
 	}
 }

@@ -39,7 +39,7 @@ func TestValidate(t *testing.T) {
 	schemas := make([]*schema.Schema, len(testData.Schemas))
 	for i, schemaStr := range testData.Schemas {
 		schemas[i] = schema.New()
-		if err := schemas[i].Parse(schemaStr); err != nil {
+		if err := schemas[i].Parse(schemaStr, false); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -34,7 +34,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		opt(s)
 	}
 
-	if err := s.schema.Parse(schemaString); err != nil {
+	if err := s.schema.Parse(schemaString, s.noCommentsAsDescriptions); err != nil {
 		return nil, err
 	}
 
@@ -63,15 +63,23 @@ type Schema struct {
 	schema *schema.Schema
 	res    *resolvable.Schema
 
-	maxDepth         int
-	maxParallelism   int
-	tracer           trace.Tracer
-	validationTracer trace.ValidationTracer
-	logger           log.Logger
+	maxDepth                 int
+	maxParallelism           int
+	tracer                   trace.Tracer
+	validationTracer         trace.ValidationTracer
+	logger                   log.Logger
+	noCommentsAsDescriptions bool
 }
 
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
 type SchemaOpt func(*Schema)
+
+// NoCommentsAsDescriptions disables the parsing of comments as descriptions
+func NoCommentsAsDescriptions() SchemaOpt {
+	return func(s *Schema) {
+		s.noCommentsAsDescriptions = true
+	}
+}
 
 // MaxDepth specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
 func MaxDepth(n int) SchemaOpt {
