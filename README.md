@@ -101,7 +101,7 @@ Example for a simple resolver method:
 
 ```go
 func (r *helloWorldResolver) Hello() string {
-	return "Hello world!"
+    return "Hello world!"
 }
 ```
 
@@ -109,7 +109,7 @@ The following signature is also allowed:
 
 ```go
 func (r *helloWorldResolver) Hello(ctx resolvers.ExecutionContext) (string, error) {
-	return "Hello world!", nil
+    return "Hello world!", nil
 }
 ```
 
@@ -123,8 +123,8 @@ Example of a simple resolver struct:
 
 ```go
 type Query struct {
-	Name   string
-	Length float64  `json:"length"`
+    Name   string
+    Length float64  `json:"length"`
 }
 ```
 
@@ -145,8 +145,8 @@ Example of a simple resolver map:
 
 ```go
 query := map[string]interface{}{
-	"Name": "Millennium Falcon",
-	"length": 34.37,
+    "Name": "Millennium Falcon",
+    "length": 34.37,
 }
 ```
 
@@ -165,11 +165,11 @@ You can change the resolver factories used by the engine and implement custom re
 
 Changing the default list of resolver factories so that only metadata and method based resolvers are used:
 ```go
-        engine, err := graphql.CreateEngine(starwars.Schema)
-        engine.ResolverFactory = &resolvers.ResolverFactoryList{
-        		&resolvers.MetadataResolverFactory{},
-        		&resolvers.MethodResolverFactory{},
-        }
+engine, err := graphql.CreateEngine(starwars.Schema)
+engine.ResolverFactory = &resolvers.ResolverFactoryList{
+        &resolvers.MetadataResolverFactory{},
+        &resolvers.MethodResolverFactory{},
+}
 ```
 
 You can also implement a custom resolver factory.  Here's an example resolver factory, that would resolve all `foo` GraphQL
@@ -178,12 +178,12 @@ fields to the value `"bar"`:
 ```go
 type MyFooResolverFactory struct{}
 func (this *MyFooResolverFactory) CreateResolver(request *resolvers.ResolveRequest) resolvers.Resolver {
-	if request.Field.Name!="foo" {
-		return nil // Lets only handle the foo fields:
-	}
-	return func() (interface{}, error) {
-		return "bar", nil
-	}
+    if request.Field.Name!="foo" {
+        return nil // Lets only handle the foo fields:
+    }
+    return func() (interface{}, error) {
+        return "bar", nil
+    }
 }
 ```
 
@@ -191,12 +191,12 @@ or you could do like:
 
 ```go
 myFooResolverFactory := resolvers.FuncResolverFactory{ func (request *resolvers.ResolveRequest) resolvers.Resolver {
-	if request.Field.Name!="foo" {
-		return nil // Lets only handle the foo fields:
-	}
-	return func() (interface{}, error) {
-		return "bar", nil
-	}
+    if request.Field.Name!="foo" {
+        return nil // Lets only handle the foo fields:
+    }
+    return func() (interface{}, error) {
+        return "bar", nil
+    }
 }}
 ```
 
@@ -223,17 +223,17 @@ each fetch is done in parallel.  You can enable async resolution in your custom 
 type MyHttpResolverFactory struct{}
 func (this *MyHttpResolverFactory) CreateResolver(request *resolvers.ResolveRequest) resolvers.Resolver {
 
-	if request.Field.Name!="google" {
-		return nil // Lets only handle the foo fields:
-	}
+    if request.Field.Name!="google" {
+        return nil // Lets only handle the google field:
+    }
 
     httpClient := &http.Client{}
     req, err := http.NewRequest("GET", "http://google.com", nil)
-    if err==nil {
+    if err!=nil {
         panic(err)
     }
 
-	return request.RunAsync(func() (interface{}, error) {
+    return request.RunAsync(func() (interface{}, error) {
         resp, err := httpClient.Do(req)
         if err != nil {
             return nil, err
@@ -245,8 +245,8 @@ func (this *MyHttpResolverFactory) CreateResolver(request *resolvers.ResolveRequ
             return nil, err
         }
 
-		return string(data), nil
-	})
+        return string(data), nil
+    })
 }
 ```
 
