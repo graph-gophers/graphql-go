@@ -1795,3 +1795,144 @@ func TestComposedFragments(t *testing.T) {
 		},
 	})
 }
+
+func BenchmarkStarwarsQuery(b *testing.B) {
+	// Lets build a query that throws the kitchen skink at the query engine.
+	// (we grab a little bit of all the tests we have so far)
+	query := `
+	query HeroNameAndFriends($episode: Episode, $withoutFriends: Boolean!, $withFriends: Boolean!) {
+		hero {
+			id
+			name
+			friends {
+				name
+			}
+		}
+		empireHerhero: hero(episode: EMPIRE) {
+			name
+		}
+		jediHero: hero(episode: JEDI) {
+			name
+		}
+		human(id: "1000") {
+			name
+			height(unit: FOOT)
+		}
+		leftComparison: hero(episode: EMPIRE) {
+			...comparisonFields
+			...height
+		}
+		rightComparison: hero(episode: JEDI) {
+			...comparisonFields
+			...height
+		}
+		heroNameAndFriends:	hero(episode: $episode) {
+			name
+		}
+		heroSkip: hero(episode: $episode) {
+			name
+			friends @skip(if: $withoutFriends) {
+				name
+			}
+		}
+			
+		heroInclude:  hero(episode: $episode) {
+			name
+			...friendsFragment @include(if: $withFriends)
+		}
+		inlineFragments: hero(episode: $episode) {
+			name
+			... on Droid {
+				primaryFunction
+			}
+			... on Human {
+				height
+			}
+		}
+		search(text: "an") {
+			__typename
+			... on Human {
+				name
+			}
+			... on Droid {
+				name
+			}
+			... on Starship {
+				name
+			}
+		}
+		heroConnections: hero {
+			name
+			friendsConnection {
+				totalCount
+				pageInfo {
+					startCursor
+					endCursor
+					hasNextPage
+				}
+				edges {
+					cursor
+					node {
+						name
+					}
+				}
+			}
+		}
+		reviews(episode: JEDI) {
+			stars
+			commentary
+		}
+		__schema {
+			types {
+				name
+			}
+		}
+		__type(name: "Droid") {
+			name
+			fields {
+				name
+				args {
+					name
+					type {
+						name
+					}
+					defaultValue
+				}
+				type {
+					name
+					kind
+				}
+			}
+		}	
+	}
+
+	fragment comparisonFields on Character {
+		name
+		appearsIn
+		friends {
+			name
+		}
+	}
+	fragment height on Human {
+		height
+	}
+	fragment friendsFragment on Character {
+		friends {
+			name
+		}
+	}	
+	`
+	variables := map[string]interface{}{
+		"episode": "JEDI",
+		"withoutFriends": true,
+		"withFriends": false,
+		"review": map[string]interface{}{
+			"stars":      5,
+			"commentary": "This is a great movie!",
+		},
+	}
+
+	for n := 0; n < b.N; n++ {
+		starwarsSchema.Exec(context.Background(), query, "", variables)
+	}
+}
