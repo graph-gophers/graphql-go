@@ -163,8 +163,8 @@ func (b *Builder) MakeStructPacker(values common.InputValueList, typ reflect.Typ
 		return nil, fmt.Errorf("expected struct or pointer to struct, got %s", typ)
 	}
 
-	var fields []*structPackerField
-	for _, v := range values {
+	fields := make([]*structPackerField, len(values))
+	for i, v := range values {
 		fe := &structPackerField{field: v}
 		fx := func(n string) bool {
 			return strings.EqualFold(stripUnderscore(n), stripUnderscore(v.Name.Name))
@@ -189,7 +189,7 @@ func (b *Builder) MakeStructPacker(values common.InputValueList, typ reflect.Typ
 			return nil, fmt.Errorf("field %q: %s", sf.Name, err)
 		}
 
-		fields = append(fields, fe)
+		fields[i] =fe
 	}
 
 	p := &StructPacker{

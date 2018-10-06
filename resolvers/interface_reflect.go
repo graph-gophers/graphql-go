@@ -23,15 +23,22 @@ type methodInfo struct {
 	hasError            bool
 }
 
-func getChildMethod(parent *reflect.Value, fieldName string) (*methodInfo, bool) {
-	parentType := parent.Type()
-	// use a cache to make subsequent lookups cheap
-	methods := childMethodTypeCache.GetOrElseUpdate(parentType, func() interface{} {
-		return typeMethods(parentType)
-	}).(map[string]*methodInfo)
+func getChildMethod(parent *reflect.Value, fieldName string) *methodInfo {
 
-	method, found := methods[strings.Replace(strings.ToLower(fieldName), "_", "", -1)]
-	return method, found
+	var key struct{
+		parentType reflect.Type
+		fieldName string
+	}
+	key.parentType = parent.Type()
+	key.fieldName = fieldName
+
+	// use a cache to make subsequent lookups cheap
+	method := childMethodTypeCache.GetOrElseUpdate(key, func() interface{} {
+		methods := typeMethods(key.parentType)
+		return methods[strings.Replace(strings.ToLower(fieldName), "_", "", -1)]
+	}).(*methodInfo)
+
+	return method
 }
 
 var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()

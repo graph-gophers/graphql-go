@@ -23,23 +23,23 @@ type ExecutionContext interface {
 type ResolveRequest struct {
 	Context       ExecutionContext
 	ParentResolve *ResolveRequest
-	SelectionPath []string
+	SelectionPath func()[]string
 	ParentType    common.Type
-	Parent        interface{}
+	Parent        reflect.Value
 	Field         *schema.Field
 	Args          map[string]interface{}
 	Selection     *query.Field
 }
 
 type resolution struct {
-	result interface{}
+	result reflect.Value
 	err    error
 }
 
 func (this *ResolveRequest) RunAsync(resolver Resolver) Resolver {
 	channel := make(chan *resolution, 1)
 	r := resolution{
-		result: nil,
+		result: reflect.Value{},
 		err:    errors.New("Unknown"),
 	}
 
@@ -49,7 +49,7 @@ func (this *ResolveRequest) RunAsync(resolver Resolver) Resolver {
 
 		// Setup some post processing
 		defer func() {
-			err := this.Context.HandlePanic(this.SelectionPath)
+			err := this.Context.HandlePanic(this.SelectionPath())
 			if err != nil {
 				r.err = err
 			}
@@ -62,7 +62,7 @@ func (this *ResolveRequest) RunAsync(resolver Resolver) Resolver {
 	}()
 
 	// Return a resolver that waits for the async results
-	return func() (interface{}, error) {
+	return func() (reflect.Value, error) {
 		r := <-channel
 		return r.result, r.err
 	}
@@ -73,15 +73,33 @@ type ResolverFactoryFunc func(request *ResolveRequest) Resolver
 type ResolverFactory interface {
 	CreateResolver(request *ResolveRequest) Resolver
 }
-type Resolver func() (interface{}, error)
+type Resolver func() (reflect.Value, error)
+
+type dynamicResolverFactory struct {
+}
+
+func (this *dynamicResolverFactory) CreateResolver(request *ResolveRequest) Resolver {
+	resolver := (&MetadataResolverFactory{}).CreateResolver(request)
+	if resolver != nil {
+		return resolver
+	}
+	resolver = (&MethodResolverFactory{}).CreateResolver(request)
+	if resolver != nil {
+		return resolver
+	}
+	resolver = (&FieldResolverFactory{}).CreateResolver(request)
+	if resolver != nil {
+		return resolver
+	}
+	resolver = (&MapResolverFactory{}).CreateResolver(request)
+	if resolver != nil {
+		return resolver
+	}
+	return nil
+}
 
 func DynamicResolverFactory() ResolverFactory {
-	return &ResolverFactoryList{
-		&MetadataResolverFactory{},
-		&MethodResolverFactory{},
-		&FieldResolverFactory{},
-		&MapResolverFactory{},
-	}
+	return &dynamicResolverFactory{}
 }
 
 type FuncResolverFactory struct {
@@ -141,7 +159,7 @@ func (this *ResolverFactoryList) CreateResolver(request *ResolveRequest) Resolve
 type FieldResolverFactory struct{}
 
 func (this *FieldResolverFactory) CreateResolver(request *ResolveRequest) Resolver {
-	parentValue := derefIfPointer(reflect.ValueOf(request.Parent))
+	parentValue := dereference(request.Parent)
 	if (parentValue.Kind() != reflect.Struct) {
 		return nil
 	}
@@ -149,13 +167,14 @@ func (this *FieldResolverFactory) CreateResolver(request *ResolveRequest) Resolv
 	if !found {
 		return nil
 	}
-	return func() (interface{}, error) {
-		return childValue.Interface(), nil
+	return func() (reflect.Value, error) {
+		return *childValue, nil
 	}
 }
-func derefIfPointer(value reflect.Value) reflect.Value {
-	if (value.Kind() == reflect.Ptr) {
-		return value.Elem()
+
+func dereference(value reflect.Value) reflect.Value {
+	for ; value.Kind() == reflect.Ptr || value.Kind() == reflect.Interface ; {
+		value = value.Elem()
 	}
 	return value
 }
@@ -169,10 +188,8 @@ func derefIfPointer(value reflect.Value) reflect.Value {
 type MethodResolverFactory struct{}
 
 func (this *MethodResolverFactory) CreateResolver(request *ResolveRequest) Resolver {
-	parentValue := reflect.ValueOf(request.Parent)
-
-	childMethod, found := getChildMethod(&parentValue, request.Field.Name)
-	if !found {
+	childMethod := getChildMethod(&request.Parent, request.Field.Name)
+	if childMethod == nil {
 		return nil
 	}
 
@@ -187,8 +204,7 @@ func (this *MethodResolverFactory) CreateResolver(request *ResolveRequest) Resol
 		structPacker = sp;
 	}
 
-	return func() (interface{}, error) {
-
+	return func() (reflect.Value, error) {
 		var in []reflect.Value
 		if childMethod.hasContext {
 			in = append(in, reflect.ValueOf(request.Context.GetContext()))
@@ -201,25 +217,16 @@ func (this *MethodResolverFactory) CreateResolver(request *ResolveRequest) Resol
 
 			argValue, err := structPacker.Pack(request.Args)
 			if err != nil {
-				return nil, err
+				return reflect.Value{}, err
 			}
 			in = append(in, argValue)
 
 		}
-		result := parentValue.Method(childMethod.Index).Call(in)
+		result := request.Parent.Method(childMethod.Index).Call(in)
 		if childMethod.hasError && !result[1].IsNil() {
-			return nil, result[1].Interface().(error)
+			return reflect.Value{}, result[1].Interface().(error)
 		}
-		rc := result[0]
-		switch rc.Kind() {
-		case reflect.Ptr:
-			if rc.IsNil() {
-				return nil, nil
-			}
-		case reflect.String:
-			return rc.String(), nil
-		}
-		return result[0].Interface(), nil
+		return result[0], nil
 
 	}
 }
@@ -232,7 +239,7 @@ func (this *MethodResolverFactory) CreateResolver(request *ResolveRequest) Resol
 type MapResolverFactory struct{}
 
 func (this *MapResolverFactory) CreateResolver(request *ResolveRequest) Resolver {
-	parentValue := derefIfPointer(reflect.ValueOf(request.Parent))
+	parentValue := dereference(request.Parent)
 	if (parentValue.Kind() != reflect.Map || parentValue.Type().Key().Kind() != reflect.String) {
 		return nil
 	}
@@ -242,8 +249,8 @@ func (this *MapResolverFactory) CreateResolver(request *ResolveRequest) Resolver
 		return nil
 	}
 
-	return func() (interface{}, error) {
-		return value.Interface(), nil
+	return func() (reflect.Value, error) {
+		return value, nil
 	}
 }
 
@@ -253,39 +260,39 @@ func (this *MetadataResolverFactory) CreateResolver(request *ResolveRequest) Res
 	s := request.Context.GetSchema()
 	switch (request.Field.Name) {
 	case "__typename":
-		return func() (interface{}, error) {
+		return func() (reflect.Value, error) {
 
 			switch schemaType := request.ParentType.(type) {
 			case *schema.Union:
 				for _, pt := range schemaType.PossibleTypes {
 					if _, ok := TryCastFunction(request.Parent, pt.Name); ok {
-						return pt.Name, nil
+						return reflect.ValueOf(pt.Name), nil
 					}
 				}
 			case *schema.Interface:
 				for _, pt := range schemaType.PossibleTypes {
 					if _, ok := TryCastFunction(request.Parent, pt.Name); ok {
-						return pt.Name, nil
+						return reflect.ValueOf(pt.Name), nil
 					}
 				}
 			default:
-				return schemaType.String(), nil
+				return reflect.ValueOf(schemaType.String()), nil
 			}
-			return "", nil
+			return reflect.ValueOf(""), nil
 		}
 
 	case "__schema":
-		return func() (interface{}, error) {
-			return introspection.WrapSchema(s), nil
+		return func() (reflect.Value, error) {
+			return reflect.ValueOf(introspection.WrapSchema(s)), nil
 		}
 
 	case "__type":
-		return func() (interface{}, error) {
+		return func() (reflect.Value, error) {
 			t, ok := s.Types[request.Args["name"].(string)]
 			if !ok {
-				return nil, fmt.Errorf("Could not find the type")
+				return reflect.Value{}, fmt.Errorf("Could not find the type")
 			}
-			return introspection.WrapType(t), nil
+			return reflect.ValueOf(introspection.WrapType(t)), nil
 		}
 	}
 	return nil
@@ -297,26 +304,38 @@ func normalizeMethodName(method string) string {
 	return method;
 }
 
-func TryCastFunction(parent interface{}, toType string) (interface{}, bool) {
-	parentValue := reflect.ValueOf(parent);
-	resolverType := parentValue.Type()
-	needle := normalizeMethodName("To" + toType)
-	for methodIndex := 0; methodIndex < resolverType.NumMethod(); methodIndex++ {
-		method := normalizeMethodName(resolverType.Method(methodIndex).Name);
-		if needle == method {
+var castMethodCache common.Cache
 
-			if resolverType.Method(methodIndex).Type.NumIn() != 1 {
-				continue;
-			}
-			if resolverType.Method(methodIndex).Type.NumOut() != 2 {
-				continue
-			}
-			if resolverType.Method(methodIndex).Type.Out(1) != reflect.TypeOf(true) {
-				continue;
-			}
-			out := parentValue.Method(methodIndex).Call(nil)
-			return out[0].Interface(), out[1].Bool()
-		}
+func TryCastFunction(parentValue reflect.Value, toType string) (reflect.Value, bool) {
+	var key struct {
+		fromType reflect.Type
+		toType   string
 	}
-	return nil, false
+	key.fromType = parentValue.Type()
+	key.toType = toType
+
+	methodIndex := childMethodTypeCache.GetOrElseUpdate(key, func() interface{} {
+		needle := normalizeMethodName("To" + toType)
+		for methodIndex := 0; methodIndex < key.fromType.NumMethod(); methodIndex++ {
+			method := normalizeMethodName(key.fromType.Method(methodIndex).Name);
+			if needle == method {
+				if key.fromType.Method(methodIndex).Type.NumIn() != 1 {
+					continue;
+				}
+				if key.fromType.Method(methodIndex).Type.NumOut() != 2 {
+					continue
+				}
+				if key.fromType.Method(methodIndex).Type.Out(1) != reflect.TypeOf(true) {
+					continue;
+				}
+				return methodIndex
+			}
+		}
+		return -1
+	}).(int)
+	if methodIndex == -1 {
+		return reflect.Value{}, false
+	}
+	out := parentValue.Method(methodIndex).Call(nil)
+	return out[0], out[1].Bool()
 }

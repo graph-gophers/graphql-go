@@ -49,7 +49,7 @@ func (this *Execution) HandlePanic(path []string) error {
 	if value := recover(); value != nil {
 		this.Logger.LogPanic(this.Context, value)
 		err := makePanicError(value)
-		err.Path = stringToInterfaceArray(path)
+		err.Path = path
 		return err
 	}
 	return nil
@@ -65,35 +65,76 @@ func (this *Execution) Execute() []*errors.QueryError {
 	this.Limiter <- 1;
 	defer func() { <-this.Limiter }()
 
-	path := []string{}
-	errors := this.recursiveExecute(path, this.Root, nil, this.Operation.Selections)
+	rootValue := reflect.ValueOf(this.Root)
+	errors := this.recursiveExecute(nil, rootValue, nil, this.Operation.Selections)
 	this.Out.Flush()
 
 	return errors
 }
 
 type selectionResolver struct {
+	parent     *selectionResolver
 	field      *query.Field
 	resolver   resolvers.Resolver
 	selections []query.Selection
 }
 
-type selectionResolvers struct {
-	keys        []string
-	valuesByKey map[string]*selectionResolver
+func (this *selectionResolver) Path() []string {
+	if (this == nil) {
+		return []string{}
+	}
+	if this.parent == nil {
+		return []string{this.field.Alias.Name}
+	}
+	return append(this.parent.Path(), this.field.Alias.Name)
 }
 
-func (this *selectionResolvers) set(key string, value *selectionResolver) *selectionResolver {
-	if previousValue, found := this.valuesByKey[key]; found {
-		this.valuesByKey[key] = value
-		return previousValue;
+type linkedMapEntry struct {
+	value interface{}
+	next  *linkedMapEntry
+}
+type linkedMap struct {
+	valuesByKey map[interface{}]*linkedMapEntry
+	first       *linkedMapEntry
+	last        *linkedMapEntry
+}
+
+func CreateLinkedMap(size int) *linkedMap {
+	return &linkedMap{
+		valuesByKey: make(map[interface{}]*linkedMapEntry, size),
 	}
-	this.valuesByKey[key] = value
-	this.keys = append(this.keys, key)
+}
+
+func (this *linkedMap) Get(key interface{}) interface{} {
+	entry := this.valuesByKey[key]
+	if entry == nil {
+		return nil
+	}
+	return entry.value
+}
+
+func (this *linkedMap) Set(key interface{}, value interface{}) interface{} {
+	if previousEntry, found := this.valuesByKey[key]; found {
+		prevValue := previousEntry.value
+		entry := this.valuesByKey[key]
+		entry.value = value
+		return prevValue;
+	}
+	entry := &linkedMapEntry{
+		value: value,
+	}
+	if this.first == nil {
+		this.first = entry
+		this.last = entry
+	} else {
+		this.last.next = entry
+		this.last = entry
+	}
+	this.valuesByKey[key] = entry
 	return nil;
 }
 
-func (this *Execution) CreateSelectionResolvers(path []string, selectionResolvers *selectionResolvers, parent interface{}, parentType common.Type, selections []query.Selection) {
+func (this *Execution) CreateSelectionResolvers(parentSelectionResolver *selectionResolver, selectionResolvers *linkedMap, parentValue reflect.Value, parentType common.Type, selections []query.Selection) {
 	for _, selection := range selections {
 		switch field := selection.(type) {
 		case *query.Field:
@@ -101,14 +142,20 @@ func (this *Execution) CreateSelectionResolvers(path []string, selectionResolver
 				continue
 			}
 
-			sr := selectionResolvers.valuesByKey[field.Alias.Name]
-			if sr == nil {
+			var sr *selectionResolver = nil
+			x := selectionResolvers.Get(field.Alias.Name)
+			if x != nil {
+				sr = x.(*selectionResolver)
+			} else {
 				sr = &selectionResolver{}
+				sr.field = field
+				sr.parent = parentSelectionResolver
 			}
-			sr.field = field
-			sr.selections = append(sr.selections, field.Selections...)
 
 			if sr.resolver == nil {
+
+				// This field has not been resolved yet..
+				sr.selections = field.Selections
 
 				typeName := parentType
 				evaluatedArguments := make(map[string]interface{}, len(field.Arguments))
@@ -117,23 +164,27 @@ func (this *Execution) CreateSelectionResolvers(path []string, selectionResolver
 				}
 
 				resolver := this.ResolverFactory.CreateResolver(&resolvers.ResolveRequest{
-					Context:    this,
-					ParentType: typeName,
-					Parent:     parent,
-					Field:      field.Schema.Field,
-					Args:       evaluatedArguments,
-					Selection:  field,
+					Context:       this,
+					ParentType:    typeName,
+					Parent:        parentValue,
+					Field:         field.Schema.Field,
+					Args:          evaluatedArguments,
+					Selection:     field,
+					SelectionPath: sr.Path,
 				})
 
 				if resolver == nil {
 					this.AddError(&errors.QueryError{
 						Message: "No resolver found",
-						Path:    stringToInterfaceArray(append(path, field.Alias.Name)),
+						Path:    append(parentSelectionResolver.Path(), field.Alias.Name),
 					})
 				} else {
 					sr.resolver = resolver
-					selectionResolvers.set(field.Alias.Name, sr)
+					selectionResolvers.Set(field.Alias.Name, sr)
 				}
+			} else {
+				// field previously resolved, but fragment is adding more child field selections.
+				sr.selections = append(sr.selections, field.Selections...)
 			}
 
 		case *query.InlineFragment:
@@ -142,82 +193,81 @@ func (this *Execution) CreateSelectionResolvers(path []string, selectionResolver
 			}
 
 			fragment := &field.Fragment
-			this.CreateSelectionResolversForFragment(path, fragment, parentType, parent, selectionResolvers)
+			this.CreateSelectionResolversForFragment(parentSelectionResolver, fragment, parentType, parentValue, selectionResolvers)
 
 		case *query.FragmentSpread:
 			if this.skipByDirective(field.Directives) {
 				continue
 			}
 			fragment := &this.Doc.Fragments.Get(field.Name.Name).Fragment
-			this.CreateSelectionResolversForFragment(path, fragment, parentType, parent, selectionResolvers)
+			this.CreateSelectionResolversForFragment(parentSelectionResolver, fragment, parentType, parentValue, selectionResolvers)
 		}
 	}
 }
 
-func (this *Execution) CreateSelectionResolversForFragment(path []string, fragment *query.Fragment, parentType common.Type, parent interface{}, selectionResolvers *selectionResolvers) {
+func (this *Execution) CreateSelectionResolversForFragment(parentSelectionResolver *selectionResolver, fragment *query.Fragment, parentType common.Type, parentValue reflect.Value, selectionResolvers *linkedMap) {
 	if fragment.On.Name != "" && fragment.On.Name != parentType.String() {
 		castType := this.Schema.Types[fragment.On.Name]
-		if casted, ok := resolvers.TryCastFunction(parent, fragment.On.Name); ok {
-			this.CreateSelectionResolvers(path, selectionResolvers, casted, castType, fragment.Selections)
+		if casted, ok := resolvers.TryCastFunction(parentValue, fragment.On.Name); ok {
+			this.CreateSelectionResolvers(parentSelectionResolver, selectionResolvers, casted, castType, fragment.Selections)
 		}
 	} else {
-		this.CreateSelectionResolvers(path, selectionResolvers, parent, parentType, fragment.Selections)
+		this.CreateSelectionResolvers(parentSelectionResolver, selectionResolvers, parentValue, parentType, fragment.Selections)
 	}
 }
 
-func (this *Execution) recursiveExecute(path []string, parent interface{}, parentType common.Type, selections []query.Selection) []*errors.QueryError {
-	func() {
+func (this *Execution) recursiveExecute(parentSelection *selectionResolver, parentValue reflect.Value, parentType common.Type, selections []query.Selection) []*errors.QueryError {
+	{
 		defer func() {
 			if value := recover(); value != nil {
 				this.Logger.LogPanic(this.Context, value)
 				err := makePanicError(value)
-				err.Path = stringToInterfaceArray(path)
+				err.Path = parentSelection.Path()
 				this.AddError(err)
 			}
 		}()
 
 		// Create resolvers for the the selections.  Creating resolvers can trigger async fetching of
 		// the field data.
-		selectedFields := &selectionResolvers{}
-		selectedFields.valuesByKey = make(map[string]*selectionResolver)
-		this.CreateSelectionResolvers(path, selectedFields, parent, parentType, selections)
+		selectedFields := CreateLinkedMap(len(selections))
+		this.CreateSelectionResolvers(parentSelection, selectedFields, parentValue, parentType, selections)
 
 		// Write the
 		this.Out.WriteByte('{')
 
 		writeComma := false;
-		for _, selectedFieldName := range selectedFields.keys {
+		for entry := selectedFields.first; entry != nil; entry = entry.next {
 			if writeComma {
 				this.Out.WriteByte(',')
 			}
 			writeComma = true;
-			selected := selectedFields.valuesByKey[selectedFieldName]
+			selected := entry.value.(*selectionResolver)
 			field := selected.field
-			childPath := append(path, selectedFieldName)
 
 			this.Out.WriteByte('"')
-			this.Out.WriteString(selectedFieldName)
+			this.Out.WriteString(selected.field.Alias.Name)
 			this.Out.WriteByte('"')
 			this.Out.WriteByte(':')
 
 			resolver := selected.resolver
 
-			child, err := resolver()
+			childValue, err := resolver()
 			if err != nil {
 				this.AddError(&errors.QueryError{
 					Message:       err.Error(),
-					Path:          stringToInterfaceArray(childPath),
+					Path:          selected.Path(),
 					ResolverError: err,
 				})
 				continue
 			}
 
 			childType, nonNullType := unwrapNonNull(field.Schema.Field.Type)
-			if (child == nil) {
+			if ((childValue.Kind() == reflect.Ptr || childValue.Kind() == reflect.Interface) &&
+				childValue.IsNil()) {
 				if (nonNullType) {
 					this.AddError(&errors.QueryError{
 						Message: "ResolverFactory produced a nil value for a Non Null type",
-						Path:    stringToInterfaceArray(childPath),
+						Path:    selected.Path(),
 					})
 				} else {
 					this.Out.WriteString("null")
@@ -227,22 +277,22 @@ func (this *Execution) recursiveExecute(path []string, parent interface{}, paren
 
 			// Are we a leaf node?
 			if selected.selections == nil {
-				this.writeLeaf(child, childPath, childType)
+				this.writeLeaf(childValue, selected, childType)
 			} else {
 				switch childType := childType.(type) {
 				case *common.List:
-					this.writeList(*childType, child, childPath, func(elementType common.Type, element interface{}) {
-						this.recursiveExecute(childPath, element, elementType, selected.selections)
+					this.writeList(*childType, childValue, selected, func(elementType common.Type, element reflect.Value) {
+						this.recursiveExecute(selected, element, elementType, selected.selections)
 					})
 				case *schema.Object, *schema.Interface, *schema.Union:
-					this.recursiveExecute(childPath, child, childType, selected.selections)
+					this.recursiveExecute(selected, childValue, childType, selected.selections)
 				}
 			}
 
 		}
 		this.Out.WriteByte('}')
 
-	}()
+	}
 	if err := this.Context.Err(); err != nil {
 		return []*errors.QueryError{errors.Errorf("%s", err)}
 	}
@@ -274,16 +324,7 @@ func (this *Execution) skipByDirective(directives common.DirectiveList) bool {
 	return false
 }
 
-func stringToInterfaceArray(v []string) []interface{} {
-	rc := make([]interface{}, len(v))
-	for key, value := range v {
-		rc[key] = value
-	}
-	return rc
-}
-
-func (this *Execution) writeList(listType common.List, list interface{}, listPath []string, writeElement func(elementType common.Type, element interface{})) {
-	childValue := reflect.ValueOf(list);
+func (this *Execution) writeList(listType common.List, childValue reflect.Value, selectionResolver *selectionResolver, writeElement func(elementType common.Type, element reflect.Value)) {
 
 	// Dereference pointers..
 	for ; childValue.Kind() == reflect.Ptr; {
@@ -298,10 +339,10 @@ func (this *Execution) writeList(listType common.List, list interface{}, listPat
 			if i > 0 {
 				this.Out.WriteByte(',')
 			}
-			element := childValue.Index(i).Interface()
+			element := childValue.Index(i)
 			switch elementType := listType.OfType.(type) {
 			case *common.List:
-				this.writeList(*elementType, element, listPath, writeElement)
+				this.writeList(*elementType, element, selectionResolver, writeElement)
 			default:
 				writeElement(elementType, element)
 			}
@@ -310,40 +351,30 @@ func (this *Execution) writeList(listType common.List, list interface{}, listPat
 	default:
 		this.AddError(&errors.QueryError{
 			Message: fmt.Sprintf("Resolved object was not an array, it was a: %v", childValue.Kind()),
-			Path:    stringToInterfaceArray(listPath),
+			Path:    selectionResolver.Path(),
 		});
 	}
 }
 
-func (this *Execution) writeLeaf(child interface{}, childPath []string, childType common.Type) {
+func (this *Execution) writeLeaf(childValue reflect.Value, selectionResolver *selectionResolver, childType common.Type) {
 	switch childType := childType.(type) {
 	case *common.NonNull:
-		childValue := reflect.ValueOf(child)
 		if (childValue.Kind() == reflect.Ptr && childValue.Elem().IsNil()) {
-			this.AddError(&errors.QueryError{
-				Message: "Resolved to nil value for a Non Null type.",
-				Path:    stringToInterfaceArray(childPath),
-			})
+			panic(errors.Errorf("got nil for non-null %q", childType))
 		} else {
-			this.writeLeaf(child, childPath, childType.OfType)
+			this.writeLeaf(childValue, selectionResolver, childType.OfType)
 		}
 
 	case *schema.Scalar:
-		data, err := json.Marshal(child)
+		data, err := json.Marshal(childValue.Interface())
 		if err != nil {
-			this.AddError(&errors.QueryError{
-				Message:       fmt.Sprintf("could not json.Marshal(%v)", child),
-				Path:          stringToInterfaceArray(childPath),
-				ResolverError: err,
-			})
-			return
+			panic(errors.Errorf("could not marshal %v: %s", childValue, err))
 		}
 		this.Out.Write(data)
 
 	case *schema.Enum:
 
 		// Deref the pointer.
-		childValue := reflect.ValueOf(child)
 		for ; childValue.Kind() == reflect.Ptr; {
 			childValue = childValue.Elem()
 		}
@@ -353,8 +384,8 @@ func (this *Execution) writeLeaf(child interface{}, childPath []string, childTyp
 		this.Out.WriteByte('"')
 
 	case *common.List:
-		this.writeList(*childType, child, childPath, func(elementType common.Type, element interface{}) {
-			this.writeLeaf(element, childPath, childType.OfType)
+		this.writeList(*childType, childValue, selectionResolver, func(elementType common.Type, element reflect.Value) {
+			this.writeLeaf(element, selectionResolver, childType.OfType)
 		})
 
 	default:

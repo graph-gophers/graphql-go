@@ -7,7 +7,7 @@ import (
 type QueryError struct {
 	Message       string        `json:"message"`
 	Locations     []Location    `json:"locations,omitempty"`
-	Path          []interface{} `json:"path,omitempty"`
+	Path          []string		`json:"path,omitempty"`
 	Rule          string        `json:"-"`
 	ResolverError error         `json:"-"`
 }
