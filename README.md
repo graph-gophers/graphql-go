@@ -181,8 +181,8 @@ func (this *MyFooResolverFactory) CreateResolver(request *resolvers.ResolveReque
     if request.Field.Name!="foo" {
         return nil // Lets only handle the foo fields:
     }
-    return func() (interface{}, error) {
-        return "bar", nil
+    return func() (reflect.Value, error) {
+        return reflect.ValueOf("bar"), nil
     }
 }
 ```
@@ -194,8 +194,8 @@ myFooResolverFactory := resolvers.FuncResolverFactory{ func (request *resolvers.
     if request.Field.Name!="foo" {
         return nil // Lets only handle the foo fields:
     }
-    return func() (interface{}, error) {
-        return "bar", nil
+    return func() (reflect.Value, error) {
+        return reflect.ValueOf("bar"), nil
     }
 }}
 ```
@@ -207,8 +207,8 @@ myTypeResolverFactory := resolvers.TypeResolverFactory {
         if request.Field.Name!="foo" {
             return nil // Lets only handle the foo fields:
         }
-        return func() (interface{}, error) {
-            return "bar", nil
+        return func() (reflect.Value, error) {
+            return reflect.ValueOf("bar"), nil
         }
     },
 }
@@ -233,7 +233,7 @@ func (this *MyHttpResolverFactory) CreateResolver(request *resolvers.ResolveRequ
         panic(err)
     }
 
-    return request.RunAsync(func() (interface{}, error) {
+    return request.RunAsync(func() (reflect.Value, error) {
         resp, err := httpClient.Do(req)
         if err != nil {
             return nil, err
@@ -245,7 +245,7 @@ func (this *MyHttpResolverFactory) CreateResolver(request *resolvers.ResolveRequ
             return nil, err
         }
 
-        return string(data), nil
+        return reflect.ValueOf(string(data)), nil
     })
 }
 ```
