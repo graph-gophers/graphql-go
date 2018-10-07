@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/graph-gophers/graphql-go"
-	graphqlerrors "github.com/graph-gophers/graphql-go/errors"
+	gqlerrors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/example/starwars"
 	"github.com/graph-gophers/graphql-go/gqltesting"
 )
@@ -293,8 +293,8 @@ func TestNilInterface(t *testing.T) {
 					"c": null
 				}
 			`,
-			ExpectedErrors: []*graphqlerrors.QueryError{
-				&graphqlerrors.QueryError{
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
 					Message:       "x",
 					Path:          []interface{}{"b"},
 					ResolverError: errors.New("x"),
