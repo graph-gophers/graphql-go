@@ -46,13 +46,11 @@ func RunTest(t *testing.T, test *Test) {
 	// Verify JSON to avoid red herring errors.
 	got, err := formatJSON(result.Data)
 	if err != nil {
-		response := string(got[:])
-		t.Fatalf("got: invalid JSON: %s\n response value is: %s", err, response)
+		t.Fatalf("got: invalid JSON: %s\n response value is: [%s]", err, got)
 	}
 	want, err := formatJSON([]byte(test.ExpectedResult))
 	if err != nil {
-		expected := string(want[:])
-		t.Fatalf("want: invalid JSON: %s\n expected value is: %s", err, expected)
+		t.Fatalf("want: invalid JSON: %s\n expected value is: [%s]", err, want)
 	}
 	checkErrors(t, test.ExpectedErrors, result.Errors)
 
