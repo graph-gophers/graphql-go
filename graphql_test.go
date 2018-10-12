@@ -2,12 +2,11 @@ package graphql_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/graph-gophers/graphql-go"
-	gqlerrors "github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/example/starwars"
 	"github.com/graph-gophers/graphql-go/gqltesting"
 )
@@ -247,57 +246,20 @@ func TestBasic(t *testing.T) {
 	})
 }
 
-type testNilInterfaceResolver struct{}
-
-func (r *testNilInterfaceResolver) A() interface{ Z() int32 } {
-	return nil
-}
-
-func (r *testNilInterfaceResolver) B() (interface{ Z() int32 }, error) {
-	return nil, errors.New("x")
-}
-
-func (r *testNilInterfaceResolver) C() (interface{ Z() int32 }, error) {
-	return nil, nil
-}
-
-func TestNilInterface(t *testing.T) {
+func TestInvalidQuery(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
-			Schema: graphql.MustParseSchema(`
-				schema {
-					query: Query
-				}
-
-				type Query {
-					a: T
-					b: T
-					c: T
-				}
-
-				type T {
-					z: Int!
-				}
-			`, &testNilInterfaceResolver{}),
+			Schema: starwarsSchema,
 			Query: `
-				{
-					a { z }
-					b { z }
-					c { z }
+				{	
+					invalid
 				}
 			`,
-			ExpectedResult: `
-				{
-					"a": null,
-					"b": null,
-					"c": null
-				}
-			`,
-			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
-					Message:       "x",
-					Path:          []interface{}{"b"},
-					ResolverError: errors.New("x"),
+			ExpectedErrors: []*errors.QueryError {
+				&errors.QueryError{
+					Message: `Cannot query field "invalid" on type "Query".`,
+					Rule:"FieldsOnCorrectType",
+					Locations: []errors.Location{{Line:3,Column:6}},
 				},
 			},
 		},
