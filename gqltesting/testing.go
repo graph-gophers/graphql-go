@@ -49,11 +49,11 @@ func RunTest(t *testing.T, test *Test) {
 		// Verify JSON to avoid red herring errors.
 		got, err := formatJSON(result.Data)
 		if err != nil {
-			t.Fatalf("got: invalid JSON: %s", err)
+			t.Fatalf("got: invalid JSON: %s\n response value is: [%s]", err, got)
 		}
 		want, err := formatJSON([]byte(test.ExpectedResult))
 		if err != nil {
-			t.Fatalf("want: invalid JSON: %s", err)
+			t.Fatalf("want: invalid JSON: %s\n expected value is: [%s]", err, want)
 		}
 		if !bytes.Equal(got, want) {
 			t.Logf("got:  %s", got)
@@ -79,7 +79,7 @@ func checkErrors(t *testing.T, expected, actual []*errors.QueryError) {
 	expectedCount, actualCount := len(expected), len(actual)
 
 	if expectedCount != actualCount {
-		t.Fatalf("unexpected number of errors: got %d, want %d", actualCount, expectedCount)
+		t.Fatalf("unexpected number of errors: got %d, want %d\nerror(s):\n%+v", actualCount, expectedCount, actual)
 	}
 
 	if expectedCount > 0 {
