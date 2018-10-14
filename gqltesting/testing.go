@@ -43,16 +43,17 @@ func RunTest(t *testing.T, test *Test) {
 		test.Context = context.Background()
 	}
 	result := test.Schema.Exec(test.Context, test.Query, test.OperationName, test.Variables)
-	checkErrors(t, test.ExpectedErrors, result.Errors)
-	if test.ExpectedResult != "" {
+	if result.Errors != nil {
+		checkErrors(t, test.ExpectedErrors, result.Errors)
+	} else {
 		// Verify JSON to avoid red herring errors.
 		got, err := formatJSON(result.Data)
 		if err != nil {
-			t.Fatalf("got: invalid JSON: %s\n response value is: [%s]", err, got)
+			t.Fatalf("got: invalid JSON: %s", err)
 		}
 		want, err := formatJSON([]byte(test.ExpectedResult))
 		if err != nil {
-			t.Fatalf("want: invalid JSON: %s\n expected value is: [%s]", err, want)
+			t.Fatalf("want: invalid JSON: %s", err)
 		}
 		if !bytes.Equal(got, want) {
 			t.Logf("got:  %s", got)
@@ -76,19 +77,24 @@ func formatJSON(data []byte) ([]byte, error) {
 
 func checkErrors(t *testing.T, expected, actual []*errors.QueryError) {
 	expectedCount, actualCount := len(expected), len(actual)
+
 	if expectedCount != actualCount {
-		t.Fatalf("unexpected number of errors: got %d, want %d\nerror(s):\n%+v", actualCount, expectedCount, actual)
+		t.Fatalf("unexpected number of errors: got %d, want %d", actualCount, expectedCount)
 	}
+
 	if expectedCount > 0 {
 		for i, want := range expected {
 			got := actual[i]
+
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("unexpected error: got %+v, want %+v", got, want)
 			}
 		}
+
 		// Return because we're done checking.
 		return
 	}
+
 	for _, err := range actual {
 		t.Errorf("unexpected error: '%s'", err)
 	}
