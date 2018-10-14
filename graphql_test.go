@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/graph-gophers/graphql-go"
-	"github.com/graph-gophers/graphql-go/errors"
+	gqlerrors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/example/starwars"
 	"github.com/graph-gophers/graphql-go/gqltesting"
 )
@@ -242,26 +242,6 @@ func TestBasic(t *testing.T) {
 					}
 				}
 			`,
-		},
-	})
-}
-
-func TestInvalidQuery(t *testing.T) {
-	gqltesting.RunTests(t, []*gqltesting.Test{
-		{
-			Schema: starwarsSchema,
-			Query: `
-				{	
-					invalid
-				}
-			`,
-			ExpectedErrors: []*errors.QueryError {
-				&errors.QueryError{
-					Message: `Cannot query field "invalid" on type "Query".`,
-					Rule:"FieldsOnCorrectType",
-					Locations: []errors.Location{{Line:3,Column:6}},
-				},
-			},
 		},
 	})
 }
@@ -1794,6 +1774,26 @@ func TestComposedFragments(t *testing.T) {
 					}
 				}
 			`,
+		},
+	})
+}
+
+func TestInvalidQuery(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: starwarsSchema,
+			Query: `
+				{	
+					invalid
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError {
+				&gqlerrors.QueryError{
+					Message: `Cannot query field "invalid" on type "Query".`,
+					Rule:"FieldsOnCorrectType",
+					Locations: []gqlerrors.Location{{Line:3,Column:6}},
+				},
+			},
 		},
 	})
 }
