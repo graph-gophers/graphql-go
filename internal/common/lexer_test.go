@@ -7,11 +7,11 @@ import (
 )
 
 type consumeTestCase struct {
-	description              string
-	definition               string
-	expected                 string // expected description
-	failureExpected          bool
-	noCommentsAsDescriptions bool
+	description           string
+	definition            string
+	expected              string // expected description
+	failureExpected       bool
+	useStringDescriptions bool
 }
 
 // Note that these tests stop as soon as they parse the comments, so even though the rest of the file will fail to parse sometimes, the tests still pass
@@ -26,8 +26,8 @@ var consumeTests = []consumeTestCase{{
 type Hello {
 	world: String!
 }`,
-	expected:                 "Comment line 1\nComment line 2\nCommas are insignificant",
-	noCommentsAsDescriptions: false,
+	expected:              "Comment line 1\nComment line 2\nCommas are insignificant",
+	useStringDescriptions: false,
 }, {
 	description: "simple string descriptions allowed in old mode",
 	definition: `
@@ -39,8 +39,8 @@ type Hello {
 type Hello {
 	world: String!
 }`,
-	expected:                 "New style comments",
-	noCommentsAsDescriptions: true,
+	expected:              "New style comments",
+	useStringDescriptions: true,
 }, {
 	description: "triple quote descriptions allowed in old mode",
 	definition: `
@@ -54,14 +54,14 @@ New style comments
 type Hello {
 	world: String!
 }`,
-	expected:                 "New style comments",
-	noCommentsAsDescriptions: true,
+	expected:              "New style comments",
+	useStringDescriptions: true,
 }}
 
 func TestConsume(t *testing.T) {
 	for _, test := range consumeTests {
 		t.Run(test.description, func(t *testing.T) {
-			lex := common.NewLexer(test.definition, test.noCommentsAsDescriptions)
+			lex := common.NewLexer(test.definition, test.useStringDescriptions)
 
 			err := lex.CatchSyntaxError(func() { lex.ConsumeWhitespace() })
 			if test.failureExpected {

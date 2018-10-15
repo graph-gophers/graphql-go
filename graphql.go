@@ -34,7 +34,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		opt(s)
 	}
 
-	if err := s.schema.Parse(schemaString, s.noCommentsAsDescriptions); err != nil {
+	if err := s.schema.Parse(schemaString, s.useStringDescriptions); err != nil {
 		return nil, err
 	}
 
@@ -63,21 +63,21 @@ type Schema struct {
 	schema *schema.Schema
 	res    *resolvable.Schema
 
-	maxDepth                 int
-	maxParallelism           int
-	tracer                   trace.Tracer
-	validationTracer         trace.ValidationTracer
-	logger                   log.Logger
-	noCommentsAsDescriptions bool
+	maxDepth              int
+	maxParallelism        int
+	tracer                trace.Tracer
+	validationTracer      trace.ValidationTracer
+	logger                log.Logger
+	useStringDescriptions bool
 }
 
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
 type SchemaOpt func(*Schema)
 
-// NoCommentsAsDescriptions disables the parsing of comments as descriptions
-func NoCommentsAsDescriptions() SchemaOpt {
+// UseStringDescriptions disables the parsing of comments as descriptions
+func UseStringDescriptions() SchemaOpt {
 	return func(s *Schema) {
-		s.noCommentsAsDescriptions = true
+		s.useStringDescriptions = true
 	}
 }
 

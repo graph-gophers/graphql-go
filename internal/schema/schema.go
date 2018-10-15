@@ -246,8 +246,8 @@ func New() *Schema {
 }
 
 // Parse the schema string.
-func (s *Schema) Parse(schemaString string, noCommentsAsDescriptions bool) error {
-	l := common.NewLexer(schemaString, noCommentsAsDescriptions)
+func (s *Schema) Parse(schemaString string, useStringDescriptions bool) error {
+	l := common.NewLexer(schemaString, useStringDescriptions)
 
 	err := l.CatchSyntaxError(func() { parseSchema(s, l) })
 	if err != nil {

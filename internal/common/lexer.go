@@ -12,10 +12,10 @@ import (
 type syntaxError string
 
 type Lexer struct {
-	sc                       *scanner.Scanner
-	next                     rune
-	descComment              string
-	noCommentsAsDescriptions bool
+	sc                    *scanner.Scanner
+	next                  rune
+	descComment           string
+	useStringDescriptions bool
 }
 
 type Ident struct {
@@ -23,13 +23,13 @@ type Ident struct {
 	Loc  errors.Location
 }
 
-func NewLexer(s string, noCommentsAsDescriptions bool) *Lexer {
+func NewLexer(s string, useStringDescriptions bool) *Lexer {
 	sc := &scanner.Scanner{
 		Mode: scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats | scanner.ScanStrings,
 	}
 	sc.Init(strings.NewReader(s))
 
-	return &Lexer{sc: sc, noCommentsAsDescriptions: noCommentsAsDescriptions}
+	return &Lexer{sc: sc, useStringDescriptions: useStringDescriptions}
 }
 
 func (l *Lexer) CatchSyntaxError(f func()) (errRes *errors.QueryError) {
@@ -56,9 +56,9 @@ func (l *Lexer) Peek() rune {
 //
 // Consumed comment characters will build the description for the next type or field encountered.
 // The description is available from `DescComment()`, and will be reset every time `ConsumeWhitespace()` is
-// executed unless l.noCommentsAsDescriptions is set.
+// executed unless l.useStringDescriptions is set.
 func (l *Lexer) ConsumeWhitespace() {
-	if !l.noCommentsAsDescriptions {
+	if !l.useStringDescriptions {
 		l.descComment = ""
 	}
 	for {
@@ -147,7 +147,7 @@ func (l *Lexer) ConsumeToken(expected rune) {
 }
 
 func (l *Lexer) DescComment() string {
-	if l.noCommentsAsDescriptions {
+	if l.useStringDescriptions {
 		if l.consumeDescription() {
 			l.ConsumeWhitespace()
 		}
@@ -216,7 +216,7 @@ func (l *Lexer) consumeComment() {
 		l.sc.Next()
 	}
 
-	if l.descComment != "" && !l.noCommentsAsDescriptions {
+	if l.descComment != "" && !l.useStringDescriptions {
 		// TODO: use a bytes.Buffer or strings.Builder instead of this.
 		l.descComment += "\n"
 	}
@@ -227,7 +227,7 @@ func (l *Lexer) consumeComment() {
 			break
 		}
 
-		if !l.noCommentsAsDescriptions {
+		if !l.useStringDescriptions {
 			// TODO: use a bytes.Buffer or strings.Build instead of this.
 			l.descComment += string(next)
 		}
