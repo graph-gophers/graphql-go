@@ -43,7 +43,10 @@ func RunTest(t *testing.T, test *Test) {
 		test.Context = context.Background()
 	}
 	result := test.Schema.Exec(test.Context, test.Query, test.OperationName, test.Variables)
-	checkErrors(t, test.ExpectedErrors, result.Errors)
+	if result.Errors != nil {
+		checkErrors(t, test.ExpectedErrors, result.Errors)
+		return
+	}
 	// Verify JSON to avoid red herring errors.
 	got, err := formatJSON(result.Data)
 	if err != nil {
@@ -72,7 +75,7 @@ func formatJSON(data []byte) ([]byte, error) {
 	return formatted, nil
 }
 
-func checkErrors(t *testing.T, expected, actual []*errors.QueryError) {
+func checkErrors(t *testing.T, expected, actual []*errors.QueryError)  {
 	expectedCount, actualCount := len(expected), len(actual)
 
 	if expectedCount != actualCount {
