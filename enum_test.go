@@ -11,19 +11,29 @@ type benchStringEnum string
 
 func BenchmarkEnumStringStringer(b *testing.B) {
 	v := reflect.ValueOf(benchStringEnum("TEST"))
+	var out string
 	for n := 0; n < b.N; n++ {
-		if s, ok := v.Interface().(fmt.Stringer); ok {
-			s.String()
+		if _, ok := v.Interface().(fmt.Stringer); ok {
+			b.Error("this should not need fmt.Stringer")
 		} else {
-			v.String()
+			out = v.String()
 		}
+	}
+
+	if out != "TEST" {
+		b.Errorf("unexpected output: %q", out)
 	}
 }
 
 func BenchmarkEnumStringFmt(b *testing.B) {
 	v := reflect.ValueOf(benchStringEnum("TEST"))
+	var out string
 	for n := 0; n < b.N; n++ {
-		fmt.Sprintf("%s", v)
+		out = fmt.Sprintf("%s", v)
+	}
+
+	if out != "TEST" {
+		b.Errorf("unexpected output: %q", out)
 	}
 }
 
@@ -35,18 +45,28 @@ func (i benchIntEnum) String() string {
 
 func BenchmarkEnumIntStringer(b *testing.B) {
 	v := reflect.ValueOf(benchIntEnum(1))
+	var out string
 	for n := 0; n < b.N; n++ {
 		if s, ok := v.Interface().(fmt.Stringer); ok {
-			s.String()
+			out = s.String()
 		} else {
-			v.String()
+			b.Error("this should use fmt.Stringer")
 		}
+	}
+
+	if out != "1" {
+		b.Errorf("unexpected output: %q", out)
 	}
 }
 
 func BenchmarkEnumIntFmt(b *testing.B) {
 	v := reflect.ValueOf(benchIntEnum(1))
+	var out string
 	for n := 0; n < b.N; n++ {
-		fmt.Sprintf("%s", v)
+		out = fmt.Sprintf("%s", v)
+	}
+
+	if out != "1" {
+		b.Errorf("unexpected output: %q", out)
 	}
 }
