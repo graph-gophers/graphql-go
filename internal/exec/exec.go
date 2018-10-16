@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"sync"
 
@@ -276,8 +277,12 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 		out.Write(data)
 
 	case *schema.Enum:
+		var stringer fmt.Stringer = resolver
+		if s, ok := resolver.Interface().(fmt.Stringer); ok {
+			stringer = s
+		}
 		out.WriteByte('"')
-		out.WriteString(resolver.String())
+		out.WriteString(stringer.String())
 		out.WriteByte('"')
 
 	default:
