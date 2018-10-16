@@ -163,7 +163,7 @@ type InputObject struct {
 type FieldList []*Field
 
 // Get iterates over the field list, returning a pointer-to-Field when the field name matches the
-// provided `name` arguement.
+// provided `name` argument.
 // Returns nil when no field was found by that name.
 func (l FieldList) Get(name string) *Field {
 	for _, f := range l {

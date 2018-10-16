@@ -101,7 +101,7 @@ func ValidationTracer(tracer trace.ValidationTracer) SchemaOpt {
 	}
 }
 
-// Logger is used to log panics durring query execution. It defaults to exec.DefaultLogger.
+// Logger is used to log panics during query execution. It defaults to exec.DefaultLogger.
 func Logger(logger log.Logger) SchemaOpt {
 	return func(s *Schema) {
 		s.logger = logger
@@ -110,9 +110,10 @@ func Logger(logger log.Logger) SchemaOpt {
 
 // Response represents a typical response of a GraphQL server. It may be encoded to JSON directly or
 // it may be further processed to a custom response type, for example to include custom error data.
+// Errors are intentionally serialized first based on the advice in https://github.com/facebook/graphql/commit/7b40390d48680b15cb93e02d46ac5eb249689876#diff-757cea6edf0288677a9eea4cfc801d87R107
 type Response struct {
-	Data       json.RawMessage        `json:"data,omitempty"`
 	Errors     []*errors.QueryError   `json:"errors,omitempty"`
+	Data       json.RawMessage        `json:"data,omitempty"`
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 

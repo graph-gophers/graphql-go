@@ -173,7 +173,7 @@ func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type) (Resolv
 		return e, nil
 
 	default:
-		panic("invalid type")
+		panic("invalid type: " + t.String())
 	}
 }
 
