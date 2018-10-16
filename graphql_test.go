@@ -64,6 +64,12 @@ func (r *timeResolver) AddHour(args struct{ Time graphql.Time }) graphql.Time {
 	return graphql.Time{Time: args.Time.Add(time.Hour)}
 }
 
+type echoResolver struct{}
+
+func (r *echoResolver) Echo(args struct{ Value *string }) *string {
+	return args.Value
+}
+
 var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
 
 func TestHelloWorld(t *testing.T) {
@@ -495,6 +501,28 @@ func TestVariables(t *testing.T) {
 					"hero": {
 						"name": "Luke Skywalker"
 					}
+				}
+			`,
+		},
+
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					echo(value: String): String
+				}
+			`, &echoResolver{}),
+			Query: `
+				query Echo($value:String = "default"){
+					echo(value:$value)
+				}
+			`,
+			ExpectedResult: `
+				{
+					"echo": "default"
 				}
 			`,
 		},
