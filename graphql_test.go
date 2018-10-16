@@ -3,6 +3,7 @@ package graphql_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -64,6 +65,24 @@ func (r *timeResolver) AddHour(args struct{ Time graphql.Time }) graphql.Time {
 }
 
 var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
+
+type findDroidResolver struct{}
+
+type withExtensionError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (e withExtensionError) Error() string {
+	return fmt.Sprintf("Error [%s] %s", e.Code, e.Message)
+}
+
+func (r *findDroidResolver) FindDroid(ctx context.Context) (string, error) {
+	return "", withExtensionError{
+		Code:    "NotFound",
+		Message: "This is not the droid you are looking for",
+	}
+}
 
 func TestHelloWorld(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
@@ -298,6 +317,45 @@ func TestNilInterface(t *testing.T) {
 					Message:       "x",
 					Path:          []interface{}{"b"},
 					ResolverError: errors.New("x"),
+				},
+			},
+		},
+	})
+}
+
+func TestErrorWithExtension(t *testing.T) {
+	err := withExtensionError{
+		Code:    "NotFound",
+		Message: "This is not the droid you are looking for",
+	}
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					FindDroid: String!
+				}
+			`, &findDroidResolver{}),
+			Query: `
+				{
+					FindDroid
+				}
+			`,
+			ExpectedResult: `
+				{
+					"FindDroid": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       err.Error(),
+					Path:          []interface{}{"FindDroid"},
+					ResolverError: err,
+					Extensions:    nil,
 				},
 			},
 		},
