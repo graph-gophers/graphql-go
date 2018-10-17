@@ -32,6 +32,10 @@ func (r *Request) handlePanic(ctx context.Context) {
 	}
 }
 
+type extensionser interface {
+	Extensions() map[string]interface{}
+}
+
 func makePanicError(value interface{}) *errors.QueryError {
 	return errors.Errorf("graphql: panic occurred: %v", value)
 }
@@ -188,6 +192,9 @@ func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *p
 			err := errors.Errorf("%s", resolverErr)
 			err.Path = path.toSlice()
 			err.ResolverError = resolverErr
+			if ex, ok := callOut[1].Interface().(extensionser); ok {
+				err.Extensions = ex.Extensions()
+			}
 			return err
 		}
 		return nil

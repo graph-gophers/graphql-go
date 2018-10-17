@@ -72,6 +72,42 @@ func (r *echoResolver) Echo(args struct{ Value *string }) *string {
 
 var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
 
+type ResolverError interface {
+	error
+	Extensions() map[string]interface{}
+}
+
+type resolverNotFoundError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (e resolverNotFoundError) Error() string {
+	return fmt.Sprintf("Error [%s]: %s", e.Code, e.Message)
+}
+
+func (e resolverNotFoundError) Extensions() map[string]interface{} {
+	return map[string]interface{}{
+		"code":    e.Code,
+		"message": e.Message,
+	}
+}
+
+type findDroidResolver struct{}
+
+func (r *findDroidResolver) FindDroid(ctx context.Context) (string, error) {
+	return "", resolverNotFoundError{
+		Code:    "NotFound",
+		Message: "This is not the droid you are looking for",
+	}
+}
+
+type discussPlanResolver struct{}
+
+func (r *discussPlanResolver) DismissVader(ctx context.Context) (string, error) {
+	return "", errors.New("I find your lack of faith disturbing")
+}
+
 func TestHelloWorld(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
@@ -305,6 +341,81 @@ func TestNilInterface(t *testing.T) {
 					Message:       "x",
 					Path:          []interface{}{"b"},
 					ResolverError: errors.New("x"),
+				},
+			},
+		},
+	})
+}
+
+func TestErrorWithExtensions(t *testing.T) {
+	err := resolverNotFoundError{
+		Code:    "NotFound",
+		Message: "This is not the droid you are looking for",
+	}
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					FindDroid: String!
+				}
+			`, &findDroidResolver{}),
+			Query: `
+				{
+					FindDroid
+				}
+			`,
+			ExpectedResult: `
+				{
+					"FindDroid": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       err.Error(),
+					Path:          []interface{}{"FindDroid"},
+					ResolverError: err,
+					Extensions:    map[string]interface{}{"code": err.Code, "message": err.Message},
+				},
+			},
+		},
+	})
+}
+
+func TestErrorWithNoExtensions(t *testing.T) {
+	err := errors.New("I find your lack of faith disturbing")
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					DismissVader: String!
+				}
+			`, &discussPlanResolver{}),
+			Query: `
+				{
+					DismissVader
+				}
+			`,
+			ExpectedResult: `
+				{
+					"DismissVader": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       err.Error(),
+					Path:          []interface{}{"DismissVader"},
+					ResolverError: err,
+					Extensions:    nil,
 				},
 			},
 		},
