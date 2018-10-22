@@ -16,6 +16,8 @@ safe for production use.
 - resolvers are matched to the schema based on method sets (can resolve a GraphQL schema with a Go interface or Go struct).
 - handles panics in resolvers
 - parallel execution of resolvers
+- subscriptions
+   - [sample WS transport](https://github.com/graph-gophers/graphql-transport-ws)
 
 ## Roadmap
 
