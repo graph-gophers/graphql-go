@@ -246,8 +246,8 @@ func New() *Schema {
 }
 
 // Parse the schema string.
-func (s *Schema) Parse(schemaString string) error {
-	l := common.NewLexer(schemaString)
+func (s *Schema) Parse(schemaString string, useStringDescriptions bool) error {
+	l := common.NewLexer(schemaString, useStringDescriptions)
 
 	err := l.CatchSyntaxError(func() { parseSchema(s, l) })
 	if err != nil {
@@ -389,7 +389,7 @@ func resolveInputObject(s *Schema, values common.InputValueList) error {
 }
 
 func parseSchema(s *Schema, l *common.Lexer) {
-	l.Consume()
+	l.ConsumeWhitespace()
 
 	for l.Peek() != scanner.EOF {
 		desc := l.DescComment()

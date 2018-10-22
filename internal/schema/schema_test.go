@@ -80,7 +80,7 @@ func TestParse(t *testing.T) {
 			t.Skip("TODO: add support for descriptions")
 			schema := setup(t)
 
-			err := schema.Parse(test.sdl)
+			err := schema.Parse(test.sdl, false)
 			if err != nil {
 				t.Fatal(err)
 			}
