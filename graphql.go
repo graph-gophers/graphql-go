@@ -74,7 +74,10 @@ type Schema struct {
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
 type SchemaOpt func(*Schema)
 
-// UseStringDescriptions disables the parsing of comments as descriptions
+// UseStringDescriptions enables the usage of double quoted and triple quoted
+// strings as descriptions as per the June 2018 spec
+// https://facebook.github.io/graphql/June2018/. When this is not enabled,
+// comments are parsed as descriptions instead.
 func UseStringDescriptions() SchemaOpt {
 	return func(s *Schema) {
 		s.useStringDescriptions = true

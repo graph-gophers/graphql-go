@@ -171,12 +171,8 @@ func (l *Lexer) consumeTripleQuoteComment() {
 		panic("consumeTripleQuoteComment used in wrong context: no third quote?")
 	}
 
-	if l.descComment != "" {
-		l.descComment += "\n"
-	}
-
-	comment := ""
-	numQuotes := 0
+	var comment string
+	var numQuotes int
 	for {
 		l.next = l.sc.Next()
 		if l.next == '"' {
@@ -193,10 +189,6 @@ func (l *Lexer) consumeTripleQuoteComment() {
 }
 
 func (l *Lexer) consumeStringComment(str string) {
-	if l.descComment != "" {
-		l.descComment += "\n"
-	}
-
 	value, err := strconv.Unquote(str)
 	if err != nil {
 		panic(err)

@@ -29,7 +29,7 @@ type Hello {
 	expected:              "Comment line 1\nComment line 2\nCommas are insignificant",
 	useStringDescriptions: false,
 }, {
-	description: "simple string descriptions allowed in old mode",
+	description: "simple string descriptions allowed in new mode",
 	definition: `
 
 # Comment line 1
@@ -42,7 +42,19 @@ type Hello {
 	expected:              "New style comments",
 	useStringDescriptions: true,
 }, {
-	description: "triple quote descriptions allowed in old mode",
+	description: "comment after description works",
+	definition: `
+
+# Comment line 1
+#Comment line 2
+,,,,,, # Commas are insignificant
+type Hello {
+	world: String!
+}`,
+	expected:              "",
+	useStringDescriptions: true,
+}, {
+	description: "triple quote descriptions allowed in new mode",
 	definition: `
 
 # Comment line 1
@@ -50,11 +62,12 @@ type Hello {
 ,,,,,, # Commas are insignificant
 """
 New style comments
+Another line
 """
 type Hello {
 	world: String!
 }`,
-	expected:              "New style comments",
+	expected:              "New style comments\nAnother line",
 	useStringDescriptions: true,
 }}
 
