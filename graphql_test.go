@@ -102,6 +102,15 @@ func (r *findDroidResolver) FindDroid(ctx context.Context) (string, error) {
 	}
 }
 
+type findDroidsResolver struct{}
+
+func (r *findDroidsResolver) FindDroids(ctx context.Context) []*droidResolver {
+	return []*droidResolver{&droidResolver{}, &droidResolver{resolverNotFoundError{
+		Code:    "NotFound",
+		Message: "This is not the droid you are looking for",
+	}}}
+}
+
 type findDroidOrHumanResolver struct{}
 
 func (r *findDroidOrHumanResolver) FindHuman(ctx context.Context) (*string, error) {
@@ -116,10 +125,13 @@ func (r *findDroidOrHumanResolver) FindDroid(ctx context.Context) (*droidResolve
 	}
 }
 
-type droidResolver struct{}
+type droidResolver struct{ err error }
 
-func (d *droidResolver) Name() string {
-	return "R2D2"
+func (d *droidResolver) Name() (string, error) {
+	if d.err != nil {
+		return "", d.err
+	}
+	return "R2D2", nil
 }
 
 type discussPlanResolver struct{}
@@ -361,6 +373,48 @@ func TestNilInterface(t *testing.T) {
 					Message:       "x",
 					Path:          []interface{}{"b"},
 					ResolverError: errors.New("x"),
+				},
+			},
+		},
+	})
+}
+
+func TestErrorPropagationInLists(t *testing.T) {
+	err := resolverNotFoundError{
+		Code:    "NotFound",
+		Message: "This is not the droid you are looking for",
+	}
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					FindDroids: [Droid!]!
+				}
+				type Droid {
+					Name: String!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					FindDroids {
+						Name
+					}
+				}
+			`,
+			ExpectedResult: `
+				null
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       err.Error(),
+					Path:          []interface{}{"FindDroids", 1, "Name"},
+					ResolverError: err,
+					Extensions:    map[string]interface{}{"code": err.Code, "message": err.Message},
 				},
 			},
 		},
