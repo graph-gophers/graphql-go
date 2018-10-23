@@ -102,6 +102,26 @@ func (r *findDroidResolver) FindDroid(ctx context.Context) (string, error) {
 	}
 }
 
+type findDroidOrHumanResolver struct{}
+
+func (r *findDroidOrHumanResolver) FindHuman(ctx context.Context) (*string, error) {
+	human := "human"
+	return &human, nil
+}
+
+func (r *findDroidOrHumanResolver) FindDroid(ctx context.Context) (*droidResolver, error) {
+	return &droidResolver{}, resolverNotFoundError{
+		Code:    "NotFound",
+		Message: "This is not the droid you are looking for",
+	}
+}
+
+type droidResolver struct{}
+
+func (d *droidResolver) Name() string {
+	return "R2D2"
+}
+
 type discussPlanResolver struct{}
 
 func (r *discussPlanResolver) DismissVader(ctx context.Context) (string, error) {
@@ -361,12 +381,19 @@ func TestErrorWithExtensions(t *testing.T) {
 				}
 
 				type Query {
-					FindDroid: String!
+					FindDroid: Droid!
+					FindHuman: String
 				}
-			`, &findDroidResolver{}),
+				type Droid {
+					Name: String!
+				}
+			`, &findDroidOrHumanResolver{}),
 			Query: `
 				{
-					FindDroid
+					FindDroid {
+						Name
+					}
+					FindHuman
 				}
 			`,
 			ExpectedResult: `
