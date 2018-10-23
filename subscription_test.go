@@ -100,11 +100,7 @@ func TestSchemaSubscribe(t *testing.T) {
 				},
 				{
 					Data: json.RawMessage(`
-						{
-							"helloSaid": {
-								"msg":null
-							}
-						}
+						null
 					`),
 					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", resolverErr)},
 				},
