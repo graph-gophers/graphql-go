@@ -115,9 +115,13 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 					func() {
 						defer subR.handlePanic(subCtx)
 
-						out.WriteString(fmt.Sprintf(`{"%s":`, f.field.Alias))
-						subR.execSelectionSet(subCtx, f.sels, f.field.Type, &pathSegment{nil, f.field.Alias}, resp, &out)
-						out.WriteString(`}`)
+						var buf bytes.Buffer
+						subR.execSelectionSet(subCtx, f.sels, f.field.Type, &pathSegment{nil, f.field.Alias}, resp, &buf)
+						if len(subR.Errs) == 0 {
+							out.WriteString(fmt.Sprintf(`{"%s":`, f.field.Alias))
+							out.Write(buf.Bytes())
+							out.WriteString(`}`)
+						}
 					}()
 
 					if err := subCtx.Err(); err != nil {
