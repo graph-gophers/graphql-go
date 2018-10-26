@@ -1634,6 +1634,10 @@ func (r *inputResolver) ID(args struct{ Value graphql.ID }) graphql.ID {
 func (r *inputResolver) InputTime(args struct{ Value struct{T time.Time} }) graphql.Time {
 	return graphql.Time{args.Value.T}
 }
+
+func (r *inputResolver) NullableInputTime(args struct{ Value struct{T *time.Time} }) graphql.Time {
+	return graphql.Time{*args.Value.T}
+}
 func TestInput(t *testing.T) {
 	coercionSchema := graphql.MustParseSchema(`
 		schema {
@@ -1656,8 +1660,12 @@ func TestInput(t *testing.T) {
 			recursive(value: RecursiveInput!): Int!
 			id(value: ID!): ID!
 			inputTime(value: TimeInput!): Time!
+			nullableInputTime(value: NullableTimeInput!): Time!
 		}
 		input TimeInput{
+			t: Time!
+		}
+		input NullableTimeInput{
 			t: Time!
 		}
 		input Input {
@@ -1699,6 +1707,7 @@ func TestInput(t *testing.T) {
 					intID: id(value: 1234)
 					strID: id(value: "1234")
 					timeInput: inputTime(value: {t : "2018-08-22T11:34:55Z"})
+					nullableTimeInput: nullableInputTime(value: {t : "2018-08-22T11:34:55Z"})
 				}
 			`,
 			ExpectedResult: `
@@ -1723,7 +1732,8 @@ func TestInput(t *testing.T) {
 					"recursive": 3,
 					"intID": "1234",
 					"strID": "1234",
-					"timeInput": "2018-08-22T11:34:55Z"
+					"timeInput": "2018-08-22T11:34:55Z",
+					"nullableTimeInput": "2018-08-22T11:34:55Z"
 				}
 			`,
 		},
