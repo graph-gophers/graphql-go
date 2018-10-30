@@ -2,9 +2,8 @@ package graphql
 
 import (
 	"context"
-	"fmt"
-
 	"encoding/json"
+	"fmt"
 
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
@@ -81,6 +80,13 @@ type SchemaOpt func(*Schema)
 func UseStringDescriptions() SchemaOpt {
 	return func(s *Schema) {
 		s.useStringDescriptions = true
+	}
+}
+
+// Specifies whether to use struct field resolvers
+func UseFieldResolvers() SchemaOpt {
+	return func(s *Schema) {
+		s.schema.UseFieldResolvers = true
 	}
 }
 

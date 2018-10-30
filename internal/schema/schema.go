@@ -41,6 +41,8 @@ type Schema struct {
 	// http://facebook.github.io/graphql/draft/#sec-Type-System.Directives
 	Directives map[string]*DirectiveDecl
 
+	UseFieldResolvers bool
+
 	entryPointNames map[string]string
 	objects         []*Object
 	unions          []*Union
