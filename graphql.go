@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"encoding/json"
 
@@ -53,6 +54,12 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 func MustParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) *Schema {
 	s, err := ParseSchema(schemaString, resolver, opts...)
 	if err != nil {
+		lines := strings.Split(schemaString, "\n")
+		for i, line := range lines {
+			lines[i] = fmt.Sprintf("%d: %v", i+1, line)
+		}
+		fmt.Printf("schema: \n%v\n", strings.Join(lines, "\n"))
+		time.Sleep(1 * time.Second)
 		panic(err)
 	}
 	return s
