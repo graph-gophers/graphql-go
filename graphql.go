@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"encoding/json"
