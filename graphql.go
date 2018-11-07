@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"encoding/json"
 
@@ -59,9 +58,7 @@ func MustParseSchema(schemaString string, resolver interface{}, opts ...SchemaOp
 		for i, line := range lines {
 			lines[i] = fmt.Sprintf("%d: %v", i+1, line)
 		}
-		fmt.Printf("schema: \n%v\n", strings.Join(lines, "\n"))
-		time.Sleep(1 * time.Second)
-		panic(err)
+		panic(fmt.Errorf("%+v\n%v\n", err, strings.Join(lines, "\n")))
 	}
 	return s
 }
