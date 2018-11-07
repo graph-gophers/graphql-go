@@ -13,11 +13,12 @@ import (
 
 type Schema struct {
 	schema.Schema
-	Query            Resolvable
-	Mutation         Resolvable
-	Subscription     Resolvable
-	QueryResolver    reflect.Value
-	MutationResolver reflect.Value
+	Query                Resolvable
+	Mutation             Resolvable
+	Subscription         Resolvable
+	QueryResolver        reflect.Value
+	MutationResolver     reflect.Value
+	SubscriptionResolver reflect.Value
 }
 
 type Resolvable interface {
@@ -64,12 +65,16 @@ type MutationResolver interface {
 	Mutation() interface{}
 }
 
+type SubscriptionResolver interface {
+	Subscription() interface{}
+}
+
 func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 	b := newBuilder(s)
 
 	var (
-		query, mutation, subscription   Resolvable
-		queryResolver, mutationResolver interface{}
+		query, mutation, subscription                         Resolvable
+		queryResolver, mutationResolver, subscriptionResolver interface{}
 	)
 
 	sqr, isSeparateQueryResolver := resolver.(QueryResolver)
@@ -83,6 +88,12 @@ func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 		mutationResolver = smr.Mutation()
 	} else {
 		mutationResolver = resolver
+	}
+	ssr, isSeparateSubscriptionResolver := resolver.(SubscriptionResolver)
+	if isSeparateSubscriptionResolver {
+		subscriptionResolver = ssr.Subscription()
+	} else {
+		subscriptionResolver = resolver
 	}
 
 	if t, ok := s.EntryPoints["query"]; ok {
@@ -98,7 +109,7 @@ func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 	}
 
 	if t, ok := s.EntryPoints["subscription"]; ok {
-		if err := b.assignExec(&subscription, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&subscription, t, reflect.TypeOf(subscriptionResolver)); err != nil {
 			return nil, err
 		}
 	}
@@ -108,12 +119,13 @@ func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 	}
 
 	return &Schema{
-		Schema:           *s,
-		QueryResolver:    reflect.ValueOf(queryResolver),
-		MutationResolver: reflect.ValueOf(mutationResolver),
-		Query:            query,
-		Mutation:         mutation,
-		Subscription:     subscription,
+		Schema:               *s,
+		QueryResolver:        reflect.ValueOf(queryResolver),
+		MutationResolver:     reflect.ValueOf(mutationResolver),
+		SubscriptionResolver: reflect.ValueOf(subscriptionResolver),
+		Query:                query,
+		Mutation:             mutation,
+		Subscription:         subscription,
 	}, nil
 }
 

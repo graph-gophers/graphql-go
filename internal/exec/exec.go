@@ -51,6 +51,8 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *query.O
 			resolver = s.QueryResolver
 		case query.Mutation:
 			resolver = s.MutationResolver
+		case query.Subscription:
+			resolver = s.SubscriptionResolver
 		default:
 			panic("unknown query operation")
 		}
