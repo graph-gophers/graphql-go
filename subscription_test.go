@@ -130,7 +130,7 @@ func TestSchemaSubscribe(t *testing.T) {
 			},
 		},
 		{
-			Name:   "subscribe_to_query_errors",
+			Name:   "subscribe_to_query_succeeds",
 			Schema: graphql.MustParseSchema(schema, &rootResolver{}),
 			Query: `
 				query Hello {
@@ -139,7 +139,11 @@ func TestSchemaSubscribe(t *testing.T) {
 			`,
 			ExpectedResults: []gqltesting.TestResponse{
 				{
-					Errors: []*qerrors.QueryError{qerrors.Errorf("%s: %s", "subscription unavailable for operation of type", "QUERY")},
+					Data: json.RawMessage(`
+						{
+							"hello": "Hello world!"
+						}
+					`),
 				},
 			},
 		},
