@@ -44,11 +44,6 @@ func (s *Schema) subscribe(ctx context.Context, queryString string, operationNam
 		return sendAndReturnClosed(&Response{Errors: []*qerrors.QueryError{qerrors.Errorf("%s", err)}})
 	}
 
-	// TODO: Move to validation.Validate?
-	if op.Type != query.Subscription {
-		return sendAndReturnClosed(&Response{Errors: []*qerrors.QueryError{qerrors.Errorf("%s: %s", "subscription unavailable for operation of type", op.Type)}})
-	}
-
 	r := &exec.Request{
 		Request: selected.Request{
 			Doc:    doc,
@@ -66,6 +61,11 @@ func (s *Schema) subscribe(ctx context.Context, queryString string, operationNam
 			return sendAndReturnClosed(&Response{Errors: []*qerrors.QueryError{err}})
 		}
 		varTypes[v.Name.Name] = introspection.WrapType(t)
+	}
+
+	if op.Type == query.Query || op.Type == query.Mutation {
+		data, errs := r.Execute(ctx, res, op)
+		return sendAndReturnClosed(&Response{Data: data, Errors: errs})
 	}
 
 	responses := r.Subscribe(ctx, res, op)
