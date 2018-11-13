@@ -19,14 +19,14 @@ import (
 // If the context gets cancelled, the response channel will be closed and no
 // further resolvers will be called. The context error will be returned as soon
 // as possible (not immediately).
-func (s *Schema) Subscribe(ctx context.Context, queryString string, operationName string, variables map[string]interface{}) (<-chan *Response, error) {
+func (s *Schema) Subscribe(ctx context.Context, queryString string, operationName string, variables map[string]interface{}) (<-chan interface{}, error) {
 	if s.res == nil {
 		return nil, errors.New("schema created without resolver, can not subscribe")
 	}
 	return s.subscribe(ctx, queryString, operationName, variables, s.res), nil
 }
 
-func (s *Schema) subscribe(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, res *resolvable.Schema) <-chan *Response {
+func (s *Schema) subscribe(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, res *resolvable.Schema) <-chan interface{} {
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
 		return sendAndReturnClosed(&Response{Errors: []*qerrors.QueryError{qErr}})
@@ -69,7 +69,7 @@ func (s *Schema) subscribe(ctx context.Context, queryString string, operationNam
 	}
 
 	responses := r.Subscribe(ctx, res, op)
-	c := make(chan *Response)
+	c := make(chan interface{})
 	go func() {
 		for resp := range responses {
 			c <- &Response{
@@ -83,8 +83,8 @@ func (s *Schema) subscribe(ctx context.Context, queryString string, operationNam
 	return c
 }
 
-func sendAndReturnClosed(resp *Response) chan *Response {
-	c := make(chan *Response, 1)
+func sendAndReturnClosed(resp *Response) chan interface{} {
+	c := make(chan interface{}, 1)
 	c <- resp
 	close(c)
 	return c

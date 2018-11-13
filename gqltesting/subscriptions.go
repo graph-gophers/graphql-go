@@ -57,7 +57,7 @@ func RunSubscribe(t *testing.T, test *TestSubscription) {
 
 	var results []*graphql.Response
 	for res := range c {
-		results = append(results, res)
+		results = append(results, res.(*graphql.Response))
 	}
 
 	for i, expected := range test.ExpectedResults {
