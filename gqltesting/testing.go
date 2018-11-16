@@ -43,6 +43,9 @@ func RunTest(t *testing.T, test *Test) {
 		test.Context = context.Background()
 	}
 	result := test.Schema.Exec(test.Context, test.Query, test.OperationName, test.Variables)
+
+	checkErrors(t, test.ExpectedErrors, result.Errors)
+
 	// Verify JSON to avoid red herring errors.
 	got, err := formatJSON(result.Data)
 	if err != nil {
@@ -52,8 +55,6 @@ func RunTest(t *testing.T, test *Test) {
 	if err != nil {
 		t.Fatalf("want: invalid JSON: %s", err)
 	}
-
-	checkErrors(t, test.ExpectedErrors, result.Errors)
 
 	if !bytes.Equal(got, want) {
 		t.Logf("got:  %s", got)
