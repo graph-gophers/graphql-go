@@ -284,26 +284,16 @@ type review struct {
 
 var reviews = make(map[string][]*review)
 
-type RootResolver struct{}
-type QueryResolver struct{}
-type MutationResolver struct{}
+type Resolver struct{}
 
-func (r *RootResolver) Query() interface{} {
-	return &QueryResolver{}
-}
-
-func (r *RootResolver) Mutation() interface{} {
-	return &MutationResolver{}
-}
-
-func (r *QueryResolver) Hero(args struct{ Episode string }) *characterResolver {
+func (r *Resolver) Hero(args struct{ Episode string }) *characterResolver {
 	if args.Episode == "EMPIRE" {
 		return &characterResolver{&humanResolver{humanData["1000"]}}
 	}
 	return &characterResolver{&droidResolver{droidData["2001"]}}
 }
 
-func (r *QueryResolver) Reviews(args struct{ Episode string }) []*reviewResolver {
+func (r *Resolver) Reviews(args struct{ Episode string }) []*reviewResolver {
 	var l []*reviewResolver
 	for _, review := range reviews[args.Episode] {
 		l = append(l, &reviewResolver{review})
@@ -311,7 +301,7 @@ func (r *QueryResolver) Reviews(args struct{ Episode string }) []*reviewResolver
 	return l
 }
 
-func (r *QueryResolver) Search(args struct{ Text string }) []*searchResultResolver {
+func (r *Resolver) Search(args struct{ Text string }) []*searchResultResolver {
 	var l []*searchResultResolver
 	for _, h := range humans {
 		if strings.Contains(h.Name, args.Text) {
@@ -331,7 +321,7 @@ func (r *QueryResolver) Search(args struct{ Text string }) []*searchResultResolv
 	return l
 }
 
-func (r *QueryResolver) Character(args struct{ ID graphql.ID }) *characterResolver {
+func (r *Resolver) Character(args struct{ ID graphql.ID }) *characterResolver {
 	if h := humanData[args.ID]; h != nil {
 		return &characterResolver{&humanResolver{h}}
 	}
@@ -341,28 +331,28 @@ func (r *QueryResolver) Character(args struct{ ID graphql.ID }) *characterResolv
 	return nil
 }
 
-func (r *QueryResolver) Human(args struct{ ID graphql.ID }) *humanResolver {
+func (r *Resolver) Human(args struct{ ID graphql.ID }) *humanResolver {
 	if h := humanData[args.ID]; h != nil {
 		return &humanResolver{h}
 	}
 	return nil
 }
 
-func (r *QueryResolver) Droid(args struct{ ID graphql.ID }) *droidResolver {
+func (r *Resolver) Droid(args struct{ ID graphql.ID }) *droidResolver {
 	if d := droidData[args.ID]; d != nil {
 		return &droidResolver{d}
 	}
 	return nil
 }
 
-func (r *QueryResolver) Starship(args struct{ ID graphql.ID }) *starshipResolver {
+func (r *Resolver) Starship(args struct{ ID graphql.ID }) *starshipResolver {
 	if s := starshipData[args.ID]; s != nil {
 		return &starshipResolver{s}
 	}
 	return nil
 }
 
-func (r *MutationResolver) CreateReview(args *struct {
+func (r *Resolver) CreateReview(args *struct {
 	Episode string
 	Review  *reviewInput
 }) *reviewResolver {

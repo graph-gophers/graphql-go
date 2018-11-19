@@ -70,7 +70,7 @@ func (r *echoResolver) Echo(args struct{ Value *string }) *string {
 	return args.Value
 }
 
-var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.RootResolver{})
+var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
 
 type ResolverError interface {
 	error
