@@ -2127,25 +2127,32 @@ func TestComposedFragments(t *testing.T) {
 	})
 }
 
-var exampleErrorString = "This is an error"
-var exampleError = fmt.Errorf(exampleErrorString)
+var (
+	exampleErrorString = "This is an error"
+	exampleError       = fmt.Errorf(exampleErrorString)
 
-type errorringResolver1 struct{}
+	nilChildErrorString = `got nil for non-null "Child"`
+)
 
-func (r *errorringResolver1) TriggerError() (string, error) {
+type erroringResolver1 struct{}
+
+func (r *erroringResolver1) TriggerError() (string, error) {
 	return "This will never be returned to the client", exampleError
 }
-func (r *errorringResolver1) NoError() string {
+func (r *erroringResolver1) NoError() string {
 	return "no error"
 }
-func (r *errorringResolver1) Child() *errorringResolver1 {
-	return &errorringResolver1{}
+func (r *erroringResolver1) Child() *erroringResolver1 {
+	return &erroringResolver1{}
+}
+func (r *erroringResolver1) NilChild() *erroringResolver1 {
+	return nil
 }
 
 type nonFailingRoot struct{}
 
-func (r *nonFailingRoot) Child() *errorringResolver1 {
-	return &errorringResolver1{}
+func (r *nonFailingRoot) Child() *erroringResolver1 {
+	return &erroringResolver1{}
 }
 func (r *nonFailingRoot) NoError() string {
 	return "no error"
@@ -2163,7 +2170,7 @@ func TestErrorPropagation(t *testing.T) {
 					noError: String!
 					triggerError: String!
 				}
-			`, &errorringResolver1{}),
+			`, &erroringResolver1{}),
 			Query: `
 				{
 					noError
@@ -2306,6 +2313,170 @@ func TestErrorPropagation(t *testing.T) {
 					Message:       exampleErrorString,
 					ResolverError: exampleError,
 					Path:          []interface{}{"child", "child", "triggerError"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					noError: String!
+					child: Child!
+				}
+
+				type Child {
+					noError: String!
+					nilChild: Child!
+				}
+			`, &nonFailingRoot{}),
+			Query: `
+				{
+					noError
+					child {
+						nilChild {
+							noError
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				null
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: nilChildErrorString,
+					Path:    []interface{}{"child", "nilChild"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					noError: String!
+					child: Child
+				}
+
+				type Child {
+					noError: String!
+					nilChild: Child!
+				}
+			`, &nonFailingRoot{}),
+			Query: `
+				{
+					noError
+					child {
+						noError
+						nilChild {
+							noError
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+			{
+				"noError": "no error",
+				"child": null
+			}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: nilChildErrorString,
+					Path:    []interface{}{"child", "nilChild"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					child: Child
+				}
+
+				type Child {
+					triggerError: String!
+					child: Child
+					nilChild: Child!
+				}
+			`, &nonFailingRoot{}),
+			Query: `
+				{
+					child {
+						child {
+							triggerError
+							child {
+								nilChild {
+									triggerError
+								}
+							}
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+			{
+				"child": {
+					"child": null
+				}
+			}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: nilChildErrorString,
+					Path:    []interface{}{"child", "child", "child", "nilChild"},
+				},
+				{
+					Message:       exampleErrorString,
+					ResolverError: exampleError,
+					Path:          []interface{}{"child", "child", "triggerError"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					child: Child
+				}
+
+				type Child {
+					noError: String!
+					child: Child!
+					nilChild: Child!
+				}
+			`, &nonFailingRoot{}),
+			Query: `
+				{
+					child {
+						child {
+							nilChild {
+								noError
+							}
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+			{
+				"child": null
+			}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: nilChildErrorString,
+					Path:    []interface{}{"child", "child", "nilChild"},
 				},
 			},
 		},

@@ -249,8 +249,11 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 	case *schema.Object, *schema.Interface, *schema.Union:
 		// a reflect.Value of a nil interface will show up as an Invalid value
 		if resolver.Kind() == reflect.Invalid || ((resolver.Kind() == reflect.Ptr || resolver.Kind() == reflect.Interface) && resolver.IsNil()) {
+			// If a field of a non-null type resolves to nil, add an error and propagate it
 			if nonNull {
-				panic(errors.Errorf("got nil for non-null %q", t))
+				err := errors.Errorf("got nil for non-null %q", t)
+				err.Path = path.toSlice()
+				r.AddError(err)
 			}
 			out.WriteString("null")
 			return
