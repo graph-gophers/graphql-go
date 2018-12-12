@@ -251,7 +251,7 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 		if resolver.Kind() == reflect.Invalid || ((resolver.Kind() == reflect.Ptr || resolver.Kind() == reflect.Interface) && resolver.IsNil()) {
 			// If a field of a non-null type resolves to nil, add an error and propagate it
 			if nonNull {
-				err := errors.Errorf("got nil for non-null %q", t)
+				err := errors.Errorf("graphql: got nil for non-null %q", t)
 				err.Path = path.toSlice()
 				r.AddError(err)
 			}

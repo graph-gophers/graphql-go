@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"testing"
 
@@ -76,7 +78,19 @@ func formatJSON(data []byte) ([]byte, error) {
 }
 
 func checkErrors(t *testing.T, want, got []*errors.QueryError) {
+	sortErrors(want)
+	sortErrors(got)
+
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected error: got %+v, want %+v", got, want)
 	}
+}
+
+func sortErrors(errors []*errors.QueryError) {
+	if len(errors) <= 1 {
+		return
+	}
+	sort.Slice(errors, func(i, j int) bool {
+		return fmt.Sprintf("%s", errors[i].Path) < fmt.Sprintf("%s", errors[j].Path)
+	})
 }

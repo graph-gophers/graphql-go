@@ -2131,7 +2131,7 @@ var (
 	exampleErrorString = "This is an error"
 	exampleError       = fmt.Errorf(exampleErrorString)
 
-	nilChildErrorString = `got nil for non-null "Child"`
+	nilChildErrorString = `graphql: got nil for non-null "Child"`
 )
 
 type erroringResolver1 struct{}
