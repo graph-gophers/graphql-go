@@ -102,17 +102,26 @@ func (r *findDroidResolver) FindDroid(ctx context.Context) (string, error) {
 	}
 }
 
+var (
+	droidNotFoundError = resolverNotFoundError{
+		Code:    "NotFound",
+		Message: "This is not the droid you are looking for",
+	}
+	quoteError = errors.New("Bleep bloop")
+
+	r2d2          = &droidResolver{name: "R2-D2"}
+	c3po          = &droidResolver{name: "C-3PO"}
+	notFoundDroid = &droidResolver{err: droidNotFoundError}
+)
+
 type findDroidsResolver struct{}
 
 func (r *findDroidsResolver) FindDroids(ctx context.Context) []*droidResolver {
-	return []*droidResolver{&droidResolver{}, &droidResolver{resolverNotFoundError{
-		Code:    "NotFound",
-		Message: "This is not the droid you are looking for",
-	}}}
+	return []*droidResolver{r2d2, notFoundDroid, c3po}
 }
 
 func (r *findDroidsResolver) FindNilDroids(ctx context.Context) *[]*droidResolver {
-	return &[]*droidResolver{&droidResolver{}, nil, &droidResolver{}}
+	return &[]*droidResolver{r2d2, nil, c3po}
 }
 
 type findDroidOrHumanResolver struct{}
@@ -123,19 +132,29 @@ func (r *findDroidOrHumanResolver) FindHuman(ctx context.Context) (*string, erro
 }
 
 func (r *findDroidOrHumanResolver) FindDroid(ctx context.Context) (*droidResolver, error) {
-	return &droidResolver{}, resolverNotFoundError{
-		Code:    "NotFound",
-		Message: "This is not the droid you are looking for",
-	}
+	return nil, notFoundDroid.err
 }
 
-type droidResolver struct{ err error }
+type droidResolver struct {
+	name string
+	err  error
+}
 
 func (d *droidResolver) Name() (string, error) {
 	if d.err != nil {
 		return "", d.err
 	}
-	return "R2D2", nil
+	return d.name, nil
+}
+
+func (d *droidResolver) Quotes() ([]string, error) {
+	switch d.name {
+	case "R2-D2":
+		return nil, quoteError
+	case "C-3PO":
+		return []string{"We're doomed!", "R2-D2, where are you?"}, nil
+	}
+	return nil, nil
 }
 
 type discussPlanResolver struct{}
@@ -384,11 +403,6 @@ func TestNilInterface(t *testing.T) {
 }
 
 func TestErrorPropagationInLists(t *testing.T) {
-	err := resolverNotFoundError{
-		Code:    "NotFound",
-		Message: "This is not the droid you are looking for",
-	}
-
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -397,16 +411,16 @@ func TestErrorPropagationInLists(t *testing.T) {
 				}
 
 				type Query {
-					FindDroids: [Droid!]!
+					findDroids: [Droid!]!
 				}
 				type Droid {
-					Name: String!
+					name: String!
 				}
 			`, &findDroidsResolver{}),
 			Query: `
 				{
-					FindDroids {
-						Name
+					findDroids {
+						name
 					}
 				}
 			`,
@@ -415,10 +429,10 @@ func TestErrorPropagationInLists(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				&gqlerrors.QueryError{
-					Message:       err.Error(),
-					Path:          []interface{}{"FindDroids", 1, "Name"},
-					ResolverError: err,
-					Extensions:    map[string]interface{}{"code": err.Code, "message": err.Message},
+					Message:       droidNotFoundError.Error(),
+					Path:          []interface{}{"findDroids", 1, "name"},
+					ResolverError: droidNotFoundError,
+					Extensions:    map[string]interface{}{"code": droidNotFoundError.Code, "message": droidNotFoundError.Message},
 				},
 			},
 		},
@@ -429,28 +443,187 @@ func TestErrorPropagationInLists(t *testing.T) {
 				}
 
 				type Query {
-					FindNilDroids: [Droid!]
+					findDroids: [Droid]!
 				}
 				type Droid {
-					Name: String!
+					name: String!
 				}
 			`, &findDroidsResolver{}),
 			Query: `
 				{
-					FindNilDroids {
-						Name
+					findDroids {
+						name
 					}
 				}
 			`,
 			ExpectedResult: `
 				{
-					"FindNilDroids": null
+					"findDroids": [
+						{
+							"name": "R2-D2"
+						},
+						null,
+						{
+							"name": "C-3PO"
+						}
+					]
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       droidNotFoundError.Error(),
+					Path:          []interface{}{"findDroids", 1, "name"},
+					ResolverError: droidNotFoundError,
+					Extensions:    map[string]interface{}{"code": droidNotFoundError.Code, "message": droidNotFoundError.Message},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					findNilDroids: [Droid!]
+				}
+				type Droid {
+					name: String!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					findNilDroids {
+						name
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"findNilDroids": null
 				}
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				&gqlerrors.QueryError{
 					Message: `graphql: got nil for non-null "Droid"`,
-					Path:    []interface{}{"FindNilDroids", 1},
+					Path:    []interface{}{"findNilDroids", 1},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					findNilDroids: [Droid]
+				}
+				type Droid {
+					name: String!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					findNilDroids {
+						name
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"findNilDroids": [
+						{
+							"name": "R2-D2"
+						},
+						null,
+						{
+							"name": "C-3PO"
+						}
+					]
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					findDroids: [Droid]!
+				}
+				type Droid {
+					quotes: [String!]!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					findDroids {
+						quotes
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"findDroids": [
+						null,
+						{
+							"quotes": []
+						},
+						{
+							"quotes": [
+								"We're doomed!",
+								"R2-D2, where are you?"
+							]
+						}
+					]
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       quoteError.Error(),
+					ResolverError: quoteError,
+					Path:          []interface{}{"findDroids", 0, "quotes"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					findNilDroids: [Droid!]
+				}
+				type Droid {
+					name: String!
+					quotes: [String!]!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					findNilDroids {
+						name
+						quotes
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"findNilDroids": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       quoteError.Error(),
+					ResolverError: quoteError,
+					Path:          []interface{}{"findNilDroids", 0, "quotes"},
+				},
+				&gqlerrors.QueryError{
+					Message: `graphql: got nil for non-null "Droid"`,
+					Path:    []interface{}{"findNilDroids", 1},
 				},
 			},
 		},
@@ -458,11 +631,6 @@ func TestErrorPropagationInLists(t *testing.T) {
 }
 
 func TestErrorWithExtensions(t *testing.T) {
-	err := resolverNotFoundError{
-		Code:    "NotFound",
-		Message: "This is not the droid you are looking for",
-	}
-
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -491,10 +659,10 @@ func TestErrorWithExtensions(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				&gqlerrors.QueryError{
-					Message:       err.Error(),
+					Message:       droidNotFoundError.Error(),
 					Path:          []interface{}{"FindDroid"},
-					ResolverError: err,
-					Extensions:    map[string]interface{}{"code": err.Code, "message": err.Message},
+					ResolverError: droidNotFoundError,
+					Extensions:    map[string]interface{}{"code": droidNotFoundError.Code, "message": droidNotFoundError.Message},
 				},
 			},
 		},

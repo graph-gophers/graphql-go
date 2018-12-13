@@ -298,18 +298,6 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 }
 
 func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *common.List, path *pathSegment, resolver reflect.Value, out *bytes.Buffer) {
-	// If the list wraps a non-null type and one of the list elements resolves to nil,
-	// then the entire list resolves to nil
-	defer func() {
-		if _, ok := typ.OfType.(*common.NonNull); !ok {
-			return
-		}
-		if r.SubPathHasError(path.toSlice()) {
-			out.Reset()
-			out.WriteString("null")
-		}
-	}()
-
 	l := resolver.Len()
 
 	if selected.HasAsyncSel(sels) {
@@ -333,17 +321,24 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 			out.Write(entryout.Bytes())
 		}
 		out.WriteByte(']')
-		return
+	} else {
+		out.WriteByte('[')
+		for i := 0; i < l; i++ {
+			if i > 0 {
+				out.WriteByte(',')
+			}
+			r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, resolver.Index(i), out)
+		}
+		out.WriteByte(']')
 	}
 
-	out.WriteByte('[')
-	for i := 0; i < l; i++ {
-		if i > 0 {
-			out.WriteByte(',')
-		}
-		r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, resolver.Index(i), out)
+	// If the list wraps a non-null type and one of the list elements
+	// resolves to null, then the entire list resolves to null
+	_, ok := typ.OfType.(*common.NonNull)
+	if ok && r.SubPathHasError(path.toSlice()) {
+		out.Reset()
+		out.WriteString("null")
 	}
-	out.WriteByte(']')
 }
 
 func unwrapNonNull(t common.Type) (common.Type, bool) {
