@@ -273,40 +273,7 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 
 	switch t := t.(type) {
 	case *common.List:
-		l := resolver.Len()
-
-		if selected.HasAsyncSel(sels) {
-			var wg sync.WaitGroup
-			wg.Add(l)
-			entryouts := make([]bytes.Buffer, l)
-			for i := 0; i < l; i++ {
-				go func(i int) {
-					defer wg.Done()
-					defer r.handlePanic(ctx)
-					r.execSelectionSet(ctx, sels, t.OfType, &pathSegment{path, i}, resolver.Index(i), &entryouts[i])
-				}(i)
-			}
-			wg.Wait()
-
-			out.WriteByte('[')
-			for i, entryout := range entryouts {
-				if i > 0 {
-					out.WriteByte(',')
-				}
-				out.Write(entryout.Bytes())
-			}
-			out.WriteByte(']')
-			return
-		}
-
-		out.WriteByte('[')
-		for i := 0; i < l; i++ {
-			if i > 0 {
-				out.WriteByte(',')
-			}
-			r.execSelectionSet(ctx, sels, t.OfType, &pathSegment{path, i}, resolver.Index(i), out)
-		}
-		out.WriteByte(']')
+		r.execList(ctx, sels, t, path, resolver, out)
 
 	case *schema.Scalar:
 		v := resolver.Interface()
@@ -328,6 +295,55 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 	default:
 		panic("unreachable")
 	}
+}
+
+func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *common.List, path *pathSegment, resolver reflect.Value, out *bytes.Buffer) {
+	// If the list wraps a non-null type and one of the list elements resolves to nil,
+	// then the entire list resolves to nil
+	defer func() {
+		if _, ok := typ.OfType.(*common.NonNull); !ok {
+			return
+		}
+		if r.SubPathHasError(path.toSlice()) {
+			out.Reset()
+			out.WriteString("null")
+		}
+	}()
+
+	l := resolver.Len()
+
+	if selected.HasAsyncSel(sels) {
+		var wg sync.WaitGroup
+		wg.Add(l)
+		entryouts := make([]bytes.Buffer, l)
+		for i := 0; i < l; i++ {
+			go func(i int) {
+				defer wg.Done()
+				defer r.handlePanic(ctx)
+				r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, resolver.Index(i), &entryouts[i])
+			}(i)
+		}
+		wg.Wait()
+
+		out.WriteByte('[')
+		for i, entryout := range entryouts {
+			if i > 0 {
+				out.WriteByte(',')
+			}
+			out.Write(entryout.Bytes())
+		}
+		out.WriteByte(']')
+		return
+	}
+
+	out.WriteByte('[')
+	for i := 0; i < l; i++ {
+		if i > 0 {
+			out.WriteByte(',')
+		}
+		r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, resolver.Index(i), out)
+	}
+	out.WriteByte(']')
 }
 
 func unwrapNonNull(t common.Type) (common.Type, bool) {
