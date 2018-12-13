@@ -111,6 +111,10 @@ func (r *findDroidsResolver) FindDroids(ctx context.Context) []*droidResolver {
 	}}}
 }
 
+func (r *findDroidsResolver) FindNilDroids(ctx context.Context) *[]*droidResolver {
+	return &[]*droidResolver{&droidResolver{}, nil, &droidResolver{}}
+}
+
 type findDroidOrHumanResolver struct{}
 
 func (r *findDroidOrHumanResolver) FindHuman(ctx context.Context) (*string, error) {
@@ -415,6 +419,38 @@ func TestErrorPropagationInLists(t *testing.T) {
 					Path:          []interface{}{"FindDroids", 1, "Name"},
 					ResolverError: err,
 					Extensions:    map[string]interface{}{"code": err.Code, "message": err.Message},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					FindNilDroids: [Droid!]
+				}
+				type Droid {
+					Name: String!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					FindNilDroids {
+						Name
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"FindNilDroids": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message: `graphql: got nil for non-null "Droid"`,
+					Path:    []interface{}{"FindNilDroids", 1},
 				},
 			},
 		},
