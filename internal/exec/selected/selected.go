@@ -28,31 +28,6 @@ func (r *Request) AddError(err *errors.QueryError) {
 	r.Mu.Unlock()
 }
 
-// pathPrefixMatch checks if `path` starts with `prefix`
-func pathPrefixMatch(path []interface{}, prefix []interface{}) bool {
-	if len(prefix) > len(path) {
-		return false
-	}
-	for i, component := range prefix {
-		if path[i] != component {
-			return false
-		}
-	}
-	return true
-}
-
-// SubPathHasError returns true if any path that is a subpath of the given path has added errors to the response
-func (r *Request) SubPathHasError(path []interface{}) bool {
-	r.Mu.Lock()
-	defer r.Mu.Unlock()
-	for _, err := range r.Errs {
-		if pathPrefixMatch(err.Path, path) {
-			return true
-		}
-	}
-	return false
-}
-
 func ApplyOperation(r *Request, s *resolvable.Schema, op *query.Operation) []Selection {
 	var obj *resolvable.Object
 	switch op.Type {

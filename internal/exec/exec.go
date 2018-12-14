@@ -62,6 +62,10 @@ type fieldToExec struct {
 	out      *bytes.Buffer
 }
 
+func resolvedToNull(b *bytes.Buffer) bool {
+	return bytes.Equal(b.Bytes(), []byte("null"))
+}
+
 func (r *Request) execSelections(ctx context.Context, sels []selected.Selection, path *pathSegment, resolver reflect.Value, out *bytes.Buffer, serially bool, isNonNull bool) {
 	async := !serially && selected.HasAsyncSel(sels)
 
@@ -87,44 +91,37 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 		}
 	}
 
-	//                              | nullable field | non-nullable field
+	//                               | nullable field | non-nullable field
 	// -------------------------------------------------------------------------------
-	// non-nullable child has error | print null     | print nothing, wait for parent to print null
-	//  no non-nullable child error | print output   | print output
+	// non-nullable child is null    | print null     | print nothing, wait for parent to print null
+	// no non-nullable child is null | print output   | print output
 
-	childHasError := false
+	propagateChildError := false
 	for _, f := range fields {
-		if _, nonNullChild := f.field.Type.(*common.NonNull); nonNullChild && r.SubPathHasError((&pathSegment{path, f.field.Alias}).toSlice()) {
-			childHasError = true
+		if _, nonNullChild := f.field.Type.(*common.NonNull); nonNullChild && resolvedToNull(f.out) {
+			propagateChildError = true
 			break
 		}
 	}
 
-	// If the child has no error, we simply write out the results
-	if !childHasError {
-		out.WriteByte('{')
-		for i, f := range fields {
-			if i > 0 {
-				out.WriteByte(',')
-			}
-			out.WriteByte('"')
-			out.WriteString(f.field.Alias)
-			out.WriteByte('"')
-			out.WriteByte(':')
-			out.Write(f.out.Bytes())
+	// If a non-nullable child is null, its parent resolves to null
+	if propagateChildError {
+		out.Write([]byte("null"))
+		return
+	}
+
+	out.WriteByte('{')
+	for i, f := range fields {
+		if i > 0 {
+			out.WriteByte(',')
 		}
-		out.WriteByte('}')
-		return
+		out.WriteByte('"')
+		out.WriteString(f.field.Alias)
+		out.WriteByte('"')
+		out.WriteByte(':')
+		out.Write(f.out.Bytes())
 	}
-
-	// We exit early in the non-null case because we want the parent to write out its response instead
-	// and an error has already been set, indicating to the parent that it should become null
-	if isNonNull {
-		return
-	}
-
-	// If there's an error and the current field is nullable, we write out a null
-	out.Write([]byte("null"))
+	out.WriteByte('}')
 }
 
 func collectFieldsToResolve(sels []selected.Selection, resolver reflect.Value, fields *[]*fieldToExec, fieldByAlias map[string]*fieldToExec) {
@@ -231,11 +228,9 @@ func execFieldSelection(ctx context.Context, r *Request, f *fieldToExec, path *p
 	}
 
 	if err != nil {
+		// If an error is thrown while resolving a field, it should be treated as though the field
+		// returned null, and an error must be added to the "errors" list in the response
 		r.AddError(err)
-		// Note that we write null here, but if this resolver is non-nullable and we've added an error,
-		// its parent ignores this output. We write the null here anyway just in case because
-		// we don't make decisions about the nullability of fields until the parent detects an error
-		// somewhere within the child's tree
 		f.out.WriteString("null")
 		return
 	}
@@ -249,7 +244,7 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 	case *schema.Object, *schema.Interface, *schema.Union:
 		// a reflect.Value of a nil interface will show up as an Invalid value
 		if resolver.Kind() == reflect.Invalid || ((resolver.Kind() == reflect.Ptr || resolver.Kind() == reflect.Interface) && resolver.IsNil()) {
-			// If a field of a non-null type resolves to nil, add an error and propagate it
+			// If a field of a non-null type resolves to null, add an error and propagate it
 			if nonNull {
 				err := errors.Errorf("graphql: got nil for non-null %q", t)
 				err.Path = path.toSlice()
@@ -299,11 +294,11 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 
 func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *common.List, path *pathSegment, resolver reflect.Value, out *bytes.Buffer) {
 	l := resolver.Len()
+	entryouts := make([]bytes.Buffer, l)
 
 	if selected.HasAsyncSel(sels) {
 		var wg sync.WaitGroup
 		wg.Add(l)
-		entryouts := make([]bytes.Buffer, l)
 		for i := 0; i < l; i++ {
 			go func(i int) {
 				defer wg.Done()
@@ -312,33 +307,30 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 			}(i)
 		}
 		wg.Wait()
-
-		out.WriteByte('[')
-		for i, entryout := range entryouts {
-			if i > 0 {
-				out.WriteByte(',')
-			}
-			out.Write(entryout.Bytes())
-		}
-		out.WriteByte(']')
 	} else {
-		out.WriteByte('[')
 		for i := 0; i < l; i++ {
-			if i > 0 {
-				out.WriteByte(',')
-			}
-			r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, resolver.Index(i), out)
+			r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, resolver.Index(i), &entryouts[i])
 		}
-		out.WriteByte(']')
 	}
 
-	// If the list wraps a non-null type and one of the list elements
-	// resolves to null, then the entire list resolves to null
-	_, ok := typ.OfType.(*common.NonNull)
-	if ok && r.SubPathHasError(path.toSlice()) {
-		out.Reset()
-		out.WriteString("null")
+	_, listOfNonNull := typ.OfType.(*common.NonNull)
+
+	out.WriteByte('[')
+	for i, entryout := range entryouts {
+		// If the list wraps a non-null type and one of the list elements
+		// resolves to null, then the entire list resolves to null
+		if listOfNonNull && resolvedToNull(&entryout) {
+			out.Reset()
+			out.WriteString("null")
+			return
+		}
+
+		if i > 0 {
+			out.WriteByte(',')
+		}
+		out.Write(entryout.Bytes())
 	}
+	out.WriteByte(']')
 }
 
 func unwrapNonNull(t common.Type) (common.Type, bool) {

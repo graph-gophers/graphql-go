@@ -123,7 +123,7 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 						subR.execSelectionSet(subCtx, f.sels, f.field.Type, &pathSegment{nil, f.field.Alias}, resp, &buf)
 
 						propagateChildError := false
-						if _, nonNullChild := f.field.Type.(*common.NonNull); nonNullChild && subR.SubPathHasError((&pathSegment{nil, f.field.Alias}).toSlice()) {
+						if _, nonNullChild := f.field.Type.(*common.NonNull); nonNullChild && resolvedToNull(&buf) {
 							propagateChildError = true
 						}
 
