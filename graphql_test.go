@@ -149,9 +149,9 @@ func (d *droidResolver) Name() (string, error) {
 
 func (d *droidResolver) Quotes() ([]string, error) {
 	switch d.name {
-	case "R2-D2":
+	case r2d2.name:
 		return nil, quoteError
-	case "C-3PO":
+	case c3po.name:
 		return []string{"We're doomed!", "R2-D2, where are you?"}, nil
 	}
 	return nil, nil
@@ -2332,34 +2332,24 @@ func TestComposedFragments(t *testing.T) {
 }
 
 var (
-	exampleErrorString = "This is an error"
-	exampleError       = fmt.Errorf(exampleErrorString)
+	exampleError = fmt.Errorf("This is an error")
 
 	nilChildErrorString = `graphql: got nil for non-null "Child"`
 )
 
-type erroringResolver1 struct{}
+type childResolver struct{}
 
-func (r *erroringResolver1) TriggerError() (string, error) {
+func (r *childResolver) TriggerError() (string, error) {
 	return "This will never be returned to the client", exampleError
 }
-func (r *erroringResolver1) NoError() string {
+func (r *childResolver) NoError() string {
 	return "no error"
 }
-func (r *erroringResolver1) Child() *erroringResolver1 {
-	return &erroringResolver1{}
+func (r *childResolver) Child() *childResolver {
+	return &childResolver{}
 }
-func (r *erroringResolver1) NilChild() *erroringResolver1 {
+func (r *childResolver) NilChild() *childResolver {
 	return nil
-}
-
-type nonFailingRoot struct{}
-
-func (r *nonFailingRoot) Child() *erroringResolver1 {
-	return &erroringResolver1{}
-}
-func (r *nonFailingRoot) NoError() string {
-	return "no error"
 }
 
 func TestErrorPropagation(t *testing.T) {
@@ -2374,7 +2364,7 @@ func TestErrorPropagation(t *testing.T) {
 					noError: String!
 					triggerError: String!
 				}
-			`, &erroringResolver1{}),
+			`, &childResolver{}),
 			Query: `
 				{
 					noError
@@ -2386,7 +2376,7 @@ func TestErrorPropagation(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:       exampleErrorString,
+					Message:       exampleError.Error(),
 					ResolverError: exampleError,
 					Path:          []interface{}{"triggerError"},
 				},
@@ -2407,7 +2397,7 @@ func TestErrorPropagation(t *testing.T) {
 					noError: String!
 					triggerError: String!
 				}
-			`, &nonFailingRoot{}),
+			`, &childResolver{}),
 			Query: `
 				{
 					noError
@@ -2425,7 +2415,7 @@ func TestErrorPropagation(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:       exampleErrorString,
+					Message:       exampleError.Error(),
 					ResolverError: exampleError,
 					Path:          []interface{}{"child", "triggerError"},
 				},
@@ -2447,7 +2437,7 @@ func TestErrorPropagation(t *testing.T) {
 					triggerError: String!
 					child: Child!
 				}
-			`, &nonFailingRoot{}),
+			`, &childResolver{}),
 			Query: `
 				{
 					noError
@@ -2468,7 +2458,7 @@ func TestErrorPropagation(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:       exampleErrorString,
+					Message:       exampleError.Error(),
 					ResolverError: exampleError,
 					Path:          []interface{}{"child", "child", "triggerError"},
 				},
@@ -2490,7 +2480,7 @@ func TestErrorPropagation(t *testing.T) {
 					triggerError: String!
 					child: Child
 				}
-			`, &nonFailingRoot{}),
+			`, &childResolver{}),
 			Query: `
 				{
 					noError
@@ -2514,7 +2504,7 @@ func TestErrorPropagation(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:       exampleErrorString,
+					Message:       exampleError.Error(),
 					ResolverError: exampleError,
 					Path:          []interface{}{"child", "child", "triggerError"},
 				},
@@ -2535,7 +2525,7 @@ func TestErrorPropagation(t *testing.T) {
 					noError: String!
 					nilChild: Child!
 				}
-			`, &nonFailingRoot{}),
+			`, &childResolver{}),
 			Query: `
 				{
 					noError
@@ -2571,7 +2561,7 @@ func TestErrorPropagation(t *testing.T) {
 					noError: String!
 					nilChild: Child!
 				}
-			`, &nonFailingRoot{}),
+			`, &childResolver{}),
 			Query: `
 				{
 					noError
@@ -2611,7 +2601,7 @@ func TestErrorPropagation(t *testing.T) {
 					child: Child
 					nilChild: Child!
 				}
-			`, &nonFailingRoot{}),
+			`, &childResolver{}),
 			Query: `
 				{
 					child {
@@ -2639,7 +2629,7 @@ func TestErrorPropagation(t *testing.T) {
 					Path:    []interface{}{"child", "child", "child", "nilChild"},
 				},
 				{
-					Message:       exampleErrorString,
+					Message:       exampleError.Error(),
 					ResolverError: exampleError,
 					Path:          []interface{}{"child", "child", "triggerError"},
 				},
@@ -2660,7 +2650,7 @@ func TestErrorPropagation(t *testing.T) {
 					child: Child!
 					nilChild: Child!
 				}
-			`, &nonFailingRoot{}),
+			`, &childResolver{}),
 			Query: `
 				{
 					child {
