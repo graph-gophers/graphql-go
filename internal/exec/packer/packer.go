@@ -354,8 +354,21 @@ func unmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
 		if reflect.TypeOf(input).ConvertibleTo(typ) {
 			return reflect.ValueOf(input).Convert(typ).Interface(), nil
 		}
+
+	case reflect.Ptr:
+		value := reflect.ValueOf(input)
+		if value.CanAddr() {
+			return value.Addr().Interface(), nil
+		}
+		newValuePtr := reflect.New(typ.Elem())
+		newValue := reflect.Indirect(newValuePtr)
+		if newValue.CanSet() {
+			newValue.Set(value)
+			return newValuePtr.Interface(), nil
+		}
 	}
 
+	fmt.Println(typ, input)
 	return nil, fmt.Errorf("incompatible type")
 }
 
