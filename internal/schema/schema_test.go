@@ -89,3 +89,25 @@ func TestParse(t *testing.T) {
 		})
 	}
 }
+
+func TestInvalidInterfaceImpl(t *testing.T) {
+	var tests = []parseTestCase{{
+		description: "Parses type Welcome that implements interface Greeting without providing required fields",
+		sdl:         "interface Greeting { message: String! } type Welcome implements Greeting {}",
+		err:         errors.Errorf(`interface "Greeting" expects field "message" but "Welcome" does not provide it`),
+	}}
+
+	setup := func(t *testing.T) *schema.Schema {
+		t.Helper()
+		return schema.New()
+	}
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			schema := setup(t)
+			err := schema.Parse(test.sdl, false)
+			if err == nil || err.Error() != test.err.Error() {
+				t.Fatal(err)
+			}
+		})
+	}
+}
