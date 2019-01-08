@@ -50,10 +50,6 @@ func TestParseObjectDef(t *testing.T) {
 		definition:  "Hello implements World { field: String }",
 		expected:    &Object{Name: "Hello", interfaceNames: []string{"World"}},
 	}, {
-		description: "Parses type Welcome that implements interface Greeting without providing required fields",
-		definition:  "Hello implements World { }",
-		err:         errors.Errorf(`interface "World" expects field "field" but "Hello" does not provide it`),
-	}, {
 		description: "Parses type inheriting multiple interfaces",
 		definition:  "Hello implements Wo & rld { field: String }",
 		expected:    &Object{Name: "Hello", interfaceNames: []string{"Wo", "rld"}},
