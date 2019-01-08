@@ -291,6 +291,11 @@ func (s *Schema) Parse(schemaString string, useStringDescriptions bool) error {
 			if !ok {
 				return errors.Errorf("type %q is not an interface", intfName)
 			}
+			for _, f := range intf.Fields.Names() {
+				if obj.Fields.Get(f) == nil {
+					return errors.Errorf("interface %q expects field %q but %q does not provide it", intfName, f, obj.Name)
+				}
+			}
 			obj.Interfaces[i] = intf
 			intf.PossibleTypes = append(intf.PossibleTypes, obj)
 		}
