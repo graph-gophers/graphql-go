@@ -246,8 +246,8 @@ func New() *Schema {
 }
 
 // Parse the schema string.
-func (s *Schema) Parse(schemaString string) error {
-	l := common.NewLexer(schemaString)
+func (s *Schema) Parse(schemaString string, useStringDescriptions bool) error {
+	l := common.NewLexer(schemaString, useStringDescriptions)
 
 	err := l.CatchSyntaxError(func() { parseSchema(s, l) })
 	if err != nil {
@@ -290,6 +290,11 @@ func (s *Schema) Parse(schemaString string) error {
 			intf, ok := t.(*Interface)
 			if !ok {
 				return errors.Errorf("type %q is not an interface", intfName)
+			}
+			for _, f := range intf.Fields.Names() {
+				if obj.Fields.Get(f) == nil {
+					return errors.Errorf("interface %q expects field %q but %q does not provide it", intfName, f, obj.Name)
+				}
 			}
 			obj.Interfaces[i] = intf
 			intf.PossibleTypes = append(intf.PossibleTypes, obj)
@@ -389,7 +394,7 @@ func resolveInputObject(s *Schema, values common.InputValueList) error {
 }
 
 func parseSchema(s *Schema, l *common.Lexer) {
-	l.Consume()
+	l.ConsumeWhitespace()
 
 	for l.Peek() != scanner.EOF {
 		desc := l.DescComment()

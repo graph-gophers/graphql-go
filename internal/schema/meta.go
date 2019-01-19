@@ -5,7 +5,7 @@ var Meta *Schema
 func init() {
 	Meta = &Schema{} // bootstrap
 	Meta = New()
-	if err := Meta.Parse(metaSrc); err != nil {
+	if err := Meta.Parse(metaSrc, false); err != nil {
 		panic(err)
 	}
 }
@@ -167,7 +167,7 @@ var metaSrc = `
 		inputFields: [__InputValue!]
 		ofType: __Type
 	}
-	
+
 	# An enum describing what kind of type a given ` + "`" + `__Type` + "`" + ` is.
 	enum __TypeKind {
 		# Indicates this type is a scalar.

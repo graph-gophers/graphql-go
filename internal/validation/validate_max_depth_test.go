@@ -105,7 +105,7 @@ func (tc maxDepthTestCase) Run(t *testing.T, s *schema.Schema) {
 func TestMaxDepth(t *testing.T) {
 	s := schema.New()
 
-	err := s.Parse(simpleSchema)
+	err := s.Parse(simpleSchema, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestMaxDepth(t *testing.T) {
 func TestMaxDepthInlineFragments(t *testing.T) {
 	s := schema.New()
 
-	err := s.Parse(interfaceSimple)
+	err := s.Parse(interfaceSimple, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func TestMaxDepthInlineFragments(t *testing.T) {
 func TestMaxDepthFragmentSpreads(t *testing.T) {
 	s := schema.New()
 
-	err := s.Parse(interfaceSimple)
+	err := s.Parse(interfaceSimple, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,7 +317,7 @@ func TestMaxDepthFragmentSpreads(t *testing.T) {
 func TestMaxDepthUnknownFragmentSpreads(t *testing.T) {
 	s := schema.New()
 
-	err := s.Parse(interfaceSimple)
+	err := s.Parse(interfaceSimple, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -352,7 +352,7 @@ func TestMaxDepthUnknownFragmentSpreads(t *testing.T) {
 func TestMaxDepthValidation(t *testing.T) {
 	s := schema.New()
 
-	err := s.Parse(interfaceSimple)
+	err := s.Parse(interfaceSimple, false)
 	if err != nil {
 		t.Fatal(err)
 	}
