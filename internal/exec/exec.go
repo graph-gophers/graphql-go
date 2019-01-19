@@ -277,16 +277,7 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 
 	case *schema.Scalar:
 		v := resolver.Interface()
-		var (
-			data []byte
-			err  error
-		)
-		if m, ok := v.(json.Marshaler); ok {
-			data, err = m.MarshalJSON()
-		} else {
-			data, err = json.Marshal(v)
-		}
-
+		data, err := json.Marshal(v)
 		if err != nil {
 			panic(errors.Errorf("could not marshal %v: %s", v, err))
 		}
