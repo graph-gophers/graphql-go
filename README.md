@@ -65,7 +65,17 @@ $ curl -XPOST -d '{"query": "{ hello }"}' localhost:8080/query
 
 ### Resolvers
 
-A resolver must have one method for each field of the GraphQL type it resolves. The method name has to be [exported](https://golang.org/ref/spec#Exported_identifiers) and match the field's name in a non-case-sensitive way.
+A resolver must have one method or field for each field of the GraphQL type it resolves. The method or field name has to be [exported](https://golang.org/ref/spec#Exported_identifiers) and match the schema's field's name in a non-case-sensitive way.
+You can use struct fields as resolvers by using `SchemaOpt: UseFieldResolvers()`. For example,
+```
+opts := []graphql.SchemaOpt{graphql.UseFieldResolvers()}
+schema := graphql.MustParseSchema(s, &query{}, opts...)
+```   
+
+When using `UseFieldResolvers` schema option, a struct field will be used *only* when:
+- there is no method for a struct field
+- a struct field does not implement an interface method
+- a struct field does not have arguments
 
 The method has up to two arguments:
 
