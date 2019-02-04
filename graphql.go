@@ -83,7 +83,7 @@ func UseStringDescriptions() SchemaOpt {
 	}
 }
 
-// Specifies whether to use struct field resolvers
+// UseFieldResolvers specifies whether to use struct field resolvers
 func UseFieldResolvers() SchemaOpt {
 	return func(s *Schema) {
 		s.schema.UseFieldResolvers = true

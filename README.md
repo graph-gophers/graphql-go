@@ -72,10 +72,10 @@ opts := []graphql.SchemaOpt{graphql.UseFieldResolvers()}
 schema := graphql.MustParseSchema(s, &query{}, opts...)
 ```   
 
-When using `UseFieldResolvers`, a field will be used *only* when:
-- there is no method
-- it does not implement an interface
-- it does not have arguments 
+When using `UseFieldResolvers` schema option, a struct field will be used *only* when:
+- there is no method for a struct field
+- a struct field does not implement an interface method
+- a struct field does not have arguments
 
 The method has up to two arguments:
 

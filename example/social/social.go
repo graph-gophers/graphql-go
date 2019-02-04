@@ -175,15 +175,15 @@ func init() {
 type Resolver struct{}
 
 func (r *Resolver) Admin(ctx context.Context, args struct {
-	Id   string
+	ID   string
 	Role string
 }) (admin, error) {
-	if usr, ok := usersMap[args.Id]; ok {
+	if usr, ok := usersMap[args.ID]; ok {
 		if usr.RoleField == args.Role {
 			return *usr, nil
 		}
 	}
-	err := fmt.Errorf("user with id=%s and role=%s does not exist", args.Id, args.Role)
+	err := fmt.Errorf("user with id=%s and role=%s does not exist", args.ID, args.Role)
 	return user{}, err
 }
 

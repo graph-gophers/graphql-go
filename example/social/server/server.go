@@ -10,7 +10,6 @@ import (
 )
 
 func main() {
-
 	opts := []graphql.SchemaOpt{graphql.UseFieldResolvers(), graphql.MaxParallelism(20)}
 	schema := graphql.MustParseSchema(social.Schema, &social.Resolver{}, opts...)
 
