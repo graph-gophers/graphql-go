@@ -68,6 +68,7 @@ type Schema struct {
 	validationTracer      trace.ValidationTracer
 	logger                log.Logger
 	useStringDescriptions bool
+	disableIntrospection  bool
 }
 
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
@@ -122,6 +123,13 @@ func ValidationTracer(tracer trace.ValidationTracer) SchemaOpt {
 func Logger(logger log.Logger) SchemaOpt {
 	return func(s *Schema) {
 		s.logger = logger
+	}
+}
+
+// DisableIntrospection disables introspection queries.
+func DisableIntrospection() SchemaOpt {
+	return func(s *Schema) {
+		s.disableIntrospection = true
 	}
 }
 
@@ -184,9 +192,10 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 
 	r := &exec.Request{
 		Request: selected.Request{
-			Doc:    doc,
-			Vars:   variables,
-			Schema: s.schema,
+			Doc:                  doc,
+			Vars:                 variables,
+			Schema:               s.schema,
+			DisableIntrospection: s.disableIntrospection,
 		},
 		Limiter: make(chan struct{}, s.maxParallelism),
 		Tracer:  s.tracer,

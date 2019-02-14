@@ -1905,6 +1905,164 @@ func TestIntrospection(t *testing.T) {
 	})
 }
 
+var starwarsSchemaNoIntrospection = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{}, []graphql.SchemaOpt{graphql.DisableIntrospection()}...)
+
+func TestIntrospectionDisableIntrospection(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: starwarsSchemaNoIntrospection,
+			Query: `
+				{
+					__schema {
+						types {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+				}
+			`,
+		},
+
+		{
+			Schema: starwarsSchemaNoIntrospection,
+			Query: `
+				{
+					__schema {
+						queryType {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+				}
+			`,
+		},
+
+		{
+			Schema: starwarsSchemaNoIntrospection,
+			Query: `
+				{
+					a: __type(name: "Droid") {
+						name
+						kind
+						interfaces {
+							name
+						}
+						possibleTypes {
+							name
+						}
+					},
+					b: __type(name: "Character") {
+						name
+						kind
+						interfaces {
+							name
+						}
+						possibleTypes {
+							name
+						}
+					}
+					c: __type(name: "SearchResult") {
+						name
+						kind
+						interfaces {
+							name
+						}
+						possibleTypes {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+				}
+			`,
+		},
+
+		{
+			Schema: starwarsSchemaNoIntrospection,
+			Query: `
+				{
+					__type(name: "Droid") {
+						name
+						fields {
+							name
+							args {
+								name
+								type {
+									name
+								}
+								defaultValue
+							}
+							type {
+								name
+								kind
+							}
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+				}
+			`,
+		},
+
+		{
+			Schema: starwarsSchemaNoIntrospection,
+			Query: `
+				{
+					__type(name: "Episode") {
+						enumValues {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+				}
+			`,
+		},
+
+		{
+			Schema: starwarsSchemaNoIntrospection,
+			Query: `
+				{
+					__schema {
+						directives {
+							name
+							description
+							locations
+							args {
+								name
+								description
+								type {
+									kind
+									ofType {
+										kind
+										name
+									}
+								}
+							}
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+				}
+			`,
+		},
+	})
+}
+
 func TestMutationOrder(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{

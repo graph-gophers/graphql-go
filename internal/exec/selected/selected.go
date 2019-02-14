@@ -15,11 +15,12 @@ import (
 )
 
 type Request struct {
-	Schema *schema.Schema
-	Doc    *query.Document
-	Vars   map[string]interface{}
-	Mu     sync.Mutex
-	Errs   []*errors.QueryError
+	Schema               *schema.Schema
+	Doc                  *query.Document
+	Vars                 map[string]interface{}
+	Mu                   sync.Mutex
+	Errs                 []*errors.QueryError
+	DisableIntrospection bool
 }
 
 func (r *Request) AddError(err *errors.QueryError) {
@@ -80,40 +81,46 @@ func applySelectionSet(r *Request, e *resolvable.Object, sels []query.Selection)
 
 			switch field.Name.Name {
 			case "__typename":
-				flattenedSels = append(flattenedSels, &TypenameField{
-					Object: *e,
-					Alias:  field.Alias.Name,
-				})
+				if !r.DisableIntrospection {
+					flattenedSels = append(flattenedSels, &TypenameField{
+						Object: *e,
+						Alias:  field.Alias.Name,
+					})
+				}
 
 			case "__schema":
-				flattenedSels = append(flattenedSels, &SchemaField{
-					Field:       resolvable.MetaFieldSchema,
-					Alias:       field.Alias.Name,
-					Sels:        applySelectionSet(r, resolvable.MetaSchema, field.Selections),
-					Async:       true,
-					FixedResult: reflect.ValueOf(introspection.WrapSchema(r.Schema)),
-				})
+				if !r.DisableIntrospection {
+					flattenedSels = append(flattenedSels, &SchemaField{
+						Field:       resolvable.MetaFieldSchema,
+						Alias:       field.Alias.Name,
+						Sels:        applySelectionSet(r, resolvable.MetaSchema, field.Selections),
+						Async:       true,
+						FixedResult: reflect.ValueOf(introspection.WrapSchema(r.Schema)),
+					})
+				}
 
 			case "__type":
-				p := packer.ValuePacker{ValueType: reflect.TypeOf("")}
-				v, err := p.Pack(field.Arguments.MustGet("name").Value(r.Vars))
-				if err != nil {
-					r.AddError(errors.Errorf("%s", err))
-					return nil
-				}
+				if !r.DisableIntrospection {
+					p := packer.ValuePacker{ValueType: reflect.TypeOf("")}
+					v, err := p.Pack(field.Arguments.MustGet("name").Value(r.Vars))
+					if err != nil {
+						r.AddError(errors.Errorf("%s", err))
+						return nil
+					}
 
-				t, ok := r.Schema.Types[v.String()]
-				if !ok {
-					return nil
-				}
+					t, ok := r.Schema.Types[v.String()]
+					if !ok {
+						return nil
+					}
 
-				flattenedSels = append(flattenedSels, &SchemaField{
-					Field:       resolvable.MetaFieldType,
-					Alias:       field.Alias.Name,
-					Sels:        applySelectionSet(r, resolvable.MetaType, field.Selections),
-					Async:       true,
-					FixedResult: reflect.ValueOf(introspection.WrapType(t)),
-				})
+					flattenedSels = append(flattenedSels, &SchemaField{
+						Field:       resolvable.MetaFieldType,
+						Alias:       field.Alias.Name,
+						Sels:        applySelectionSet(r, resolvable.MetaType, field.Selections),
+						Async:       true,
+						FixedResult: reflect.ValueOf(introspection.WrapType(t)),
+					})
+				}
 
 			default:
 				fe := e.Fields[field.Name.Name]
