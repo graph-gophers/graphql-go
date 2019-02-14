@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"github.com/graph-gophers/graphql-go/internal/exec/selected"
 	"github.com/graph-gophers/graphql-go/internal/query"
@@ -55,7 +56,10 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 	}()
 
 	if err != nil {
-		return sendAndReturnClosed(&Response{Errors: []*errors.QueryError{err}})
+		if _, nonNullChild := f.field.Type.(*common.NonNull); nonNullChild {
+			return sendAndReturnClosed(&Response{Errors: []*errors.QueryError{err}})
+		}
+		return sendAndReturnClosed(&Response{Data: []byte(fmt.Sprintf(`{"%s":null}`, f.field.Alias)), Errors: []*errors.QueryError{err}})
 	}
 
 	if ctxErr := ctx.Err(); ctxErr != nil {
@@ -115,9 +119,19 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 					func() {
 						defer subR.handlePanic(subCtx)
 
-						out.WriteString(fmt.Sprintf(`{"%s":`, f.field.Alias))
-						subR.execSelectionSet(subCtx, f.sels, f.field.Type, &pathSegment{nil, f.field.Alias}, resp, &out)
-						out.WriteString(`}`)
+						var buf bytes.Buffer
+						subR.execSelectionSet(subCtx, f.sels, f.field.Type, &pathSegment{nil, f.field.Alias}, resp, &buf)
+
+						propagateChildError := false
+						if _, nonNullChild := f.field.Type.(*common.NonNull); nonNullChild && resolvedToNull(&buf) {
+							propagateChildError = true
+						}
+
+						if !propagateChildError {
+							out.WriteString(fmt.Sprintf(`{"%s":`, f.field.Alias))
+							out.Write(buf.Bytes())
+							out.WriteString(`}`)
+						}
 					}()
 
 					if err := subCtx.Err(); err != nil {

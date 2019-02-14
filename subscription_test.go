@@ -14,6 +14,7 @@ import (
 type rootResolver struct {
 	*helloResolver
 	*helloSaidResolver
+	*helloSaidNullableResolver
 }
 
 type helloResolver struct{}
@@ -68,6 +69,50 @@ func closedUpstream(rr ...*helloSaidEventResolver) <-chan *helloSaidEventResolve
 	return c
 }
 
+type helloSaidNullableResolver struct {
+	err      error
+	upstream <-chan *helloSaidNullableEventResolver
+}
+
+type helloSaidNullableEventResolver struct {
+	msg *string
+	err error
+}
+
+func (r *helloSaidNullableResolver) HelloSaidNullable(ctx context.Context) (chan *helloSaidNullableEventResolver, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+
+	c := make(chan *helloSaidNullableEventResolver)
+	go func() {
+		for r := range r.upstream {
+			select {
+			case <-ctx.Done():
+				close(c)
+				return
+			case c <- r:
+			}
+		}
+		close(c)
+	}()
+
+	return c, nil
+}
+
+func (r *helloSaidNullableEventResolver) Msg() (*string, error) {
+	return r.msg, r.err
+}
+
+func closedUpstreamNullable(rr ...*helloSaidNullableEventResolver) <-chan *helloSaidNullableEventResolver {
+	c := make(chan *helloSaidNullableEventResolver, len(rr))
+	for _, r := range rr {
+		c <- r
+	}
+	close(c)
+	return c
+}
+
 func TestSchemaSubscribe(t *testing.T) {
 	gqltesting.RunSubscribes(t, []*gqltesting.TestSubscription{
 		{
@@ -100,11 +145,7 @@ func TestSchemaSubscribe(t *testing.T) {
 				},
 				{
 					Data: json.RawMessage(`
-						{
-							"helloSaid": {
-								"msg":null
-							}
-						}
+						null
 					`),
 					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", resolverErr)},
 				},
@@ -161,6 +202,61 @@ func TestSchemaSubscribe(t *testing.T) {
 			`,
 			ExpectedResults: []gqltesting.TestResponse{
 				{
+					Data: json.RawMessage(`
+						null
+					`),
+					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", resolverErr)},
+				},
+			},
+		},
+		{
+			Name: "subscription_resolver_can_error_optional_msg",
+			Schema: graphql.MustParseSchema(schema, &rootResolver{
+				helloSaidNullableResolver: &helloSaidNullableResolver{
+					upstream: closedUpstreamNullable(
+						&helloSaidNullableEventResolver{err: resolverErr},
+					),
+				},
+			}),
+			Query: `
+				subscription onHelloSaid {
+					helloSaidNullable {
+						msg
+					}
+				}
+			`,
+			ExpectedResults: []gqltesting.TestResponse{
+				{
+					Data: json.RawMessage(`
+						{
+							"helloSaidNullable": {
+								"msg": null
+							}
+						}
+					`),
+					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", resolverErr)},
+				},
+			},
+		},
+		{
+			Name: "subscription_resolver_can_error_optional_event",
+			Schema: graphql.MustParseSchema(schema, &rootResolver{
+				helloSaidNullableResolver: &helloSaidNullableResolver{err: resolverErr},
+			}),
+			Query: `
+				subscription onHelloSaid {
+					helloSaidNullable {
+						msg
+					}
+				}
+			`,
+			ExpectedResults: []gqltesting.TestResponse{
+				{
+					Data: json.RawMessage(`
+						{
+							"helloSaidNullable": null
+						}
+					`),
 					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", resolverErr)},
 				},
 			},
@@ -188,10 +284,15 @@ const schema = `
 
 	type Subscription {
 		helloSaid: HelloSaidEvent!
+		helloSaidNullable: HelloSaidEventNullable
 	}
 
 	type HelloSaidEvent {
 		msg: String!
+	}
+
+	type HelloSaidEventNullable {
+		msg: String
 	}
 
 	type Query {
