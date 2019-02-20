@@ -35,6 +35,8 @@ func ApplyOperation(r *Request, s *resolvable.Schema, op *query.Operation) []Sel
 		obj = s.Query.(*resolvable.Object)
 	case query.Mutation:
 		obj = s.Mutation.(*resolvable.Object)
+	case query.Subscription:
+		obj = s.Subscription.(*resolvable.Object)
 	}
 	return applySelectionSet(r, obj, op.Selections)
 }

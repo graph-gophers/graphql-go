@@ -2,10 +2,13 @@ package graphql_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/graph-gophers/graphql-go"
+	gqlerrors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/example/starwars"
 	"github.com/graph-gophers/graphql-go/gqltesting"
 )
@@ -61,7 +64,104 @@ func (r *timeResolver) AddHour(args struct{ Time graphql.Time }) graphql.Time {
 	return graphql.Time{Time: args.Time.Add(time.Hour)}
 }
 
+type echoResolver struct{}
+
+func (r *echoResolver) Echo(args struct{ Value *string }) *string {
+	return args.Value
+}
+
 var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
+
+type ResolverError interface {
+	error
+	Extensions() map[string]interface{}
+}
+
+type resolverNotFoundError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (e resolverNotFoundError) Error() string {
+	return fmt.Sprintf("Error [%s]: %s", e.Code, e.Message)
+}
+
+func (e resolverNotFoundError) Extensions() map[string]interface{} {
+	return map[string]interface{}{
+		"code":    e.Code,
+		"message": e.Message,
+	}
+}
+
+type findDroidResolver struct{}
+
+func (r *findDroidResolver) FindDroid(ctx context.Context) (string, error) {
+	return "", resolverNotFoundError{
+		Code:    "NotFound",
+		Message: "This is not the droid you are looking for",
+	}
+}
+
+var (
+	droidNotFoundError = resolverNotFoundError{
+		Code:    "NotFound",
+		Message: "This is not the droid you are looking for",
+	}
+	quoteError = errors.New("Bleep bloop")
+
+	r2d2          = &droidResolver{name: "R2-D2"}
+	c3po          = &droidResolver{name: "C-3PO"}
+	notFoundDroid = &droidResolver{err: droidNotFoundError}
+)
+
+type findDroidsResolver struct{}
+
+func (r *findDroidsResolver) FindDroids(ctx context.Context) []*droidResolver {
+	return []*droidResolver{r2d2, notFoundDroid, c3po}
+}
+
+func (r *findDroidsResolver) FindNilDroids(ctx context.Context) *[]*droidResolver {
+	return &[]*droidResolver{r2d2, nil, c3po}
+}
+
+type findDroidOrHumanResolver struct{}
+
+func (r *findDroidOrHumanResolver) FindHuman(ctx context.Context) (*string, error) {
+	human := "human"
+	return &human, nil
+}
+
+func (r *findDroidOrHumanResolver) FindDroid(ctx context.Context) (*droidResolver, error) {
+	return nil, notFoundDroid.err
+}
+
+type droidResolver struct {
+	name string
+	err  error
+}
+
+func (d *droidResolver) Name() (string, error) {
+	if d.err != nil {
+		return "", d.err
+	}
+	return d.name, nil
+}
+
+func (d *droidResolver) Quotes() ([]string, error) {
+	switch d.name {
+	case r2d2.name:
+		return nil, quoteError
+	case c3po.name:
+		return []string{"We're doomed!", "R2-D2, where are you?"}, nil
+	}
+	return nil, nil
+}
+
+type discussPlanResolver struct{}
+
+func (r *discussPlanResolver) DismissVader(ctx context.Context) (string, error) {
+	return "", errors.New("I find your lack of faith disturbing")
+}
 
 func TestHelloWorld(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
@@ -241,6 +341,364 @@ func TestBasic(t *testing.T) {
 					}
 				}
 			`,
+		},
+	})
+}
+
+type testNilInterfaceResolver struct{}
+
+func (r *testNilInterfaceResolver) A() interface{ Z() int32 } {
+	return nil
+}
+
+func (r *testNilInterfaceResolver) B() (interface{ Z() int32 }, error) {
+	return nil, errors.New("x")
+}
+
+func (r *testNilInterfaceResolver) C() (interface{ Z() int32 }, error) {
+	return nil, nil
+}
+
+func TestNilInterface(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					a: T
+					b: T
+					c: T
+				}
+
+				type T {
+					z: Int!
+				}
+			`, &testNilInterfaceResolver{}),
+			Query: `
+				{
+					a { z }
+					b { z }
+					c { z }
+				}
+			`,
+			ExpectedResult: `
+				{
+					"a": null,
+					"b": null,
+					"c": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       "x",
+					Path:          []interface{}{"b"},
+					ResolverError: errors.New("x"),
+				},
+			},
+		},
+	})
+}
+
+func TestErrorPropagationInLists(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					findDroids: [Droid!]!
+				}
+				type Droid {
+					name: String!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					findDroids {
+						name
+					}
+				}
+			`,
+			ExpectedResult: `
+				null
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       droidNotFoundError.Error(),
+					Path:          []interface{}{"findDroids", 1, "name"},
+					ResolverError: droidNotFoundError,
+					Extensions:    map[string]interface{}{"code": droidNotFoundError.Code, "message": droidNotFoundError.Message},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					findDroids: [Droid]!
+				}
+				type Droid {
+					name: String!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					findDroids {
+						name
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"findDroids": [
+						{
+							"name": "R2-D2"
+						},
+						null,
+						{
+							"name": "C-3PO"
+						}
+					]
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       droidNotFoundError.Error(),
+					Path:          []interface{}{"findDroids", 1, "name"},
+					ResolverError: droidNotFoundError,
+					Extensions:    map[string]interface{}{"code": droidNotFoundError.Code, "message": droidNotFoundError.Message},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					findNilDroids: [Droid!]
+				}
+				type Droid {
+					name: String!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					findNilDroids {
+						name
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"findNilDroids": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message: `graphql: got nil for non-null "Droid"`,
+					Path:    []interface{}{"findNilDroids", 1},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					findNilDroids: [Droid]
+				}
+				type Droid {
+					name: String!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					findNilDroids {
+						name
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"findNilDroids": [
+						{
+							"name": "R2-D2"
+						},
+						null,
+						{
+							"name": "C-3PO"
+						}
+					]
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					findDroids: [Droid]!
+				}
+				type Droid {
+					quotes: [String!]!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					findDroids {
+						quotes
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"findDroids": [
+						null,
+						{
+							"quotes": []
+						},
+						{
+							"quotes": [
+								"We're doomed!",
+								"R2-D2, where are you?"
+							]
+						}
+					]
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       quoteError.Error(),
+					ResolverError: quoteError,
+					Path:          []interface{}{"findDroids", 0, "quotes"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					findNilDroids: [Droid!]
+				}
+				type Droid {
+					name: String!
+					quotes: [String!]!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					findNilDroids {
+						name
+						quotes
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"findNilDroids": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       quoteError.Error(),
+					ResolverError: quoteError,
+					Path:          []interface{}{"findNilDroids", 0, "quotes"},
+				},
+				&gqlerrors.QueryError{
+					Message: `graphql: got nil for non-null "Droid"`,
+					Path:    []interface{}{"findNilDroids", 1},
+				},
+			},
+		},
+	})
+}
+
+func TestErrorWithExtensions(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					FindDroid: Droid!
+					FindHuman: String
+				}
+				type Droid {
+					Name: String!
+				}
+			`, &findDroidOrHumanResolver{}),
+			Query: `
+				{
+					FindDroid {
+						Name
+					}
+					FindHuman
+				}
+			`,
+			ExpectedResult: `
+				null
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       droidNotFoundError.Error(),
+					Path:          []interface{}{"FindDroid"},
+					ResolverError: droidNotFoundError,
+					Extensions:    map[string]interface{}{"code": droidNotFoundError.Code, "message": droidNotFoundError.Message},
+				},
+			},
+		},
+	})
+}
+
+func TestErrorWithNoExtensions(t *testing.T) {
+	err := errors.New("I find your lack of faith disturbing")
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					DismissVader: String!
+				}
+			`, &discussPlanResolver{}),
+			Query: `
+				{
+					DismissVader
+				}
+			`,
+			ExpectedResult: `
+				null
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       err.Error(),
+					Path:          []interface{}{"DismissVader"},
+					ResolverError: err,
+					Extensions:    nil,
+				},
+			},
 		},
 	})
 }
@@ -435,6 +893,28 @@ func TestVariables(t *testing.T) {
 					"hero": {
 						"name": "Luke Skywalker"
 					}
+				}
+			`,
+		},
+
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					echo(value: String): String
+				}
+			`, &echoResolver{}),
+			Query: `
+				query Echo($value:String = "default"){
+					echo(value:$value)
+				}
+			`,
+			ExpectedResult: `
+				{
+					"echo": "default"
 				}
 			`,
 		},
@@ -1547,6 +2027,50 @@ func TestUnexportedField(t *testing.T) {
 	}
 }
 
+type StringEnum string
+
+const (
+	EnumOption1 StringEnum = "Option1"
+	EnumOption2 StringEnum = "Option2"
+)
+
+type IntEnum int
+
+const (
+	IntEnum0 IntEnum = iota
+	IntEnum1
+)
+
+func (e IntEnum) String() string {
+	switch int(e) {
+	case 0:
+		return "Int0"
+	case 1:
+		return "Int1"
+	default:
+		return "IntN"
+	}
+}
+
+func (IntEnum) ImplementsGraphQLType(name string) bool {
+	return name == "IntEnum"
+}
+
+func (e *IntEnum) UnmarshalGraphQL(input interface{}) error {
+	if str, ok := input.(string); ok {
+		switch str {
+		case "Int0":
+			*e = IntEnum(0)
+		case "Int1":
+			*e = IntEnum(1)
+		default:
+			*e = IntEnum(-1)
+		}
+		return nil
+	}
+	return fmt.Errorf("wrong type for IntEnum: %T", input)
+}
+
 type inputResolver struct{}
 
 func (r *inputResolver) Int(args struct{ Value int32 }) int32 {
@@ -1590,11 +2114,35 @@ func (r *inputResolver) NullableList(args struct{ Value *[]*struct{ V int32 } })
 	return &l
 }
 
-func (r *inputResolver) Enum(args struct{ Value string }) string {
+func (r *inputResolver) StringEnumValue(args struct{ Value string }) string {
 	return args.Value
 }
 
-func (r *inputResolver) NullableEnum(args struct{ Value *string }) *string {
+func (r *inputResolver) NullableStringEnumValue(args struct{ Value *string }) *string {
+	return args.Value
+}
+
+func (r *inputResolver) StringEnum(args struct{ Value StringEnum }) StringEnum {
+	return args.Value
+}
+
+func (r *inputResolver) NullableStringEnum(args struct{ Value *StringEnum }) *StringEnum {
+	return args.Value
+}
+
+func (r *inputResolver) IntEnumValue(args struct{ Value string }) string {
+	return args.Value
+}
+
+func (r *inputResolver) NullableIntEnumValue(args struct{ Value *string }) *string {
+	return args.Value
+}
+
+func (r *inputResolver) IntEnum(args struct{ Value IntEnum }) IntEnum {
+	return args.Value
+}
+
+func (r *inputResolver) NullableIntEnum(args struct{ Value *IntEnum }) *IntEnum {
 	return args.Value
 }
 
@@ -1630,8 +2178,14 @@ func TestInput(t *testing.T) {
 			nullable(value: Int): Int
 			list(value: [Input!]!): [Int!]!
 			nullableList(value: [Input]): [Int]
-			enum(value: Enum!): Enum!
-			nullableEnum(value: Enum): Enum
+			stringEnumValue(value: StringEnum!): StringEnum!
+			nullableStringEnumValue(value: StringEnum): StringEnum
+			stringEnum(value: StringEnum!): StringEnum!
+			nullableStringEnum(value: StringEnum): StringEnum
+			intEnumValue(value: IntEnum!): IntEnum!
+			nullableIntEnumValue(value: IntEnum): IntEnum
+			intEnum(value: IntEnum!): IntEnum!
+			nullableIntEnum(value: IntEnum): IntEnum
 			recursive(value: RecursiveInput!): Int!
 			id(value: ID!): ID!
 		}
@@ -1644,9 +2198,14 @@ func TestInput(t *testing.T) {
 			next: RecursiveInput
 		}
 
-		enum Enum {
+		enum StringEnum {
 			Option1
 			Option2
+		}
+
+		enum IntEnum {
+			Int0
+			Int1
 		}
 	`, &inputResolver{})
 	gqltesting.RunTests(t, []*gqltesting.Test{
@@ -1665,9 +2224,18 @@ func TestInput(t *testing.T) {
 					list2: list(value: {v: 42})
 					nullableList1: nullableList(value: [{v: 41}, null, {v: 43}])
 					nullableList2: nullableList(value: null)
-					enum(value: Option2)
-					nullableEnum1: nullableEnum(value: Option2)
-					nullableEnum2: nullableEnum(value: null)
+					stringEnumValue(value: Option1)
+					nullableStringEnumValue1: nullableStringEnum(value: Option1)
+					nullableStringEnumValue2: nullableStringEnum(value: null)
+					stringEnum(value: Option2)
+					nullableStringEnum1: nullableStringEnum(value: Option2)
+					nullableStringEnum2: nullableStringEnum(value: null)
+					intEnumValue(value: Int1)
+					nullableIntEnumValue1: nullableIntEnumValue(value: Int1)
+					nullableIntEnumValue2: nullableIntEnumValue(value: null)
+					intEnum(value: Int1)
+					nullableIntEnum1: nullableIntEnum(value: Int1)
+					nullableIntEnum2: nullableIntEnum(value: null)
 					recursive(value: {next: {next: {}}})
 					intID: id(value: 1234)
 					strID: id(value: "1234")
@@ -1686,9 +2254,18 @@ func TestInput(t *testing.T) {
 					"list2": [42],
 					"nullableList1": [41, null, 43],
 					"nullableList2": null,
-					"enum": "Option2",
-					"nullableEnum1": "Option2",
-					"nullableEnum2": null,
+					"stringEnumValue": "Option1",
+					"nullableStringEnumValue1": "Option1",
+					"nullableStringEnumValue2": null,
+					"stringEnum": "Option2",
+					"nullableStringEnum1": "Option2",
+					"nullableStringEnum2": null,
+					"intEnumValue": "Int1",
+					"nullableIntEnumValue1": "Int1",
+					"nullableIntEnumValue2": null,
+					"intEnum": "Int1",
+					"nullableIntEnum1": "Int1",
+					"nullableIntEnum2": null,
 					"recursive": 3,
 					"intID": "1234",
 					"strID": "1234"
@@ -1750,6 +2327,352 @@ func TestComposedFragments(t *testing.T) {
 					}
 				}
 			`,
+		},
+	})
+}
+
+var (
+	exampleError = fmt.Errorf("This is an error")
+
+	nilChildErrorString = `graphql: got nil for non-null "Child"`
+)
+
+type childResolver struct{}
+
+func (r *childResolver) TriggerError() (string, error) {
+	return "This will never be returned to the client", exampleError
+}
+func (r *childResolver) NoError() string {
+	return "no error"
+}
+func (r *childResolver) Child() *childResolver {
+	return &childResolver{}
+}
+func (r *childResolver) NilChild() *childResolver {
+	return nil
+}
+
+func TestErrorPropagation(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					noError: String!
+					triggerError: String!
+				}
+			`, &childResolver{}),
+			Query: `
+				{
+					noError
+					triggerError
+				}
+			`,
+			ExpectedResult: `
+				null
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message:       exampleError.Error(),
+					ResolverError: exampleError,
+					Path:          []interface{}{"triggerError"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					noError: String!
+					child: Child
+				}
+
+				type Child {
+					noError: String!
+					triggerError: String!
+				}
+			`, &childResolver{}),
+			Query: `
+				{
+					noError
+					child {
+						noError
+						triggerError
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"noError": "no error",
+					"child": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message:       exampleError.Error(),
+					ResolverError: exampleError,
+					Path:          []interface{}{"child", "triggerError"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					noError: String!
+					child: Child
+				}
+
+				type Child {
+					noError: String!
+					triggerError: String!
+					child: Child!
+				}
+			`, &childResolver{}),
+			Query: `
+				{
+					noError
+					child {
+						noError
+						child {
+							noError
+							triggerError
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"noError": "no error",
+					"child": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message:       exampleError.Error(),
+					ResolverError: exampleError,
+					Path:          []interface{}{"child", "child", "triggerError"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					noError: String!
+					child: Child
+				}
+
+				type Child {
+					noError: String!
+					triggerError: String!
+					child: Child
+				}
+			`, &childResolver{}),
+			Query: `
+				{
+					noError
+					child {
+						noError
+						child {
+							noError
+							triggerError
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"noError": "no error",
+					"child": {
+						"noError": "no error",
+						"child": null
+					}
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message:       exampleError.Error(),
+					ResolverError: exampleError,
+					Path:          []interface{}{"child", "child", "triggerError"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					noError: String!
+					child: Child!
+				}
+
+				type Child {
+					noError: String!
+					nilChild: Child!
+				}
+			`, &childResolver{}),
+			Query: `
+				{
+					noError
+					child {
+						nilChild {
+							noError
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				null
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: nilChildErrorString,
+					Path:    []interface{}{"child", "nilChild"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					noError: String!
+					child: Child
+				}
+
+				type Child {
+					noError: String!
+					nilChild: Child!
+				}
+			`, &childResolver{}),
+			Query: `
+				{
+					noError
+					child {
+						noError
+						nilChild {
+							noError
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+			{
+				"noError": "no error",
+				"child": null
+			}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: nilChildErrorString,
+					Path:    []interface{}{"child", "nilChild"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					child: Child
+				}
+
+				type Child {
+					triggerError: String!
+					child: Child
+					nilChild: Child!
+				}
+			`, &childResolver{}),
+			Query: `
+				{
+					child {
+						child {
+							triggerError
+							child {
+								nilChild {
+									triggerError
+								}
+							}
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+			{
+				"child": {
+					"child": null
+				}
+			}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: nilChildErrorString,
+					Path:    []interface{}{"child", "child", "child", "nilChild"},
+				},
+				{
+					Message:       exampleError.Error(),
+					ResolverError: exampleError,
+					Path:          []interface{}{"child", "child", "triggerError"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					child: Child
+				}
+
+				type Child {
+					noError: String!
+					child: Child!
+					nilChild: Child!
+				}
+			`, &childResolver{}),
+			Query: `
+				{
+					child {
+						child {
+							nilChild {
+								noError
+							}
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+			{
+				"child": null
+			}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: nilChildErrorString,
+					Path:    []interface{}{"child", "child", "nilChild"},
+				},
+			},
 		},
 	})
 }
