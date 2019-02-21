@@ -2,21 +2,20 @@ package graphql
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
-	"encoding/json"
-
-	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/internal/common"
-	"github.com/graph-gophers/graphql-go/internal/exec"
-	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
-	"github.com/graph-gophers/graphql-go/internal/exec/selected"
-	"github.com/graph-gophers/graphql-go/internal/query"
-	"github.com/graph-gophers/graphql-go/internal/schema"
-	"github.com/graph-gophers/graphql-go/internal/validation"
-	"github.com/graph-gophers/graphql-go/introspection"
-	"github.com/graph-gophers/graphql-go/log"
-	"github.com/graph-gophers/graphql-go/trace"
+	"github.com/nauto/graphql-go/errors"
+	"github.com/nauto/graphql-go/internal/common"
+	"github.com/nauto/graphql-go/internal/exec"
+	"github.com/nauto/graphql-go/internal/exec/resolvable"
+	"github.com/nauto/graphql-go/internal/exec/selected"
+	"github.com/nauto/graphql-go/internal/query"
+	"github.com/nauto/graphql-go/internal/schema"
+	"github.com/nauto/graphql-go/internal/validation"
+	"github.com/nauto/graphql-go/introspection"
+	"github.com/nauto/graphql-go/log"
+	"github.com/nauto/graphql-go/trace"
 )
 
 // ParseSchema parses a GraphQL schema and attaches the given root resolver. It returns an error if
@@ -24,16 +23,17 @@ import (
 // resolver, then the schema can not be executed, but it may be inspected (e.g. with ToJSON).
 func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (*Schema, error) {
 	s := &Schema{
-		schema:         schema.New(),
-		maxParallelism: 10,
-		tracer:         trace.OpenTracingTracer{},
-		logger:         &log.DefaultLogger{},
+		schema:           schema.New(),
+		maxParallelism:   10,
+		tracer:           trace.OpenTracingTracer{},
+		validationTracer: trace.NoopValidationTracer{},
+		logger:           &log.DefaultLogger{},
 	}
 	for _, opt := range opts {
 		opt(s)
 	}
 
-	if err := s.schema.Parse(schemaString); err != nil {
+	if err := s.schema.Parse(schemaString, s.useStringDescriptions); err != nil {
 		return nil, err
 	}
 
@@ -62,13 +62,40 @@ type Schema struct {
 	schema *schema.Schema
 	res    *resolvable.Schema
 
-	maxParallelism int
-	tracer         trace.Tracer
-	logger         log.Logger
+	maxDepth              int
+	maxParallelism        int
+	tracer                trace.Tracer
+	validationTracer      trace.ValidationTracer
+	logger                log.Logger
+	useStringDescriptions bool
 }
 
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
 type SchemaOpt func(*Schema)
+
+// UseStringDescriptions enables the usage of double quoted and triple quoted
+// strings as descriptions as per the June 2018 spec
+// https://facebook.github.io/graphql/June2018/. When this is not enabled,
+// comments are parsed as descriptions instead.
+func UseStringDescriptions() SchemaOpt {
+	return func(s *Schema) {
+		s.useStringDescriptions = true
+	}
+}
+
+// UseFieldResolvers specifies whether to use struct field resolvers
+func UseFieldResolvers() SchemaOpt {
+	return func(s *Schema) {
+		s.schema.UseFieldResolvers = true
+	}
+}
+
+// MaxDepth specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
+func MaxDepth(n int) SchemaOpt {
+	return func(s *Schema) {
+		s.maxDepth = n
+	}
+}
 
 // MaxParallelism specifies the maximum number of resolvers per request allowed to run in parallel. The default is 10.
 func MaxParallelism(n int) SchemaOpt {
@@ -84,7 +111,14 @@ func Tracer(tracer trace.Tracer) SchemaOpt {
 	}
 }
 
-// Logger is used to log panics durring query execution. It defaults to exec.DefaultLogger.
+// ValidationTracer is used to trace validation errors. It defaults to trace.NoopValidationTracer.
+func ValidationTracer(tracer trace.ValidationTracer) SchemaOpt {
+	return func(s *Schema) {
+		s.validationTracer = tracer
+	}
+}
+
+// Logger is used to log panics during query execution. It defaults to exec.DefaultLogger.
 func Logger(logger log.Logger) SchemaOpt {
 	return func(s *Schema) {
 		s.logger = logger
@@ -93,9 +127,10 @@ func Logger(logger log.Logger) SchemaOpt {
 
 // Response represents a typical response of a GraphQL server. It may be encoded to JSON directly or
 // it may be further processed to a custom response type, for example to include custom error data.
+// Errors are intentionally serialized first based on the advice in https://github.com/facebook/graphql/commit/7b40390d48680b15cb93e02d46ac5eb249689876#diff-757cea6edf0288677a9eea4cfc801d87R107
 type Response struct {
-	Data       json.RawMessage        `json:"data,omitempty"`
 	Errors     []*errors.QueryError   `json:"errors,omitempty"`
+	Data       json.RawMessage        `json:"data,omitempty"`
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
@@ -106,7 +141,7 @@ func (s *Schema) Validate(queryString string) []*errors.QueryError {
 		return []*errors.QueryError{qErr}
 	}
 
-	return validation.Validate(s.schema, doc)
+	return validation.Validate(s.schema, doc, s.maxDepth)
 }
 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
@@ -125,7 +160,9 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		return &Response{Errors: []*errors.QueryError{qErr}}
 	}
 
-	errs := validation.Validate(s.schema, doc)
+	validationFinish := s.validationTracer.TraceValidation()
+	errs := validation.Validate(s.schema, doc, s.maxDepth)
+	validationFinish(errs)
 	if len(errs) != 0 {
 		return &Response{Errors: errs}
 	}
@@ -133,6 +170,16 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	op, err := getOperation(doc, operationName)
 	if err != nil {
 		return &Response{Errors: []*errors.QueryError{errors.Errorf("%s", err)}}
+	}
+
+	// Fill in variables with the defaults from the operation
+	if variables == nil {
+		variables = make(map[string]interface{}, len(op.Vars))
+	}
+	for _, v := range op.Vars {
+		if _, ok := variables[v.Name.Name]; !ok && v.Default != nil {
+			variables[v.Name.Name] = v.Default.Value(nil)
+		}
 	}
 
 	r := &exec.Request{

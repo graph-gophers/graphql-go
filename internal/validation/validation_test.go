@@ -8,10 +8,10 @@ import (
 
 	"encoding/json"
 
-	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/internal/query"
-	"github.com/graph-gophers/graphql-go/internal/schema"
-	"github.com/graph-gophers/graphql-go/internal/validation"
+	"github.com/nauto/graphql-go/errors"
+	"github.com/nauto/graphql-go/internal/query"
+	"github.com/nauto/graphql-go/internal/schema"
+	"github.com/nauto/graphql-go/internal/validation"
 )
 
 type Test struct {
@@ -39,7 +39,7 @@ func TestValidate(t *testing.T) {
 	schemas := make([]*schema.Schema, len(testData.Schemas))
 	for i, schemaStr := range testData.Schemas {
 		schemas[i] = schema.New()
-		if err := schemas[i].Parse(schemaStr); err != nil {
+		if err := schemas[i].Parse(schemaStr, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -50,7 +50,7 @@ func TestValidate(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			errs := validation.Validate(schemas[test.Schema], d)
+			errs := validation.Validate(schemas[test.Schema], d, 0)
 			got := []*errors.QueryError{}
 			for _, err := range errs {
 				if err.Rule == test.Rule {

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"text/scanner"
 
-	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/internal/common"
+	"github.com/nauto/graphql-go/errors"
+	"github.com/nauto/graphql-go/internal/common"
 )
 
 type Document struct {
@@ -94,7 +94,7 @@ func (InlineFragment) isSelection() {}
 func (FragmentSpread) isSelection() {}
 
 func Parse(queryString string) (*Document, *errors.QueryError) {
-	l := common.NewLexer(queryString)
+	l := common.NewLexer(queryString, false)
 
 	var doc *Document
 	err := l.CatchSyntaxError(func() { doc = parseDocument(l) })
@@ -107,7 +107,7 @@ func Parse(queryString string) (*Document, *errors.QueryError) {
 
 func parseDocument(l *common.Lexer) *Document {
 	d := &Document{}
-	l.Consume()
+	l.ConsumeWhitespace()
 	for l.Peek() != scanner.EOF {
 		if l.Peek() == '{' {
 			op := &Operation{Type: Query, Loc: l.Location()}

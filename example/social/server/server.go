@@ -5,24 +5,21 @@ import (
 	"net/http"
 
 	"github.com/nauto/graphql-go"
-	"github.com/nauto/graphql-go/example/starwars"
+	"github.com/nauto/graphql-go/example/social"
 	"github.com/nauto/graphql-go/relay"
 )
 
-var schema *graphql.Schema
-
-func init() {
-	schema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
-}
-
 func main() {
+	opts := []graphql.SchemaOpt{graphql.UseFieldResolvers(), graphql.MaxParallelism(20)}
+	schema := graphql.MustParseSchema(social.Schema, &social.Resolver{}, opts...)
+
 	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write(page)
 	}))
 
 	http.Handle("/query", &relay.Handler{Schema: schema})
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":9011", nil))
 }
 
 var page = []byte(`
