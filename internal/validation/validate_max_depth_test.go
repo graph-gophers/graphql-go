@@ -3,8 +3,8 @@ package validation
 import (
 	"testing"
 
-	"github.com/graph-gophers/graphql-go/internal/query"
-	"github.com/graph-gophers/graphql-go/internal/schema"
+	"github.com/nauto/graphql-go/internal/query"
+	"github.com/nauto/graphql-go/internal/schema"
 )
 
 const (
