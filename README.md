@@ -110,3 +110,5 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 [deltaskelta/graphql-go-pets-example](https://github.com/deltaskelta/graphql-go-pets-example) - graphql-go resolving against a sqlite database
 
 [OscarYuen/go-graphql-starter](https://github.com/OscarYuen/go-graphql-starter) - a starter application integrated with dataloader, psql and basic authentication
+
+[musobarlab/gorengan](https://github.com/musobarlab/gorengan) - a graphql go example featuring Repository pattern, Echo Framework, GORM, Postgres Database, unit testing, Glide and basic authentication
