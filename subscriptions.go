@@ -3,7 +3,6 @@ package graphql
 import (
 	"context"
 	"errors"
-
 	qerrors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec"
@@ -75,6 +74,9 @@ func (s *Schema) subscribe(ctx context.Context, queryString string, operationNam
 			c <- &Response{
 				Data:   resp.Data,
 				Errors: resp.Errors,
+			}
+			if len(resp.Errors) > 0 {
+				break
 			}
 		}
 		close(c)
