@@ -121,8 +121,8 @@ func TestSchemaSubscribe(t *testing.T) {
 				helloSaidResolver: &helloSaidResolver{
 					upstream: closedUpstream(
 						&helloSaidEventResolver{msg: "Hello world!"},
-						&helloSaidEventResolver{err: resolverErr},
 						&helloSaidEventResolver{msg: "Hello again!"},
+						&helloSaidEventResolver{err: resolverErr},
 					),
 				},
 			}),
@@ -145,18 +145,18 @@ func TestSchemaSubscribe(t *testing.T) {
 				},
 				{
 					Data: json.RawMessage(`
-						null
-					`),
-					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", resolverErr)},
-				},
-				{
-					Data: json.RawMessage(`
 						{
 							"helloSaid": {
 								"msg": "Hello again!"
 							}
 						}
 					`),
+				},
+				{
+					Data: json.RawMessage(`
+						null
+					`),
+					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", resolverErr)},
 				},
 			},
 		},
