@@ -60,25 +60,25 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
+func ApplyResolver(s *schema.Schema, resolver interface{}, prefixRootFuncs bool) (*Schema, error) {
 	b := newBuilder(s)
 
 	var query, mutation, subscription Resolvable
 
 	if t, ok := s.EntryPoints["query"]; ok {
-		if err := b.assignExec(&query, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&query, t, reflect.TypeOf(resolver), prefixRootFuncs); err != nil {
 			return nil, err
 		}
 	}
 
 	if t, ok := s.EntryPoints["mutation"]; ok {
-		if err := b.assignExec(&mutation, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&mutation, t, reflect.TypeOf(resolver), prefixRootFuncs); err != nil {
 			return nil, err
 		}
 	}
 
 	if t, ok := s.EntryPoints["subscription"]; ok {
-		if err := b.assignExec(&subscription, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&subscription, t, reflect.TypeOf(resolver), prefixRootFuncs); err != nil {
 			return nil, err
 		}
 	}
@@ -130,14 +130,14 @@ func (b *execBuilder) finish() error {
 	return b.packerBuilder.Finish()
 }
 
-func (b *execBuilder) assignExec(target *Resolvable, t common.Type, resolverType reflect.Type) error {
+func (b *execBuilder) assignExec(target *Resolvable, t common.Type, resolverType reflect.Type, prefixFuncs bool) error {
 	k := typePair{t, resolverType}
 	ref, ok := b.resMap[k]
 	if !ok {
 		ref = &resMapEntry{}
 		b.resMap[k] = ref
 		var err error
-		ref.exec, err = b.makeExec(t, resolverType)
+		ref.exec, err = b.makeExec(t, resolverType, prefixFuncs)
 		if err != nil {
 			return err
 		}
@@ -146,13 +146,13 @@ func (b *execBuilder) assignExec(target *Resolvable, t common.Type, resolverType
 	return nil
 }
 
-func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type) (Resolvable, error) {
+func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type, prefixFuncs bool) (Resolvable, error) {
 	var nonNull bool
 	t, nonNull = unwrapNonNull(t)
 
 	switch t := t.(type) {
 	case *schema.Object:
-		return b.makeObjectExec(t.Name, t.Fields, nil, nonNull, resolverType)
+		return b.makeObjectExecWithPrefix(t.Name, t.Fields, nil, nonNull, resolverType, prefixFuncs)
 
 	case *schema.Interface:
 		return b.makeObjectExec(t.Name, t.Fields, t.PossibleTypes, nonNull, resolverType)
@@ -180,7 +180,7 @@ func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type) (Resolv
 			return nil, fmt.Errorf("%s is not a slice", resolverType)
 		}
 		e := &List{}
-		if err := b.assignExec(&e.Elem, t.OfType, resolverType.Elem()); err != nil {
+		if err := b.assignExec(&e.Elem, t.OfType, resolverType.Elem(), false); err != nil {
 			return nil, err
 		}
 		return e, nil
@@ -212,6 +212,9 @@ func makeScalarExec(t *schema.Scalar, resolverType reflect.Type) (Resolvable, er
 
 func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, possibleTypes []*schema.Object,
 	nonNull bool, resolverType reflect.Type) (*Object, error) {
+	return b.makeObjectExecWithPrefix(typeName, fields, possibleTypes, nonNull, resolverType, false)
+}
+func (b *execBuilder) makeObjectExecWithPrefix(typeName string, fields schema.FieldList, possibleTypes []*schema.Object, nonNull bool, resolverType reflect.Type, prefixFuncs bool) (*Object, error) {
 	if !nonNull {
 		if resolverType.Kind() != reflect.Ptr && resolverType.Kind() != reflect.Interface {
 			return nil, fmt.Errorf("%s is not a pointer or interface", resolverType)
@@ -223,17 +226,23 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 	Fields := make(map[string]*Field)
 	rt := unwrapPtr(resolverType)
 	for _, f := range fields {
+
+		methodName := f.Name
+		if prefixFuncs {
+			methodName = typeName + f.Name
+		}
+
 		fieldIndex := -1
-		methodIndex := findMethod(resolverType, f.Name)
+		methodIndex := findMethod(resolverType, methodName)
 		if b.schema.UseFieldResolvers && methodIndex == -1 {
 			fieldIndex = findField(rt, f.Name)
 		}
 		if methodIndex == -1 && fieldIndex == -1 {
 			hint := ""
-			if findMethod(reflect.PtrTo(resolverType), f.Name) != -1 {
+			if findMethod(reflect.PtrTo(resolverType), methodName) != -1 {
 				hint = " (hint: the method exists on the pointer type)"
 			}
-			return nil, fmt.Errorf("%s does not resolve %q: missing method for field %q%s", resolverType, typeName, f.Name, hint)
+			return nil, fmt.Errorf("%s does not resolve %q: missing method for field %q%s", resolverType, typeName, methodName, hint)
 		}
 
 		var m reflect.Method
@@ -266,7 +275,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 			a := &TypeAssertion{
 				MethodIndex: methodIndex,
 			}
-			if err := b.assignExec(&a.TypeExec, impl, resolverType.Method(methodIndex).Type.Out(0)); err != nil {
+			if err := b.assignExec(&a.TypeExec, impl, resolverType.Method(methodIndex).Type.Out(0), false); err != nil {
 				return nil, err
 			}
 			typeAssertions[impl.Name] = a
@@ -358,7 +367,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 	} else {
 		out = sf.Type
 	}
-	if err := b.assignExec(&fe.ValueExec, f.Type, out); err != nil {
+	if err := b.assignExec(&fe.ValueExec, f.Type, out, false); err != nil {
 		return nil, err
 	}
 
