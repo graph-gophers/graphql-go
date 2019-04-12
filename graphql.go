@@ -41,7 +41,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		return nil, err
 	}
 
-	r, err := resolvable.ApplyResolver(s.schema, resolver)
+	r, err := resolvable.ApplyResolver(s.schema, resolver, s.prefixRootFunctions)
 	if err != nil {
 		return nil, err
 	}
@@ -71,6 +71,7 @@ type Schema struct {
 	logger                log.Logger
 	useStringDescriptions bool
 	disableIntrospection  bool
+	prefixRootFunctions   bool
 }
 
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
@@ -97,6 +98,13 @@ func UseFieldResolvers() SchemaOpt {
 func MaxDepth(n int) SchemaOpt {
 	return func(s *Schema) {
 		s.maxDepth = n
+	}
+}
+
+// Add the Query, Subscription and Mutation prefixes to the root resolver function when doing reflection from schema to Go code.
+func PrefixRootFunctions() SchemaOpt {
+	return func(s *Schema) {
+		s.prefixRootFunctions = true
 	}
 }
 
