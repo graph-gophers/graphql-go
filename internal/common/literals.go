@@ -24,10 +24,19 @@ func (lit *BasicLit) Value(vars map[string]interface{}) interface{} {
 	switch lit.Type {
 	case scanner.Int:
 		value, err := strconv.ParseInt(lit.Text, 10, 32)
-		if err != nil {
-			panic(err)
+		if err == nil {
+			return int32(value)
 		}
-		return int32(value)
+		if numError, ok := err.(*strconv.NumError); ok {
+			if numError.Err == strconv.ErrRange {
+				val, e := strconv.ParseFloat(lit.Text, 64)
+				if e != nil {
+					panic(e)
+				}
+				return val
+			}
+		}
+		panic(err)
 
 	case scanner.Float:
 		value, err := strconv.ParseFloat(lit.Text, 64)
