@@ -15,10 +15,6 @@ import (
 	"github.com/graph-gophers/graphql-go/internal/query"
 )
 
-type SubscriptionError interface {
-	SubscriptionError() error
-}
-
 type Response struct {
 	Data   json.RawMessage
 	Errors []*errors.QueryError
@@ -103,7 +99,7 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 					return
 				}
 
-				if subErr, ok := resp.Interface().(SubscriptionError); ok {
+				if subErr, ok := resp.Interface().(errors.SubscriptionError); ok {
 					if err := subErr.SubscriptionError(); err != nil {
 						c <- &Response{Errors: []*errors.QueryError{errors.Errorf("%s", err)}}
 						return

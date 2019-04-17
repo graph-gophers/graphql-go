@@ -4,6 +4,10 @@ import (
 	"fmt"
 )
 
+type SubscriptionError interface {
+	SubscriptionError() error
+}
+
 type QueryError struct {
 	Message       string                 `json:"message"`
 	Locations     []Location             `json:"locations,omitempty"`
