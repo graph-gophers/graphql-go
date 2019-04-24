@@ -23,7 +23,7 @@ type Response struct {
 func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query.Operation) <-chan *Response {
 	var result reflect.Value
 	var f *fieldToExec
-	var err *errors.QueryError
+	var errs []*errors.QueryError
 	func() {
 		defer r.handlePanic(ctx)
 
@@ -31,9 +31,14 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 		var fields []*fieldToExec
 		collectFieldsToResolve(sels, s.Resolver, &fields, make(map[string]*fieldToExec))
 
+		if len(r.Errs) > 0 {
+			errs = r.Errs
+			return
+		}
+
 		// TODO: move this check into validation.Validate
 		if len(fields) != 1 {
-			err = errors.Errorf("%s", "can subscribe to at most one subscription at a time")
+			errs = []*errors.QueryError{errors.Errorf("%s", "can subscribe to at most one subscription at a time")}
 			return
 		}
 		f = fields[0]
@@ -50,16 +55,22 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 
 		if f.field.HasError && !callOut[1].IsNil() {
 			resolverErr := callOut[1].Interface().(error)
-			err = errors.Errorf("%s", resolverErr)
+			err := errors.Errorf("%s", resolverErr)
 			err.ResolverError = resolverErr
+			errs = []*errors.QueryError{err}
 		}
 	}()
 
-	if err != nil {
-		if _, nonNullChild := f.field.Type.(*common.NonNull); nonNullChild {
-			return sendAndReturnClosed(&Response{Errors: []*errors.QueryError{err}})
+	if len(errs) > 0 {
+
+		var nonNullChild bool
+		if f != nil {
+			_, nonNullChild = f.field.Type.(*common.NonNull)
 		}
-		return sendAndReturnClosed(&Response{Data: []byte(fmt.Sprintf(`{"%s":null}`, f.field.Alias)), Errors: []*errors.QueryError{err}})
+		if f == nil || nonNullChild {
+			return sendAndReturnClosed(&Response{Errors: errs})
+		}
+		return sendAndReturnClosed(&Response{Data: []byte(fmt.Sprintf(`{"%s":null}`, f.field.Alias)), Errors: errs})
 	}
 
 	if ctxErr := ctx.Err(); ctxErr != nil {
