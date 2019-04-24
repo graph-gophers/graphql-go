@@ -225,8 +225,9 @@ func (p *StructPacker) Pack(value interface{}) (reflect.Value, error) {
 	for _, f := range p.fields {
 		if value, ok := values[f.field.Name.Name]; ok {
 			packed, err := f.fieldPacker.Pack(value)
+
 			if err != nil {
-				return reflect.Value{}, err
+				return reflect.Value{}, fmt.Errorf("field [%s]: %s", f.field.Name.Name, err)
 			}
 			v.Elem().FieldByIndex(f.fieldIndex).Set(packed)
 		}
