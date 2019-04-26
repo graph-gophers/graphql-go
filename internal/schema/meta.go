@@ -1,13 +1,20 @@
 package schema
 
-var Meta *Schema
-
 func init() {
-	Meta = &Schema{} // bootstrap
-	Meta = New()
-	if err := Meta.Parse(metaSrc, false); err != nil {
+	_ = newMeta()
+}
+
+// newMeta initializes an instance of the meta Schema.
+func newMeta() *Schema {
+	s := &Schema{
+		entryPointNames: make(map[string]string),
+		Types:           make(map[string]NamedType),
+		Directives:      make(map[string]*DirectiveDecl),
+	}
+	if err := s.Parse(metaSrc, false); err != nil {
 		panic(err)
 	}
+	return s
 }
 
 var metaSrc = `
