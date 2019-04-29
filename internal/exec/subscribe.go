@@ -54,15 +54,21 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 		result = callOut[0]
 
 		if f.field.HasError && !callOut[1].IsNil() {
-			resolverErr := callOut[1].Interface().(error)
-			err := errors.Errorf("%s", resolverErr)
-			err.ResolverError = resolverErr
-			errs = []*errors.QueryError{err}
+			errIface := callOut[1].Interface()
+			switch resolverErr := errIface.(type) {
+			case *errors.QueryError:
+				errs = []*errors.QueryError{resolverErr}
+			case error:
+				err := errors.Errorf("%s", resolverErr)
+				err.ResolverError = resolverErr
+				errs = []*errors.QueryError{err}
+			default:
+				panic("dead code path")
+			}
 		}
 	}()
 
 	if len(errs) > 0 {
-
 		var nonNullChild bool
 		if f != nil {
 			_, nonNullChild = f.field.Type.(*common.NonNull)
