@@ -19,6 +19,7 @@ type Test struct {
 	Rule   string
 	Schema int
 	Query  string
+	Vars   map[string]interface{}
 	Errors []*errors.QueryError
 }
 
@@ -50,7 +51,7 @@ func TestValidate(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			errs := validation.Validate(schemas[test.Schema], d, 0)
+			errs := validation.Validate(schemas[test.Schema], d, test.Vars, 0)
 			got := []*errors.QueryError{}
 			for _, err := range errs {
 				if err.Rule == test.Rule {

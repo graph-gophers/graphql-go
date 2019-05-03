@@ -284,8 +284,23 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 		if s, ok := resolver.Interface().(fmt.Stringer); ok {
 			stringer = s
 		}
+		name := stringer.String()
+		var valid bool
+		for _, v := range t.Values {
+			if v.Name == name {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			err := errors.Errorf("Invalid value %s.\nExpected type %s, found %s.", name, t.Name, name)
+			err.Path = path.toSlice()
+			r.AddError(err)
+			out.WriteString("null")
+			return
+		}
 		out.WriteByte('"')
-		out.WriteString(stringer.String())
+		out.WriteString(name)
 		out.WriteByte('"')
 
 	default:

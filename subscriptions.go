@@ -33,7 +33,7 @@ func (s *Schema) subscribe(ctx context.Context, queryString string, operationNam
 	}
 
 	validationFinish := s.validationTracer.TraceValidation()
-	errs := validation.Validate(s.schema, doc, s.maxDepth)
+	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
 	validationFinish(errs)
 	if len(errs) != 0 {
 		return sendAndReturnClosed(&Response{Errors: errs})
