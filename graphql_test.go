@@ -164,6 +164,8 @@ func (r *discussPlanResolver) DismissVader(ctx context.Context) (string, error) 
 }
 
 func TestHelloWorld(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -212,6 +214,8 @@ func TestHelloWorld(t *testing.T) {
 }
 
 func TestHelloSnake(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -260,6 +264,8 @@ func TestHelloSnake(t *testing.T) {
 }
 
 func TestHelloSnakeArguments(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -360,6 +366,8 @@ func (r *testNilInterfaceResolver) C() (interface{ Z() int32 }, error) {
 }
 
 func TestNilInterface(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -403,6 +411,8 @@ func TestNilInterface(t *testing.T) {
 }
 
 func TestErrorPropagationInLists(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -631,6 +641,8 @@ func TestErrorPropagationInLists(t *testing.T) {
 }
 
 func TestErrorWithExtensions(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -670,6 +682,8 @@ func TestErrorWithExtensions(t *testing.T) {
 }
 
 func TestErrorWithNoExtensions(t *testing.T) {
+	t.Parallel()
+
 	err := errors.New("I find your lack of faith disturbing")
 
 	gqltesting.RunTests(t, []*gqltesting.Test{
@@ -1074,6 +1088,8 @@ func (r *testDeprecatedDirectiveResolver) C() int32 {
 }
 
 func TestDeprecatedDirective(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -2064,6 +2080,8 @@ func TestIntrospectionDisableIntrospection(t *testing.T) {
 }
 
 func TestMutationOrder(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -2111,6 +2129,8 @@ func TestMutationOrder(t *testing.T) {
 }
 
 func TestTime(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -2150,6 +2170,8 @@ func (r *resolverWithUnexportedMethod) changeTheNumber(args struct{ NewNumber in
 }
 
 func TestUnexportedMethod(t *testing.T) {
+	t.Parallel()
+
 	_, err := graphql.ParseSchema(`
 		schema {
 			mutation: Mutation
@@ -2171,6 +2193,8 @@ func (r *resolverWithUnexportedField) ChangeTheNumber(args struct{ newNumber int
 }
 
 func TestUnexportedField(t *testing.T) {
+	t.Parallel()
+
 	_, err := graphql.ParseSchema(`
 		schema {
 			mutation: Mutation
@@ -2323,6 +2347,8 @@ func (r *inputResolver) ID(args struct{ Value graphql.ID }) graphql.ID {
 }
 
 func TestInput(t *testing.T) {
+	t.Parallel()
+
 	coercionSchema := graphql.MustParseSchema(`
 		schema {
 			query: Query
@@ -2511,6 +2537,8 @@ func (r *childResolver) NilChild() *childResolver {
 }
 
 func TestErrorPropagation(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`

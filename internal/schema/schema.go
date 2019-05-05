@@ -238,10 +238,11 @@ func New() *Schema {
 		Types:           make(map[string]NamedType),
 		Directives:      make(map[string]*DirectiveDecl),
 	}
-	for n, t := range Meta.Types {
+	m := newMeta()
+	for n, t := range m.Types {
 		s.Types[n] = t
 	}
-	for n, d := range Meta.Directives {
+	for n, d := range m.Directives {
 		s.Directives[n] = d
 	}
 	return s

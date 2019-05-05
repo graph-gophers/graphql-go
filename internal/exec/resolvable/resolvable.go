@@ -12,6 +12,7 @@ import (
 )
 
 type Schema struct {
+	*Meta
 	schema.Schema
 	Query        Resolvable
 	Mutation     Resolvable
@@ -88,6 +89,7 @@ func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 	}
 
 	return &Schema{
+		Meta:         newMeta(s),
 		Schema:       *s,
 		Resolver:     reflect.ValueOf(resolver),
 		Query:        query,
