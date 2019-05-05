@@ -48,6 +48,14 @@ func RunTest(t *testing.T, test *Test) {
 
 	checkErrors(t, test.ExpectedErrors, result.Errors)
 
+	if test.ExpectedResult == "" {
+		if result.Data != nil {
+			t.Fatalf("got: %s", result.Data)
+			t.Fatalf("want: null")
+		}
+		return
+	}
+
 	// Verify JSON to avoid red herring errors.
 	got, err := formatJSON(result.Data)
 	if err != nil {

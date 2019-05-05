@@ -1179,6 +1179,161 @@ func TestDeprecatedDirective(t *testing.T) {
 	})
 }
 
+type testBadEnumResolver struct {}
+
+func (r *testBadEnumResolver) Hero() *testBadEnumCharacterResolver {
+	return &testBadEnumCharacterResolver{}
+}
+
+type testBadEnumCharacterResolver struct {}
+
+func (r *testBadEnumCharacterResolver) Name() string {
+	return "Spock"
+}
+
+func (r *testBadEnumCharacterResolver) AppearsIn() []string {
+	return []string{"STAR_TREK"}
+}
+
+func TestEnums(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		// Valid input enum supplied in query text
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query HeroForEpisode {
+					hero(episode: EMPIRE) {
+						name
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hero": {
+						"name": "Luke Skywalker"
+					}
+				}
+			`,
+		},
+		// Invalid input enum supplied in query text
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query HeroForEpisode {
+					hero(episode: WRATH_OF_KHAN) {
+						name
+					}
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: "Argument \"episode\" has invalid value WRATH_OF_KHAN.\nExpected type \"Episode\", found WRATH_OF_KHAN.",
+					Locations: []gqlerrors.Location{{Column: 20, Line: 3}},
+					Rule:      "ArgumentsOfCorrectType",
+				},
+			},
+		},
+		// Valid input enum supplied in variables
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query HeroForEpisode($episode: Episode!) {
+					hero(episode: $episode) {
+						name
+					}
+				}
+			`,
+			Variables: map[string]interface{}{"episode": "JEDI"},
+			ExpectedResult: `
+				{
+					"hero": {
+						"name": "R2-D2"
+					}
+				}
+			`,
+		},
+		// Invalid input enum supplied in variables
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query HeroForEpisode($episode: Episode!) {
+					hero(episode: $episode) {
+						name
+					}
+				}
+			`,
+			Variables: map[string]interface{}{"episode": "FINAL_FRONTIER"},
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: "Variable \"episode\" has invalid value FINAL_FRONTIER.\nExpected type \"Episode\", found FINAL_FRONTIER.",
+					Locations: []gqlerrors.Location{{Column: 26, Line: 2}},
+					Rule:      "VariablesOfCorrectType",
+				},
+			},
+		},
+		// Valid enum value in response
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query Hero {
+					hero {
+						name
+						appearsIn
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hero": {
+						"name": "R2-D2",
+						"appearsIn": ["NEWHOPE","EMPIRE","JEDI"]
+					}
+				}
+			`,
+		},
+		// Invalid enum value in response
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hero: Character
+				}
+
+				enum Episode {
+					NEWHOPE
+					EMPIRE
+					JEDI
+				}
+
+				type Character {
+					name: String!
+					appearsIn: [Episode!]!
+				}
+			`, &testBadEnumResolver{}),
+			Query: `
+				query Hero {
+					hero {
+						name
+						appearsIn
+					}
+				}
+			`,
+			ExpectedResult: `{
+				"hero": null
+			}`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: "Invalid value STAR_TREK.\nExpected type Episode, found STAR_TREK.",
+					Path:      []interface{}{"hero", "appearsIn", 0},
+				},
+			},
+		},
+	})
+}
+
 func TestInlineFragments(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
