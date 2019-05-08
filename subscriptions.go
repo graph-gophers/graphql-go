@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 	"errors"
+	"reflect"
 
 	qerrors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
@@ -20,7 +21,7 @@ import (
 // further resolvers will be called. The context error will be returned as soon
 // as possible (not immediately).
 func (s *Schema) Subscribe(ctx context.Context, queryString string, operationName string, variables map[string]interface{}) (<-chan interface{}, error) {
-	if s.res == nil {
+	if s.res.Resolver == (reflect.Value{}) {
 		return nil, errors.New("schema created without resolver, can not subscribe")
 	}
 	return s.subscribe(ctx, queryString, operationName, variables, s.res), nil
