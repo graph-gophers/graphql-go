@@ -20,24 +20,21 @@ import (
 
 type Request struct {
 	selected.Request
-	Limiter chan struct{}
-	Tracer  trace.Tracer
-	Logger  log.Logger
+	Limiter      chan struct{}
+	Tracer       trace.Tracer
+	Logger       log.Logger
+	PanicHandler errors.PanicHandler
 }
 
 func (r *Request) handlePanic(ctx context.Context) {
 	if value := recover(); value != nil {
 		r.Logger.LogPanic(ctx, value)
-		r.AddError(makePanicError(value))
+		r.AddError(r.PanicHandler.MakePanicError(ctx, value))
 	}
 }
 
 type extensionser interface {
 	Extensions() map[string]interface{}
-}
-
-func makePanicError(value interface{}) *errors.QueryError {
-	return errors.Errorf("graphql: panic occurred: %v", value)
 }
 
 func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *query.Operation) ([]byte, []*errors.QueryError) {
@@ -177,7 +174,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 		defer func() {
 			if panicValue := recover(); panicValue != nil {
 				r.Logger.LogPanic(ctx, panicValue)
-				err = makePanicError(panicValue)
+				err = r.PanicHandler.MakePanicError(ctx, panicValue)
 				err.Path = path.toSlice()
 			}
 		}()

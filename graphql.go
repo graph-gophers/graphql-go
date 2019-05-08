@@ -28,6 +28,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		tracer:           trace.OpenTracingTracer{},
 		validationTracer: trace.NoopValidationTracer{},
 		logger:           &log.DefaultLogger{},
+		panicHandler:     &errors.DefaultPanicHandler{},
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -67,6 +68,7 @@ type Schema struct {
 	tracer                trace.Tracer
 	validationTracer      trace.ValidationTracer
 	logger                log.Logger
+	panicHandler          errors.PanicHandler
 	useStringDescriptions bool
 	disableIntrospection  bool
 }
@@ -123,6 +125,14 @@ func ValidationTracer(tracer trace.ValidationTracer) SchemaOpt {
 func Logger(logger log.Logger) SchemaOpt {
 	return func(s *Schema) {
 		s.logger = logger
+	}
+}
+
+// PanicHandler is used to customize the panic errors during query execution.
+// It defaults to errors.DefaultPanicHandler.
+func PanicHandler(panicHandler errors.PanicHandler) SchemaOpt {
+	return func(s *Schema) {
+		s.panicHandler = panicHandler
 	}
 }
 
@@ -197,9 +207,10 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 			Schema:               s.schema,
 			DisableIntrospection: s.disableIntrospection,
 		},
-		Limiter: make(chan struct{}, s.maxParallelism),
-		Tracer:  s.tracer,
-		Logger:  s.logger,
+		Limiter:      make(chan struct{}, s.maxParallelism),
+		Tracer:       s.tracer,
+		Logger:       s.logger,
+		PanicHandler: s.panicHandler,
 	}
 	varTypes := make(map[string]*introspection.Type)
 	for _, v := range op.Vars {
