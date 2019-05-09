@@ -193,7 +193,8 @@ func validateValue(c *opContext, v *common.InputValue, val interface{}, t common
 		}
 		vv, ok := val.([]interface{})
 		if !ok {
-			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid type %T.\nExpected type \"%s\", found %v.", v.Name.Name, val, t, val)
+			// Input coercion rules allow single items without wrapping array
+			validateValue(c, v, val, t.OfType)
 			return
 		}
 		for _, elem := range vv {
@@ -214,6 +215,19 @@ func validateValue(c *opContext, v *common.InputValue, val interface{}, t common
 			}
 		}
 		c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value %s.\nExpected type \"%s\", found %s.", v.Name.Name, e, t, e)
+	case *schema.InputObject:
+		if val == nil {
+			return
+		}
+		in, ok := val.(map[string]interface{})
+		if !ok {
+			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid type %T.\nExpected type \"%s\", found %s.", v.Name.Name, val, t, val)
+			return
+		}
+		for _, f := range t.Values {
+			fieldVal := in[f.Name.Name]
+			validateValue(c, f, fieldVal, f.Type)
+		}
 	}
 }
 
