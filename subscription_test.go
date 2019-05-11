@@ -263,7 +263,7 @@ func TestSchemaSubscribe(t *testing.T) {
 		},
 		{
 			Name:   "schema_without_resolver_errors",
-			Schema: &graphql.Schema{},
+			Schema: graphql.MustParseSchema(schema, nil),
 			Query: `
 				subscription onHelloSaid {
 					helloSaid {

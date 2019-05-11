@@ -62,6 +62,10 @@ func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
 func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
+	if resolver == nil {
+		return &Schema{Meta: newMeta(s), Schema: *s}, nil
+	}
+
 	b := newBuilder(s)
 
 	var query, mutation, subscription Resolvable

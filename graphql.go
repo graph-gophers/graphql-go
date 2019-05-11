@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
@@ -37,13 +38,11 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		return nil, err
 	}
 
-	if resolver != nil {
-		r, err := resolvable.ApplyResolver(s.schema, resolver)
-		if err != nil {
-			return nil, err
-		}
-		s.res = r
+	r, err := resolvable.ApplyResolver(s.schema, resolver)
+	if err != nil {
+		return nil, err
 	}
+	s.res = r
 
 	return s, nil
 }
@@ -156,7 +155,7 @@ func (s *Schema) Validate(queryString string) []*errors.QueryError {
 // without a resolver. If the context get cancelled, no further resolvers will be called and a
 // the context error will be returned as soon as possible (not immediately).
 func (s *Schema) Exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}) *Response {
-	if s.res == nil {
+	if s.res.Resolver == (reflect.Value{}) {
 		panic("schema created without resolver, can not exec")
 	}
 	return s.exec(ctx, queryString, operationName, variables, s.res)

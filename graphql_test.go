@@ -3017,3 +3017,58 @@ func TestErrorPropagation(t *testing.T) {
 		},
 	})
 }
+
+func TestSchema_Exec_without_resolver(t *testing.T) {
+	t.Parallel()
+
+	type args struct {
+		Query string
+		Schema string
+	}
+	type want struct {
+		Panic interface{}
+	}
+	testTable := []struct {
+		Name   string
+		Args   args
+		Want   want
+	}{
+		{
+			Name:   "schema_without_resolver_errors",
+			Args: args{
+				Query: `
+					query {
+						hero {
+							id
+							name
+							friends {
+								name
+							}
+						}
+					}
+				`,
+				Schema: starwars.Schema,
+			},
+			Want: want{Panic: "schema created without resolver, can not exec"},
+		},
+	}
+
+	for _, tt := range testTable {
+		t.Run(tt.Name, func(t *testing.T) {
+			s := graphql.MustParseSchema(tt.Args.Schema, nil)
+
+			defer func() {
+				r := recover()
+				if r == nil {
+					t.Fatal("expected query to panic")
+				}
+				if r != tt.Want.Panic {
+					t.Logf("got:  %s", r)
+					t.Logf("want: %s", tt.Want.Panic)
+					t.Fail()
+				}
+			}()
+			_ = s.Exec(context.Background(), tt.Args.Query, "", map[string]interface{}{})
+		})
+	}
+}
