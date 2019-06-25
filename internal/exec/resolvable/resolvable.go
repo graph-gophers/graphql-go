@@ -394,7 +394,10 @@ func findField(t reflect.Type, name string, index []int) []int {
 	}
 
 	// Pop from slice
-	return index[:len(index)-1]
+	if len(index) > 0 {
+		return index[:len(index)-1]
+	}
+	return index
 }
 
 func unwrapNonNull(t common.Type) (common.Type, bool) {
