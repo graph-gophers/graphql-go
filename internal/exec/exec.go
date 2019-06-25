@@ -217,7 +217,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			if res.Kind() == reflect.Ptr {
 				res = res.Elem()
 			}
-			result = res.Field(f.field.FieldIndex)
+			result = res.FieldByIndex(f.field.FieldIndex)
 		}
 		return nil
 	}()

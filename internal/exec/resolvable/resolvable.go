@@ -34,7 +34,7 @@ type Field struct {
 	schema.Field
 	TypeName    string
 	MethodIndex int
-	FieldIndex  int
+	FieldIndex  []int
 	HasContext  bool
 	HasError    bool
 	ArgsPacker  *packer.StructPacker
@@ -43,7 +43,7 @@ type Field struct {
 }
 
 func (f *Field) UseMethodResolver() bool {
-	return f.FieldIndex == -1
+	return len(f.FieldIndex) == 0
 }
 
 type TypeAssertion struct {
@@ -229,12 +229,12 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 	Fields := make(map[string]*Field)
 	rt := unwrapPtr(resolverType)
 	for _, f := range fields {
-		fieldIndex := -1
+		var fieldIndex []int
 		methodIndex := findMethod(resolverType, f.Name)
 		if b.schema.UseFieldResolvers && methodIndex == -1 {
-			fieldIndex = findField(rt, f.Name)
+			fieldIndex = findField(rt, f.Name, []int{})
 		}
-		if methodIndex == -1 && fieldIndex == -1 {
+		if methodIndex == -1 && len(fieldIndex) == 0 {
 			hint := ""
 			if findMethod(reflect.PtrTo(resolverType), f.Name) != -1 {
 				hint = " (hint: the method exists on the pointer type)"
@@ -247,7 +247,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 		if methodIndex != -1 {
 			m = resolverType.Method(methodIndex)
 		} else {
-			sf = rt.Field(fieldIndex)
+			sf = rt.FieldByIndex(fieldIndex)
 		}
 		fe, err := b.makeFieldExec(typeName, f, m, sf, methodIndex, fieldIndex, methodHasReceiver)
 		if err != nil {
@@ -290,7 +290,7 @@ var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
 
 func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.Method, sf reflect.StructField,
-	methodIndex, fieldIndex int, methodHasReceiver bool) (*Field, error) {
+	methodIndex int, fieldIndex []int, methodHasReceiver bool) (*Field, error) {
 
 	var argsPacker *packer.StructPacker
 	var hasError bool
@@ -380,13 +380,21 @@ func findMethod(t reflect.Type, name string) int {
 	return -1
 }
 
-func findField(t reflect.Type, name string) int {
+func findField(t reflect.Type, name string, index []int) []int {
 	for i := 0; i < t.NumField(); i++ {
-		if strings.EqualFold(stripUnderscore(name), stripUnderscore(t.Field(i).Name)) {
-			return i
+		field := t.Field(i)
+
+		switch {
+		case field.Type.Kind() == reflect.Struct && field.Anonymous:
+			index = append(index, i)
+			return findField(field.Type, name, index)
+		case strings.EqualFold(stripUnderscore(name), stripUnderscore(field.Name)):
+			return append(index, i)
 		}
 	}
-	return -1
+
+	// Pop from slice
+	return index[:len(index)-1]
 }
 
 func unwrapNonNull(t common.Type) (common.Type, bool) {
