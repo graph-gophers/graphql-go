@@ -384,19 +384,18 @@ func findField(t reflect.Type, name string, index []int) []int {
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 
-		switch {
-		case field.Type.Kind() == reflect.Struct && field.Anonymous:
-			index = append(index, i)
-			return findField(field.Type, name, index)
-		case strings.EqualFold(stripUnderscore(name), stripUnderscore(field.Name)):
+		if field.Type.Kind() == reflect.Struct && field.Anonymous {
+			newIndex := findField(field.Type, name, []int{i})
+			if len(newIndex) > 1 {
+				return append(index, newIndex...)
+			}
+		}
+
+		if strings.EqualFold(stripUnderscore(name), stripUnderscore(field.Name)) {
 			return append(index, i)
 		}
 	}
 
-	// Pop from slice
-	if len(index) > 0 {
-		return index[:len(index)-1]
-	}
 	return index
 }
 
