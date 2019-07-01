@@ -228,10 +228,14 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 
 	Fields := make(map[string]*Field)
 	rt := unwrapPtr(resolverType)
+	fieldsCount := getFieldCount(rt, map[string]int{})
 	for _, f := range fields {
 		var fieldIndex []int
 		methodIndex := findMethod(resolverType, f.Name)
 		if b.schema.UseFieldResolvers && methodIndex == -1 {
+			if fieldsCount[strings.ToLower(stripUnderscore(f.Name))] > 1 {
+				return nil, fmt.Errorf("%s does not resolve %q: ambiguous field %q", resolverType, typeName, f.Name)
+			}
 			fieldIndex = findField(rt, f.Name, []int{})
 		}
 		if methodIndex == -1 && len(fieldIndex) == 0 {
@@ -397,6 +401,29 @@ func findField(t reflect.Type, name string, index []int) []int {
 	}
 
 	return index
+}
+
+// getFieldCount helps resolve ambiguity when more than one embedded struct contains fields with the same name.
+func getFieldCount(t reflect.Type, count map[string]int) map[string]int {
+	if t.Kind() != reflect.Struct {
+		return nil
+	}
+
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		fieldName := strings.ToLower(stripUnderscore(field.Name))
+
+		if field.Type.Kind() == reflect.Struct && field.Anonymous {
+			count = getFieldCount(field.Type, count)
+		} else {
+			if _, ok := count[fieldName]; !ok {
+				count[fieldName] = 0
+			}
+			count[fieldName]++
+		}
+	}
+
+	return count
 }
 
 func unwrapNonNull(t common.Type) (common.Type, bool) {
