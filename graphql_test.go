@@ -164,6 +164,8 @@ func (r *discussPlanResolver) DismissVader(ctx context.Context) (string, error) 
 }
 
 func TestHelloWorld(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -212,6 +214,8 @@ func TestHelloWorld(t *testing.T) {
 }
 
 func TestHelloSnake(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -260,6 +264,8 @@ func TestHelloSnake(t *testing.T) {
 }
 
 func TestHelloSnakeArguments(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -360,6 +366,8 @@ func (r *testNilInterfaceResolver) C() (interface{ Z() int32 }, error) {
 }
 
 func TestNilInterface(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -403,6 +411,8 @@ func TestNilInterface(t *testing.T) {
 }
 
 func TestErrorPropagationInLists(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -631,6 +641,8 @@ func TestErrorPropagationInLists(t *testing.T) {
 }
 
 func TestErrorWithExtensions(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -670,6 +682,8 @@ func TestErrorWithExtensions(t *testing.T) {
 }
 
 func TestErrorWithNoExtensions(t *testing.T) {
+	t.Parallel()
+
 	err := errors.New("I find your lack of faith disturbing")
 
 	gqltesting.RunTests(t, []*gqltesting.Test{
@@ -1074,6 +1088,8 @@ func (r *testDeprecatedDirectiveResolver) C() int32 {
 }
 
 func TestDeprecatedDirective(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -1159,6 +1175,161 @@ func TestDeprecatedDirective(t *testing.T) {
 					}
 				}
 			`,
+		},
+	})
+}
+
+type testBadEnumResolver struct {}
+
+func (r *testBadEnumResolver) Hero() *testBadEnumCharacterResolver {
+	return &testBadEnumCharacterResolver{}
+}
+
+type testBadEnumCharacterResolver struct {}
+
+func (r *testBadEnumCharacterResolver) Name() string {
+	return "Spock"
+}
+
+func (r *testBadEnumCharacterResolver) AppearsIn() []string {
+	return []string{"STAR_TREK"}
+}
+
+func TestEnums(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		// Valid input enum supplied in query text
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query HeroForEpisode {
+					hero(episode: EMPIRE) {
+						name
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hero": {
+						"name": "Luke Skywalker"
+					}
+				}
+			`,
+		},
+		// Invalid input enum supplied in query text
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query HeroForEpisode {
+					hero(episode: WRATH_OF_KHAN) {
+						name
+					}
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: "Argument \"episode\" has invalid value WRATH_OF_KHAN.\nExpected type \"Episode\", found WRATH_OF_KHAN.",
+					Locations: []gqlerrors.Location{{Column: 20, Line: 3}},
+					Rule:      "ArgumentsOfCorrectType",
+				},
+			},
+		},
+		// Valid input enum supplied in variables
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query HeroForEpisode($episode: Episode!) {
+					hero(episode: $episode) {
+						name
+					}
+				}
+			`,
+			Variables: map[string]interface{}{"episode": "JEDI"},
+			ExpectedResult: `
+				{
+					"hero": {
+						"name": "R2-D2"
+					}
+				}
+			`,
+		},
+		// Invalid input enum supplied in variables
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query HeroForEpisode($episode: Episode!) {
+					hero(episode: $episode) {
+						name
+					}
+				}
+			`,
+			Variables: map[string]interface{}{"episode": "FINAL_FRONTIER"},
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: "Variable \"episode\" has invalid value FINAL_FRONTIER.\nExpected type \"Episode\", found FINAL_FRONTIER.",
+					Locations: []gqlerrors.Location{{Column: 26, Line: 2}},
+					Rule:      "VariablesOfCorrectType",
+				},
+			},
+		},
+		// Valid enum value in response
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query Hero {
+					hero {
+						name
+						appearsIn
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hero": {
+						"name": "R2-D2",
+						"appearsIn": ["NEWHOPE","EMPIRE","JEDI"]
+					}
+				}
+			`,
+		},
+		// Invalid enum value in response
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hero: Character
+				}
+
+				enum Episode {
+					NEWHOPE
+					EMPIRE
+					JEDI
+				}
+
+				type Character {
+					name: String!
+					appearsIn: [Episode!]!
+				}
+			`, &testBadEnumResolver{}),
+			Query: `
+				query Hero {
+					hero {
+						name
+						appearsIn
+					}
+				}
+			`,
+			ExpectedResult: `{
+				"hero": null
+			}`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: "Invalid value STAR_TREK.\nExpected type Episode, found STAR_TREK.",
+					Path:      []interface{}{"hero", "appearsIn", 0},
+				},
+			},
 		},
 	})
 }
@@ -2064,6 +2235,8 @@ func TestIntrospectionDisableIntrospection(t *testing.T) {
 }
 
 func TestMutationOrder(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -2111,6 +2284,8 @@ func TestMutationOrder(t *testing.T) {
 }
 
 func TestTime(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -2150,6 +2325,8 @@ func (r *resolverWithUnexportedMethod) changeTheNumber(args struct{ NewNumber in
 }
 
 func TestUnexportedMethod(t *testing.T) {
+	t.Parallel()
+
 	_, err := graphql.ParseSchema(`
 		schema {
 			mutation: Mutation
@@ -2171,6 +2348,8 @@ func (r *resolverWithUnexportedField) ChangeTheNumber(args struct{ newNumber int
 }
 
 func TestUnexportedField(t *testing.T) {
+	t.Parallel()
+
 	_, err := graphql.ParseSchema(`
 		schema {
 			mutation: Mutation
@@ -2323,6 +2502,8 @@ func (r *inputResolver) ID(args struct{ Value graphql.ID }) graphql.ID {
 }
 
 func TestInput(t *testing.T) {
+	t.Parallel()
+
 	coercionSchema := graphql.MustParseSchema(`
 		schema {
 			query: Query
@@ -2511,6 +2692,8 @@ func (r *childResolver) NilChild() *childResolver {
 }
 
 func TestErrorPropagation(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -2833,4 +3016,59 @@ func TestErrorPropagation(t *testing.T) {
 			},
 		},
 	})
+}
+
+func TestSchema_Exec_without_resolver(t *testing.T) {
+	t.Parallel()
+
+	type args struct {
+		Query string
+		Schema string
+	}
+	type want struct {
+		Panic interface{}
+	}
+	testTable := []struct {
+		Name   string
+		Args   args
+		Want   want
+	}{
+		{
+			Name:   "schema_without_resolver_errors",
+			Args: args{
+				Query: `
+					query {
+						hero {
+							id
+							name
+							friends {
+								name
+							}
+						}
+					}
+				`,
+				Schema: starwars.Schema,
+			},
+			Want: want{Panic: "schema created without resolver, can not exec"},
+		},
+	}
+
+	for _, tt := range testTable {
+		t.Run(tt.Name, func(t *testing.T) {
+			s := graphql.MustParseSchema(tt.Args.Schema, nil)
+
+			defer func() {
+				r := recover()
+				if r == nil {
+					t.Fatal("expected query to panic")
+				}
+				if r != tt.Want.Panic {
+					t.Logf("got:  %s", r)
+					t.Logf("want: %s", tt.Want.Panic)
+					t.Fail()
+				}
+			}()
+			_ = s.Exec(context.Background(), tt.Args.Query, "", map[string]interface{}{})
+		})
+	}
 }

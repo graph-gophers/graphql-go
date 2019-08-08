@@ -12,6 +12,7 @@ import (
 )
 
 type Schema struct {
+	*Meta
 	schema.Schema
 	Query        Resolvable
 	Mutation     Resolvable
@@ -61,6 +62,10 @@ func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
 func ApplyResolver(s *schema.Schema, resolver interface{}, prefixRootFuncs bool) (*Schema, error) {
+	if resolver == nil {
+		return &Schema{Meta: newMeta(s), Schema: *s}, nil
+	}
+
 	b := newBuilder(s)
 
 	var query, mutation, subscription Resolvable
@@ -88,6 +93,7 @@ func ApplyResolver(s *schema.Schema, resolver interface{}, prefixRootFuncs bool)
 	}
 
 	return &Schema{
+		Meta:         newMeta(s),
 		Schema:       *s,
 		Resolver:     reflect.ValueOf(resolver),
 		Query:        query,
