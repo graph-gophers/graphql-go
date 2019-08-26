@@ -166,7 +166,7 @@ type InputObject struct {
 // https://facebook.github.io/graphql/draft/#sec-Type-System-Extensions
 type Extension struct {
 	Type NamedType
-	// TODO: Add a list og directives
+	// TODO: Add a list of directives
 }
 
 // FieldsList is a list of an Object's Fields.
