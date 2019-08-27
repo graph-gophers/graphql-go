@@ -18,7 +18,7 @@ func TestParseInterfaceDef(t *testing.T) {
 	tests := []testCase{{
 		description: "Parses simple interface",
 		definition:  "Greeting { field: String }",
-		expected:    &Interface{Name: "Greeting", Fields: []*Field{&Field{Name: "field"}}},
+		expected:    &Interface{Name: "Greeting", Fields: []*Field{{Name: "field"}}},
 	}}
 
 	for _, test := range tests {
@@ -158,8 +158,8 @@ func compareObjects(t *testing.T, expected, actual *Object) {
 func setup(t *testing.T, def string) *common.Lexer {
 	t.Helper()
 
-	lex := common.NewLexer(def)
-	lex.Consume()
+	lex := common.NewLexer(def, false)
+	lex.ConsumeWhitespace()
 
 	return lex
 }
