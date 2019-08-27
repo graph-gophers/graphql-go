@@ -194,32 +194,29 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 
 		res := f.resolver
 		if f.field.UseMethodResolver() {
-            var in []reflect.Value
-		if f.field.HasContext {
-			in = append(in, reflect.ValueOf(traceCtx))
-		}
-		if f.field.ArgsPacker != nil {
-			in = append(in, f.field.PackedArgs)
-		}
-		callOut := f.resolver.Method(f.field.MethodIndex).Call(in)
-		result = callOut[0]
-		if f.field.HasError && !callOut[1].IsNil() {
-			graphQLErr, ok := callOut[1].Interface().(errors.GraphQLError)
-			if ok {
-				extnErr := graphQLErr.PrepareExtErr()
-				extnErr.Path = path.toSlice()
-				extnErr.ResolverError = errlib.New(extnErr.Message)
-				return extnErr
+			var in []reflect.Value
+			if f.field.HasContext {
+				in = append(in, reflect.ValueOf(traceCtx))
 			}
-
-			resolverErr := callOut[1].Interface().(error)
-			err := errors.Errorf("%s", resolverErr)
-			err.Path = path.toSlice()
-			err.ResolverError = resolverErr
-            if ex, ok := callOut[1].Interface().(extensionser); ok {
-					err.Extensions = ex.Extensions()
+			if f.field.ArgsPacker != nil {
+				in = append(in, f.field.PackedArgs)
+			}
+			callOut := f.resolver.Method(f.field.MethodIndex).Call(in)
+			result = callOut[0]
+			if f.field.HasError && !callOut[1].IsNil() {
+				graphQLErr, ok := callOut[1].Interface().(errors.GraphQLError)
+				if ok {
+					extnErr := graphQLErr.PrepareExtErr()
+					extnErr.Path = path.toSlice()
+					extnErr.ResolverError = errlib.New(extnErr.Message)
+					return extnErr
 				}
-                return err
+
+				resolverErr := callOut[1].Interface().(error)
+				err := errors.Errorf("%s", resolverErr)
+				err.Path = path.toSlice()
+				err.ResolverError = resolverErr
+				return err
 			}
 		} else {
 			// TODO extract out unwrapping ptr logic to a common place
