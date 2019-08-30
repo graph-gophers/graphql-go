@@ -199,6 +199,52 @@ func TestParse(t *testing.T) {
 				return nil
 			},
 		},
+		{
+			name: "Schema extension works correctly",
+			sdl: `
+			schema {
+				query: Query
+			}
+			type Query {
+				hello: String!
+			}
+			extend schema {
+				mutation: Mutation
+			}
+			type Mutation {
+				concat(a: String!, b: String!): String!
+			}
+			`,
+			validateSchema: func(s *schema.Schema) error {
+				typq, ok := s.Types["Query"].(*schema.Object)
+				if !ok {
+					return fmt.Errorf("type %q not found", "Query")
+				}
+				helloField := typq.Fields.Get("hello")
+				if helloField == nil {
+					return fmt.Errorf("field %q not found", "hello")
+				}
+				if helloField.Type.String() != "String!" {
+					return fmt.Errorf("field %q has an invalid type: %q", "hello", helloField.Type.String())
+				}
+
+				typm, ok := s.Types["Mutation"].(*schema.Object)
+				if !ok {
+					return fmt.Errorf("type %q not found", "Mutation")
+				}
+				concatField := typm.Fields.Get("concat")
+				if concatField == nil {
+					return fmt.Errorf("field %q not found", "concat")
+				}
+				if concatField.Type.String() != "String!" {
+					return fmt.Errorf("field %q has an invalid type: %q", "concat", concatField.Type.String())
+				}
+				if len(concatField.Args) != 2 || concatField.Args[0] == nil || concatField.Args[1] == nil || concatField.Args[0].Type.String() != "String!" || concatField.Args[1].Type.String() != "String!" {
+					return fmt.Errorf("field %q has an invalid args: %+v", "concat", concatField.Args)
+				}
+				return nil
+			},
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			s := schema.New()
