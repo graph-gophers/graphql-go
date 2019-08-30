@@ -1,0 +1,6 @@
+{
+  "name": "graphql-go",
+  "description": "Fork of Golang based Graphql (graph-gophers/graphql-go)",
+  "owner": "bmishra",
+  "slack_channel": "gql-alerts"
+}
