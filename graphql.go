@@ -179,6 +179,11 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		return &Response{Errors: []*errors.QueryError{errors.Errorf("%s", err)}}
 	}
 
+	// Subscriptions are not valid in Exec. Use schema.Subscribe() instead.
+	if op.Type == query.Subscription {
+		return &Response{Errors: []*errors.QueryError{&errors.QueryError{ Message: "graphql-ws protocol header is missing" }}}
+	}
+
 	// Fill in variables with the defaults from the operation
 	if variables == nil {
 		variables = make(map[string]interface{}, len(op.Vars))

@@ -3072,3 +3072,33 @@ func TestSchema_Exec_without_resolver(t *testing.T) {
 		})
 	}
 }
+
+type subscriptionsInExecResolver struct{}
+
+func (r *subscriptionsInExecResolver) AppUpdated() <-chan string {
+	return make(chan string)
+}
+
+func TestSubscriptions_In_Exec(t *testing.T) {
+	gqltesting.RunTest(t, &gqltesting.Test{
+		Schema: graphql.MustParseSchema(`
+			schema {
+				subscription: Subscription
+			}
+
+			type Subscription {
+				appUpdated : String!
+			}
+	`, &subscriptionsInExecResolver{}),
+		Query: `
+			subscription {
+				appUpdated
+		  	}
+		`,
+		ExpectedErrors: []*gqlerrors.QueryError{
+			{
+				Message: "graphql-ws protocol header is missing",
+			},
+		},
+	})
+}
