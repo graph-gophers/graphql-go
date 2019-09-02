@@ -166,7 +166,7 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
-			name: "Type extension works correctly",
+			name: "Extend type",
 			sdl: `
 			type Query {
 				hello: String!
@@ -200,7 +200,7 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
-			name: "Schema extension works correctly",
+			name: "Extend schema",
 			sdl: `
 			schema {
 				query: Query
@@ -364,43 +364,6 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
-			name: "Extended enum value already exists",
-			sdl: `
-			enum Currencies{
-				AUD
-				USD
-				EUR
-			}
-			extend enum Currencies {
-				AUD
-			}`,
-			validateError: func(err error) error {
-				msg := `enum value "AUD" already declared in "Currencies"`
-				if err == nil || err.Error() != msg {
-					return fmt.Errorf("expected error %q, but got %q", msg, err)
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extend unknown type",
-			sdl: `
-			type Query {
-				hello: String!
-			}
-
-			extend type Product {
-				name: String!
-			}`,
-			validateError: func(err error) error {
-				msg := `trying to extend unknown type "Product"`
-				if err == nil || err.Error() != msg {
-					return fmt.Errorf("expected error %q, but got %q", msg, err)
-				}
-				return nil
-			},
-		},
-		{
 			name: "Extend incompatible type",
 			sdl: `
 			type Query {
@@ -412,27 +375,6 @@ func TestParse(t *testing.T) {
 			}`,
 			validateError: func(err error) error {
 				msg := `trying to extend type "OBJECT" with type "INTERFACE"`
-				if err == nil || err.Error() != msg {
-					return fmt.Errorf("expected error %q, but got %q", msg, err)
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extend field already exists",
-			sdl: `
-			interface Named {
-				name: String!
-			}
-			type Product implements Named {
-				id: ID!
-				name: String!
-			}
-			extend type Product {
-				name: String!
-			}`,
-			validateError: func(err error) error {
-				msg := `extended field "name" already exists`
 				if err == nil || err.Error() != msg {
 					return fmt.Errorf("expected error %q, but got %q", msg, err)
 				}
@@ -460,7 +402,7 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
-			name: "Extended union already contains type",
+			name: "Extend union already contains type",
 			sdl: `
 			type Named {
 				name: String!
@@ -483,68 +425,7 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
-			name: "Extended unknown type",
-			sdl: `
-			extend type User {
-				name: String!
-			}
-			`,
-			validateError: func(err error) error {
-				msg := `trying to extend unknown type "User"`
-				if err == nil || err.Error() != msg {
-					return fmt.Errorf("expected error %q, but got %q", msg, err)
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extend type with interface implementation",
-			sdl: `
-			interface Named {
-				name: String!
-			}
-			type Product {
-				id: ID!
-			}
-			extend type Product implements Named {
-				name: String!
-			}`,
-			validateSchema: func(s *schema.Schema) error {
-				typ, ok := s.Types["Product"].(*schema.Object)
-				if !ok {
-					return fmt.Errorf("type %q not found", "Product")
-				}
-				idField := typ.Fields.Get("id")
-				if idField == nil {
-					return fmt.Errorf("field %q not found", "id")
-				}
-				if idField.Type.String() != "ID!" {
-					return fmt.Errorf("field %q has an invalid type: %q", "id", idField.Type.String())
-				}
-				nameField := typ.Fields.Get("name")
-				if nameField == nil {
-					return fmt.Errorf("field %q not found", "name")
-				}
-				if nameField.Type.String() != "String!" {
-					return fmt.Errorf("field %q has an invalid type: %q", "name", nameField.Type.String())
-				}
-
-				ifc, ok := s.Types["Named"].(*schema.Interface)
-				if !ok {
-					return fmt.Errorf("type %q not found", "Named")
-				}
-				nameField = ifc.Fields.Get("name")
-				if nameField == nil {
-					return fmt.Errorf("field %q not found", "name")
-				}
-				if nameField.Type.String() != "String!" {
-					return fmt.Errorf("field %q has an invalid type: %q", "name", nameField.Type.String())
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extended union contains type",
+			name: "Extend union contains type",
 			sdl: `
 			type Named {
 				name: String!
@@ -630,43 +511,7 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
-			name: "Extend enum type",
-			sdl: `
-			enum Currencies{
-				AUD
-				USD
-				EUR
-			}
-			extend enum Currencies {
-				BGN
-				GBP
-			}
-			`,
-			validateSchema: func(s *schema.Schema) error {
-				typ, ok := s.Types["Currencies"].(*schema.Enum)
-				if !ok {
-					return fmt.Errorf("enum %q not found", "Currencies")
-				}
-				if len(typ.Values) != 5 {
-					return fmt.Errorf("Expected 5 enum values, but instead got %d types", len(typ.Values))
-				}
-				posible := map[string]struct{}{
-					"AUD": struct{}{},
-					"USD": struct{}{},
-					"EUR": struct{}{},
-					"BGN": struct{}{},
-					"GBP": struct{}{},
-				}
-				for _, v := range typ.Values {
-					if _, ok := posible[v.Name]; !ok {
-						return fmt.Errorf("Unexpected enum value %q", v.Name)
-					}
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extended enum value already exists",
+			name: "Extend enum value already exists",
 			sdl: `
 			enum Currencies{
 				AUD
@@ -685,7 +530,7 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
-			name: "Extended input field already exists",
+			name: "Extend input field already exists",
 			sdl: `
 			input Product{
 				name: String!
@@ -695,42 +540,6 @@ func TestParse(t *testing.T) {
 			}`,
 			validateError: func(err error) error {
 				msg := `extended field {"name" {'\x06' '\x05'}} already exists`
-				if err == nil || err.Error() != msg {
-					return fmt.Errorf("expected error %q, but got %q", msg, err)
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extend unknown type",
-			sdl: `
-			type Query {
-				hello: String!
-			}
-
-			extend type Product {
-				name: String!
-			}`,
-			validateError: func(err error) error {
-				msg := `trying to extend unknown type "Product"`
-				if err == nil || err.Error() != msg {
-					return fmt.Errorf("expected error %q, but got %q", msg, err)
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extend incompatible type",
-			sdl: `
-			type Query {
-				hello: String!
-			}
-
-			extend interface Query {
-				name: String!
-			}`,
-			validateError: func(err error) error {
-				msg := `trying to extend type "OBJECT" with type "INTERFACE"`
 				if err == nil || err.Error() != msg {
 					return fmt.Errorf("expected error %q, but got %q", msg, err)
 				}
@@ -754,125 +563,6 @@ func TestParse(t *testing.T) {
 				msg := `extended field "name" already exists`
 				if err == nil || err.Error() != msg {
 					return fmt.Errorf("expected error %q, but got %q", msg, err)
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extend type already implements an interface",
-			sdl: `
-			interface Named {
-				name: String!
-			}
-			type Product implements Named {
-				id: ID!
-				name: String!
-			}
-			extend type Product implements Named {
-			}`,
-			validateError: func(err error) error {
-				msg := `interface "Named" implemented in the extension is already implemented in "Product"`
-				if err == nil || err.Error() != msg {
-					return fmt.Errorf("expected error %q, but got %q", msg, err)
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extended unknown type",
-			sdl: `
-			extend type User {
-				name: String!
-			}
-			`,
-			validateError: func(err error) error {
-				msg := `trying to extend unknown type "User"`
-				if err == nil || err.Error() != msg {
-					return fmt.Errorf("expected error %q, but got %q", msg, err)
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extend type with interface implementation",
-			sdl: `
-			interface Named {
-				name: String!
-			}
-			type Product {
-				id: ID!
-			}
-			extend type Product implements Named {
-				name: String!
-			}`,
-			validateSchema: func(s *schema.Schema) error {
-				typ, ok := s.Types["Product"].(*schema.Object)
-				if !ok {
-					return fmt.Errorf("type %q not found", "Product")
-				}
-				idField := typ.Fields.Get("id")
-				if idField == nil {
-					return fmt.Errorf("field %q not found", "id")
-				}
-				if idField.Type.String() != "ID!" {
-					return fmt.Errorf("field %q has an invalid type: %q", "id", idField.Type.String())
-				}
-				nameField := typ.Fields.Get("name")
-				if nameField == nil {
-					return fmt.Errorf("field %q not found", "name")
-				}
-				if nameField.Type.String() != "String!" {
-					return fmt.Errorf("field %q has an invalid type: %q", "name", nameField.Type.String())
-				}
-
-				ifc, ok := s.Types["Named"].(*schema.Interface)
-				if !ok {
-					return fmt.Errorf("type %q not found", "Named")
-				}
-				nameField = ifc.Fields.Get("name")
-				if nameField == nil {
-					return fmt.Errorf("field %q not found", "name")
-				}
-				if nameField.Type.String() != "String!" {
-					return fmt.Errorf("field %q has an invalid type: %q", "name", nameField.Type.String())
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extend union type",
-			sdl: `
-			type Named {
-				name: String!
-			}
-			type Numbered {
-				num: Int!
-			}
-			union Item = Named | Numbered
-
-			type Coloured {
-				Colour: String!
-			}
-			
-			extend union Item = Coloured
-			`,
-			validateSchema: func(s *schema.Schema) error {
-				typ, ok := s.Types["Item"].(*schema.Union)
-				if !ok {
-					return fmt.Errorf("type %q not found", "Item")
-				}
-				if len(typ.PossibleTypes) != 3 {
-					return fmt.Errorf("Expected 3 possible types, but instead got %d types", len(typ.PossibleTypes))
-				}
-				posible := map[string]struct{}{
-					"Coloured": struct{}{},
-					"Named":    struct{}{},
-					"Numbered": struct{}{},
-				}
-				for _, pt := range typ.PossibleTypes {
-					if _, ok := posible[pt.Name]; !ok {
-						return fmt.Errorf("Unexpected possible type %q", pt.Name)
-					}
 				}
 				return nil
 			},
@@ -910,187 +600,7 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
-			name: "Extend input",
-			sdl: `
-			input Product {
-				id: ID!
-				name: String!
-			}
-			extend input Product {
-				category: Category!
-				tags: [String!]! = ["sale", "shoes"]
-			}
-			input Category {
-				id: ID!
-				name: String!
-			}
-			`,
-			validateSchema: func(s *schema.Schema) error {
-				typ, ok := s.Types["Product"].(*schema.InputObject)
-				if !ok {
-					return fmt.Errorf("type %q not found", "Product")
-				}
-				if len(typ.Values) != 4 {
-					return fmt.Errorf("Expected 4 fields, but instead got %d types", len(typ.Values))
-				}
-				posible := map[string]struct{}{
-					"id":       struct{}{},
-					"name":     struct{}{},
-					"category": struct{}{},
-					"tags":     struct{}{},
-				}
-				for _, pt := range typ.Values {
-					if _, ok := posible[pt.Name.Name]; !ok {
-						return fmt.Errorf("Unexpected possible type %q", pt.Name)
-					}
-				}
-				categoryField := typ.Values.Get("category")
-				if categoryField == nil {
-					return fmt.Errorf("field %q not found", "category")
-				}
-				if categoryField.Type.String() != "Category!" {
-					return fmt.Errorf("expected type %q, but got %q", "Category!", categoryField.Type.String())
-				}
-				if categoryField.Type.Kind() != "NON_NULL" {
-					return fmt.Errorf("expected kind %q, but got %q", "NON_NULL", categoryField.Type.Kind())
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extend enum type",
-			sdl: `
-			enum Currencies{
-				AUD
-				USD
-				EUR
-			}
-			extend enum Currencies {
-				BGN
-				GBP
-			}
-			`,
-			validateSchema: func(s *schema.Schema) error {
-				typ, ok := s.Types["Currencies"].(*schema.Enum)
-				if !ok {
-					return fmt.Errorf("enum %q not found", "Currencies")
-				}
-				if len(typ.Values) != 5 {
-					return fmt.Errorf("Expected 5 enum values, but instead got %d types", len(typ.Values))
-				}
-				posible := map[string]struct{}{
-					"AUD": struct{}{},
-					"USD": struct{}{},
-					"EUR": struct{}{},
-					"BGN": struct{}{},
-					"GBP": struct{}{},
-				}
-				for _, v := range typ.Values {
-					if _, ok := posible[v.Name]; !ok {
-						return fmt.Errorf("Unexpected enum value %q", v.Name)
-					}
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extended enum value already exists",
-			sdl: `
-			enum Currencies{
-				AUD
-				USD
-				EUR
-			}
-			extend enum Currencies {
-				AUD
-			}`,
-			validateError: func(err error) error {
-				msg := `enum value "AUD" already declared in "Currencies"`
-				if err == nil || err.Error() != msg {
-					return fmt.Errorf("expected error %q, but got %q", msg, err)
-				}
-				return nil
-			},
-		},
-		{
 			name: "Extend unknown type",
-			sdl: `
-			type Query {
-				hello: String!
-			}
-
-			extend type Product {
-				name: String!
-			}`,
-			validateError: func(err error) error {
-				msg := `trying to extend unknown type "Product"`
-				if err == nil || err.Error() != msg {
-					return fmt.Errorf("expected error %q, but got %q", msg, err)
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extend incompatible type",
-			sdl: `
-			type Query {
-				hello: String!
-			}
-
-			extend interface Query {
-				name: String!
-			}`,
-			validateError: func(err error) error {
-				msg := `trying to extend type "OBJECT" with type "INTERFACE"`
-				if err == nil || err.Error() != msg {
-					return fmt.Errorf("expected error %q, but got %q", msg, err)
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extend field already exists",
-			sdl: `
-			interface Named {
-				name: String!
-			}
-			type Product implements Named {
-				id: ID!
-				name: String!
-			}
-			extend type Product {
-				name: String!
-			}`,
-			validateError: func(err error) error {
-				msg := `extended field "name" already exists`
-				if err == nil || err.Error() != msg {
-					return fmt.Errorf("expected error %q, but got %q", msg, err)
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extend type already implements an interface",
-			sdl: `
-			interface Named {
-				name: String!
-			}
-			type Product implements Named {
-				id: ID!
-				name: String!
-			}
-			extend type Product implements Named {
-			}`,
-			validateError: func(err error) error {
-				msg := `interface "Named" implemented in the extension is already implemented in "Product"`
-				if err == nil || err.Error() != msg {
-					return fmt.Errorf("expected error %q, but got %q", msg, err)
-				}
-				return nil
-			},
-		},
-		{
-			name: "Extended unknown type",
 			sdl: `
 			extend type User {
 				name: String!
@@ -1105,7 +615,7 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
-			name: "Extended invalid syntax",
+			name: "Extend invalid syntax",
 			sdl: `
 			extend invalid Node {
 				id: ID!
