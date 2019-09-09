@@ -1,8 +1,12 @@
 package graphql
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 
 	"encoding/json"
 
@@ -202,4 +206,34 @@ func getOperation(document *query.Document, operationName string) (*query.Operat
 		return nil, fmt.Errorf("no operation with name %q", operationName)
 	}
 	return op, nil
+}
+
+// GetSchema loads schema to a string
+func GetSchema(path string) (string, error) {
+	files, err := filePathWalkDir(path)
+	if err != nil {
+		return "", err
+	}
+
+	var buffer bytes.Buffer
+	for _, file := range files {
+		b, err := ioutil.ReadFile(file)
+		if err != nil {
+			return "", err
+		}
+		buffer.Write(b)
+	}
+
+	return string(buffer.String()), nil
+}
+
+func filePathWalkDir(root string) ([]string, error) {
+	var files []string
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			files = append(files, path)
+		}
+		return nil
+	})
+	return files, err
 }
