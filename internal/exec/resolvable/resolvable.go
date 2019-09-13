@@ -228,7 +228,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 
 	Fields := make(map[string]*Field)
 	rt := unwrapPtr(resolverType)
-	fieldsCount := getFieldCount(rt, map[string]int{})
+	fieldsCount := fieldCount(rt, map[string]int{})
 	for _, f := range fields {
 		var fieldIndex []int
 		methodIndex := findMethod(resolverType, f.Name)
@@ -403,8 +403,8 @@ func findField(t reflect.Type, name string, index []int) []int {
 	return index
 }
 
-// getFieldCount helps resolve ambiguity when more than one embedded struct contains fields with the same name.
-func getFieldCount(t reflect.Type, count map[string]int) map[string]int {
+// fieldCount helps resolve ambiguity when more than one embedded struct contains fields with the same name.
+func fieldCount(t reflect.Type, count map[string]int) map[string]int {
 	if t.Kind() != reflect.Struct {
 		return nil
 	}
@@ -414,7 +414,7 @@ func getFieldCount(t reflect.Type, count map[string]int) map[string]int {
 		fieldName := strings.ToLower(stripUnderscore(field.Name))
 
 		if field.Type.Kind() == reflect.Struct && field.Anonymous {
-			count = getFieldCount(field.Type, count)
+			count = fieldCount(field.Type, count)
 		} else {
 			if _, ok := count[fieldName]; !ok {
 				count[fieldName] = 0
