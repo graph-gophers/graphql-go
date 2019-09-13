@@ -351,6 +351,88 @@ func TestBasic(t *testing.T) {
 	})
 }
 
+type testEmbeddedStructResolver struct{}
+
+func (_ *testEmbeddedStructResolver) Course() courseResolver {
+	return courseResolver{
+		CourseMeta: CourseMeta{
+			Name:       "Biology",
+			Timestamps: Timestamps{CreatedAt: "yesterday", UpdatedAt: "today"},
+		},
+		Instructor: Instructor{Name: "Socrates"},
+	}
+}
+
+type courseResolver struct {
+	CourseMeta
+	Instructor Instructor
+}
+
+type CourseMeta struct {
+	Name string
+	Timestamps
+}
+
+type Instructor struct {
+	Name string
+}
+
+type Timestamps struct {
+	CreatedAt string
+	UpdatedAt string
+}
+
+func TestEmbedded(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					course: Course!
+				}
+				
+				type Course {
+					name: String!
+					createdAt: String!
+					updatedAt: String!
+					instructor: Instructor!
+				}
+
+				type Instructor {
+					name: String!
+				}
+			`, &testEmbeddedStructResolver{}, graphql.UseFieldResolvers()),
+			Query: `
+				{
+					course{
+						name
+						createdAt
+						updatedAt
+						instructor {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"course": {
+						"name": "Biology",
+						"createdAt": "yesterday",
+						"updatedAt": "today",
+						"instructor": {
+							"name":"Socrates"
+						}
+					}
+				}
+			`,
+		},
+	})
+}
+
 type testNilInterfaceResolver struct{}
 
 func (r *testNilInterfaceResolver) A() interface{ Z() int32 } {
