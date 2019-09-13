@@ -382,7 +382,7 @@ type Timestamps struct {
 	UpdatedAt string
 }
 
-func TestEmbedded(t *testing.T) {
+func TestEmbeddedStruct(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
