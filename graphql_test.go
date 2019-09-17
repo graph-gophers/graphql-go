@@ -351,6 +351,88 @@ func TestBasic(t *testing.T) {
 	})
 }
 
+type testEmbeddedStructResolver struct{}
+
+func (_ *testEmbeddedStructResolver) Course() courseResolver {
+	return courseResolver{
+		CourseMeta: CourseMeta{
+			Name:       "Biology",
+			Timestamps: Timestamps{CreatedAt: "yesterday", UpdatedAt: "today"},
+		},
+		Instructor: Instructor{Name: "Socrates"},
+	}
+}
+
+type courseResolver struct {
+	CourseMeta
+	Instructor Instructor
+}
+
+type CourseMeta struct {
+	Name string
+	Timestamps
+}
+
+type Instructor struct {
+	Name string
+}
+
+type Timestamps struct {
+	CreatedAt string
+	UpdatedAt string
+}
+
+func TestEmbeddedStruct(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					course: Course!
+				}
+				
+				type Course {
+					name: String!
+					createdAt: String!
+					updatedAt: String!
+					instructor: Instructor!
+				}
+
+				type Instructor {
+					name: String!
+				}
+			`, &testEmbeddedStructResolver{}, graphql.UseFieldResolvers()),
+			Query: `
+				{
+					course{
+						name
+						createdAt
+						updatedAt
+						instructor {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"course": {
+						"name": "Biology",
+						"createdAt": "yesterday",
+						"updatedAt": "today",
+						"instructor": {
+							"name":"Socrates"
+						}
+					}
+				}
+			`,
+		},
+	})
+}
+
 type testNilInterfaceResolver struct{}
 
 func (r *testNilInterfaceResolver) A() interface{ Z() int32 } {
@@ -1179,13 +1261,13 @@ func TestDeprecatedDirective(t *testing.T) {
 	})
 }
 
-type testBadEnumResolver struct {}
+type testBadEnumResolver struct{}
 
 func (r *testBadEnumResolver) Hero() *testBadEnumCharacterResolver {
 	return &testBadEnumCharacterResolver{}
 }
 
-type testBadEnumCharacterResolver struct {}
+type testBadEnumCharacterResolver struct{}
 
 func (r *testBadEnumCharacterResolver) Name() string {
 	return "Spock"
@@ -1227,7 +1309,7 @@ func TestEnums(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message: "Argument \"episode\" has invalid value WRATH_OF_KHAN.\nExpected type \"Episode\", found WRATH_OF_KHAN.",
+					Message:   "Argument \"episode\" has invalid value WRATH_OF_KHAN.\nExpected type \"Episode\", found WRATH_OF_KHAN.",
 					Locations: []gqlerrors.Location{{Column: 20, Line: 3}},
 					Rule:      "ArgumentsOfCorrectType",
 				},
@@ -1265,7 +1347,7 @@ func TestEnums(t *testing.T) {
 			Variables: map[string]interface{}{"episode": "FINAL_FRONTIER"},
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message: "Variable \"episode\" has invalid value FINAL_FRONTIER.\nExpected type \"Episode\", found FINAL_FRONTIER.",
+					Message:   "Variable \"episode\" has invalid value FINAL_FRONTIER.\nExpected type \"Episode\", found FINAL_FRONTIER.",
 					Locations: []gqlerrors.Location{{Column: 26, Line: 2}},
 					Rule:      "VariablesOfCorrectType",
 				},
@@ -1327,7 +1409,7 @@ func TestEnums(t *testing.T) {
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
 					Message: "Invalid value STAR_TREK.\nExpected type Episode, found STAR_TREK.",
-					Path:      []interface{}{"hero", "appearsIn", 0},
+					Path:    []interface{}{"hero", "appearsIn", 0},
 				},
 			},
 		},
@@ -3018,23 +3100,65 @@ func TestErrorPropagation(t *testing.T) {
 	})
 }
 
+type ambiguousResolver struct {
+	Name string // ambiguous
+	University
+}
+
+type University struct {
+	Name string // ambiguous
+}
+
+func TestPanicAmbiguity(t *testing.T) {
+	panicMessage := `*graphql_test.ambiguousResolver does not resolve "Query": ambiguous field "name"`
+
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected schema parse to panic")
+		}
+
+		if r.(error).Error() != panicMessage {
+			t.Logf("got:  %s", r)
+			t.Logf("want: %s", panicMessage)
+			t.Fail()
+		}
+	}()
+
+	schema := `
+		schema {
+			query: Query
+		}
+
+		type Query {
+			name: String!
+			university: University!
+		}
+		
+		type University {
+			name: String!
+		}
+	`
+	graphql.MustParseSchema(schema, &ambiguousResolver{}, graphql.UseFieldResolvers())
+}
+
 func TestSchema_Exec_without_resolver(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		Query string
+		Query  string
 		Schema string
 	}
 	type want struct {
 		Panic interface{}
 	}
 	testTable := []struct {
-		Name   string
-		Args   args
-		Want   want
+		Name string
+		Args args
+		Want want
 	}{
 		{
-			Name:   "schema_without_resolver_errors",
+			Name: "schema_without_resolver_errors",
 			Args: args{
 				Query: `
 					query {
