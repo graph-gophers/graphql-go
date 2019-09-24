@@ -161,6 +161,8 @@ func (s *Schema) Exec(ctx context.Context, queryString string, operationName str
 }
 
 func (s *Schema) exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, res *resolvable.Schema) *Response {
+	var anyOtherValidationError bool
+
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
 		return &Response{Errors: []*errors.QueryError{qErr}}
@@ -170,7 +172,15 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
 	validationFinish(errs)
 	if len(errs) != 0 {
-		return &Response{Errors: errs}
+
+		for _, err := range errs {
+			if err.Rule != "VariablesOfCorrectType" && err.Rule != ""{
+				anyOtherValidationError = true
+			}
+		}
+		if anyOtherValidationError {
+			return &Response{Errors: errs}
+		}
 	}
 
 	op, err := getOperation(doc, operationName)
