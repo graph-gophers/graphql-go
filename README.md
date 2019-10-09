@@ -103,6 +103,57 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 }
 ```
 
+### Custom Errors
+
+Errors returned by resolvers can include custom extensions by implementing the `ResolverError` interface:
+
+```
+type ResolverError interface {
+	error
+	Extensions() map[string]interface{}
+}
+```
+
+Example of a simple custom error:
+
+```
+type droidNotFoundError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (e droidNotFoundError) Error() string {
+	return fmt.Sprintf("error [%s]: %s", e.Code, e.Message)
+}
+
+func (e droidNotFoundError) Extensions() map[string]interface{} {
+	return map[string]interface{}{
+		"code":    e.Code,
+		"message": e.Message,
+	}
+}
+```
+
+Which could produce a GraphQL error such as:
+
+```
+{
+  "errors": [
+    {
+      "message": "error [NotFound]: This is not the droid you are looking for",
+      "path": [
+        "droid"
+      ],
+      "extensions": {
+        "code": "NotFound",
+        "message": "This is not the droid you are looking for"
+      }
+    }
+  ],
+  "data": null
+}
+```
+
 ### Community Examples
 
 [tonyghita/graphql-go-example](https://github.com/tonyghita/graphql-go-example) - A more "productionized" version of the Star Wars API example given in this repository.
