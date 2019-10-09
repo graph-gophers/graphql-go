@@ -83,7 +83,7 @@ func (s *Schema) ValidateAndLog(queryString string) ([]*errors.QueryError, []Log
 	}
 
 	validationFinish := s.validationTracer.TraceValidation()
-	errs := validation.Validate(s.schema, doc, s.maxDepth)
+	errs := validation.Validate(s.schema, doc, map[string]interface{}{}, s.maxDepth)
 	validationFinish(errs)
 	if len(errs) != 0 {
 		return errs, []LoggedOperation{}

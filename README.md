@@ -1,4 +1,4 @@
-# graphql-go [![Sourcegraph](https://sourcegraph.com/github.com/graph-gophers/graphql-go/-/badge.svg)](https://sourcegraph.com/github.com/graph-gophers/graphql-go?badge) [![Build Status](https://semaphoreci.com/api/v1/graph-gophers/graphql-go/branches/master/badge.svg)](https://semaphoreci.com/graph-gophers/graphql-go) [![GoDoc](https://godoc.org/github.com/graph-gophers/graphql-go?status.svg)](https://godoc.org/github.com/graph-gophers/graphql-go)
+# graphql-go [![Sourcegraph](https://sourcegraph.com/github.com/JoinCAD/graphql-go/-/badge.svg)](https://sourcegraph.com/github.com/JoinCAD/graphql-go?badge) [![Build Status](https://semaphoreci.com/api/v1/JoinCAD/graphql-go/branches/master/badge.svg)](https://semaphoreci.com/JoinCAD/graphql-go) [![GoDoc](https://godoc.org/github.com/JoinCAD/graphql-go?status.svg)](https://godoc.org/github.com/JoinCAD/graphql-go)
 
 <p align="center"><img src="docs/img/logo.png" width="300"></p>
 
@@ -16,10 +16,12 @@ safe for production use.
 - resolvers are matched to the schema based on method sets (can resolve a GraphQL schema with a Go interface or Go struct).
 - handles panics in resolvers
 - parallel execution of resolvers
+- subscriptions
+   - [sample WS transport](https://github.com/graph-gophers/graphql-transport-ws)
 
 ## Roadmap
 
-We're trying out the GitHub Project feature to manage `graphql-go`'s [development roadmap](https://github.com/graph-gophers/graphql-go/projects/1).
+We're trying out the GitHub Project feature to manage `graphql-go`'s [development roadmap](https://github.com/JoinCAD/graphql-go/projects/1).
 Feedback is welcome and appreciated.
 
 ## (Some) Documentation
@@ -33,8 +35,8 @@ import (
         "log"
         "net/http"
 
-        graphql "github.com/graph-gophers/graphql-go"
-        "github.com/graph-gophers/graphql-go/relay"
+        graphql "github.com/JoinCAD/graphql-go"
+        "github.com/JoinCAD/graphql-go/relay"
 )
 
 type query struct{}
@@ -63,7 +65,17 @@ $ curl -XPOST -d '{"query": "{ hello }"}' localhost:8080/query
 
 ### Resolvers
 
-A resolver must have one method for each field of the GraphQL type it resolves. The method name has to be [exported](https://golang.org/ref/spec#Exported_identifiers) and match the field's name in a non-case-sensitive way.
+A resolver must have one method or field for each field of the GraphQL type it resolves. The method or field name has to be [exported](https://golang.org/ref/spec#Exported_identifiers) and match the schema's field's name in a non-case-sensitive way.
+You can use struct fields as resolvers by using `SchemaOpt: UseFieldResolvers()`. For example,
+```
+opts := []graphql.SchemaOpt{graphql.UseFieldResolvers()}
+schema := graphql.MustParseSchema(s, &query{}, opts...)
+```   
+
+When using `UseFieldResolvers` schema option, a struct field will be used *only* when:
+- there is no method for a struct field
+- a struct field does not implement an interface method
+- a struct field does not have arguments
 
 The method has up to two arguments:
 
@@ -97,4 +109,4 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 
 [deltaskelta/graphql-go-pets-example](https://github.com/deltaskelta/graphql-go-pets-example) - graphql-go resolving against a sqlite database
 
-[OscarYuen/go-graphql-starter](https://github.com/OscarYuen/go-graphql-starter) - a starter application integrated with dataloader, psql and basic authenication
+[OscarYuen/go-graphql-starter](https://github.com/OscarYuen/go-graphql-starter) - a starter application integrated with dataloader, psql and basic authentication
