@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
@@ -61,14 +62,15 @@ type Schema struct {
 	schema *schema.Schema
 	res    *resolvable.Schema
 
-	maxDepth              int
-	maxParallelism        int
-	tracer                trace.Tracer
-	validationTracer      trace.ValidationTracer
-	logger                log.Logger
-	useStringDescriptions bool
-	disableIntrospection  bool
-	prefixRootFunctions   bool
+	maxDepth                 int
+	maxParallelism           int
+	tracer                   trace.Tracer
+	validationTracer         trace.ValidationTracer
+	logger                   log.Logger
+	useStringDescriptions    bool
+	disableIntrospection     bool
+	prefixRootFunctions      bool
+	subscribeResolverTimeout time.Duration
 }
 
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
@@ -137,6 +139,15 @@ func Logger(logger log.Logger) SchemaOpt {
 func DisableIntrospection() SchemaOpt {
 	return func(s *Schema) {
 		s.disableIntrospection = true
+	}
+}
+
+// SubscribeResolverTimeout is an option to control the amount of time
+// we allow for a single subscribe message resolver to complete it's job
+// before it times out and returns an error to the subscriber.
+func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
+	return func(s *Schema) {
+		s.subscribeResolverTimeout = timeout
 	}
 }
 
