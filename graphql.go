@@ -142,12 +142,12 @@ type Response struct {
 }
 
 // Validate validates the given query with the schema.
-func (s *Schema) Validate(queryString string, variables map[string]interface{}) []*errors.QueryError {
+func (s *Schema) Validate(queryString string, variables map[string]interface{}) (bool, []*errors.QueryError) {
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
-		return []*errors.QueryError{qErr}
+		return true, []*errors.QueryError{qErr}
 	}
-	return validation.Validate(s.schema, doc, variables, s.maxDepth)
+	return false, validation.Validate(s.schema, doc, variables, s.maxDepth)
 }
 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
@@ -174,7 +174,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	if len(errs) != 0 {
 
 		for _, err := range errs {
-			if err.Rule != "VariablesOfCorrectType" && err.Rule != ""{
+			if err.Rule != "VariablesOfCorrectType" && err.Rule != "" {
 				anyOtherValidationError = true
 			}
 		}
