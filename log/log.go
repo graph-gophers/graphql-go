@@ -15,9 +15,9 @@ type Logger interface {
 type DefaultLogger struct{}
 
 // LogPanic is used to log recovered panic values that occur during query execution
-func (l *DefaultLogger) LogPanic(_ context.Context, value interface{}) {
+func (l *DefaultLogger) LogPanic(ctx context.Context, value interface{}) {
 	const size = 64 << 10
 	buf := make([]byte, size)
 	buf = buf[:runtime.Stack(buf, false)]
-	log.Printf("graphql: panic occurred: %v\n%s", value, buf)
+	log.Printf("graphql: panic occurred: %v\n%s\ncontext: %v", value, buf, ctx)
 }
