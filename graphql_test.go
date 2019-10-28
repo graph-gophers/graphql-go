@@ -2696,6 +2696,179 @@ func TestInput(t *testing.T) {
 	})
 }
 
+type inputArgumentsHello struct {}
+
+type inputArgumentsScalarMismatch1 struct{}
+
+type inputArgumentsScalarMismatch2 struct{}
+
+type inputArgumentsObjectMismatch1 struct{}
+
+type inputArgumentsObjectMismatch2 struct{}
+
+type inputArgumentsObjectMismatch3 struct{}
+
+type helloInput struct {
+	Name string
+}
+
+type helloInputMismatch struct {
+	World string
+}
+
+func (r *inputArgumentsHello) Hello(args struct { Input *helloInput }) string {
+	return "Hello " + args.Input.Name + "!"
+}
+
+func (r *inputArgumentsScalarMismatch1) Hello(name string) string {
+	return "Hello " + name + "!"
+}
+
+func (r *inputArgumentsScalarMismatch2) Hello(args struct { World string }) string {
+	return "Hello " + args.World + "!"
+}
+
+func (r *inputArgumentsObjectMismatch1) Hello(in helloInput) string {
+	return "Hello " + in.Name + "!"
+}
+
+func (r *inputArgumentsObjectMismatch2) Hello(args struct { Input *helloInputMismatch }) string {
+	return "Hello " + args.Input.World + "!"
+}
+
+func (r *inputArgumentsObjectMismatch3) Hello(args struct { Input *struct { Thing string } }) string {
+	return "Hello " + args.Input.Thing + "!"
+}
+
+func TestInputArguments_failSchemaParsing(t *testing.T) {
+	type args struct {
+		Resolver interface{}
+		Schema   string
+	}
+	type want struct {
+		Error string
+	}
+	testTable := map[string]struct {
+		Args args
+		Want want
+	}{
+		"Non-input type used with field arguments": {
+			Args: args{
+				Resolver: &inputArgumentsHello{},
+				Schema: `
+					schema {
+						query: Query
+					}
+					type Query {
+						hello(input: HelloInput): String!
+					}
+					type HelloInput {
+						name: String
+					}
+				`,
+			},
+			Want: want{Error: "field \"Input\": type of kind OBJECT can not be used as input\n\tused by (*graphql_test.inputArgumentsHello).Hello"},
+		},
+		"Missing Args Wrapper for scalar input": {
+			Args: args{
+				Resolver: &inputArgumentsScalarMismatch1{},
+				Schema: `
+					schema {
+						query: Query
+					}
+					type Query {
+						hello(name: String): String!
+					}
+					input HelloInput {
+						name: String
+					}
+				`,
+			},
+			Want: want{Error: "expected struct or pointer to struct, got string (hint: missing `args struct { ... }` wrapper for field arguments?)\n\tused by (*graphql_test.inputArgumentsScalarMismatch1).Hello"},
+		},
+		"Mismatching field name for scalar input": {
+			Args: args{
+				Resolver: &inputArgumentsScalarMismatch2{},
+				Schema: `
+					schema {
+						query: Query
+					}
+					type Query {
+						hello(name: String): String!
+					}
+				`,
+			},
+			Want: want{Error: "struct { World string } does not define field \"name\" (hint: missing `args struct { ... }` wrapper for field arguments, or missing field on input struct)\n\tused by (*graphql_test.inputArgumentsScalarMismatch2).Hello"},
+		},
+		"Missing Args Wrapper for Input type": {
+			Args: args{
+				Resolver: &inputArgumentsObjectMismatch1{},
+				Schema: `
+					schema {
+						query: Query
+					}
+					type Query {
+						hello(input: HelloInput): String!
+					}
+					input HelloInput {
+						name: String
+					}
+				`,
+			},
+			Want: want{Error: "graphql_test.helloInput does not define field \"input\" (hint: missing `args struct { ... }` wrapper for field arguments, or missing field on input struct)\n\tused by (*graphql_test.inputArgumentsObjectMismatch1).Hello"},
+		},
+		"Input struct missing field": {
+			Args: args{
+				Resolver: &inputArgumentsObjectMismatch2{},
+				Schema: `
+					schema {
+						query: Query
+					}
+					type Query {
+						hello(input: HelloInput): String!
+					}
+					input HelloInput {
+						name: String
+					}
+				`,
+			},
+			Want: want{Error: "field \"Input\": *graphql_test.helloInputMismatch does not define field \"name\" (hint: missing `args struct { ... }` wrapper for field arguments, or missing field on input struct)\n\tused by (*graphql_test.inputArgumentsObjectMismatch2).Hello"},
+		},
+		"Inline Input struct missing field": {
+			Args: args{
+				Resolver: &inputArgumentsObjectMismatch3{},
+				Schema: `
+					schema {
+						query: Query
+					}
+					type Query {
+						hello(input: HelloInput): String!
+					}
+					input HelloInput {
+						name: String
+					}
+				`,
+			},
+			Want: want{Error: "field \"Input\": *struct { Thing string } does not define field \"name\" (hint: missing `args struct { ... }` wrapper for field arguments, or missing field on input struct)\n\tused by (*graphql_test.inputArgumentsObjectMismatch3).Hello"},
+		},
+	}
+
+	for name, tt := range testTable {
+		tt := tt
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := graphql.ParseSchema(tt.Args.Schema, tt.Args.Resolver)
+			if err == nil || err.Error() != tt.Want.Error {
+				t.Log("Schema parsing error mismatch")
+				t.Logf("got: %s", err)
+				t.Logf("exp: %s", tt.Want.Error)
+				t.Fail()
+			}
+		})
+	}
+}
+
 func TestComposedFragments(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{

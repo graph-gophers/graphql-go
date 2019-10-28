@@ -255,7 +255,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 		}
 		fe, err := b.makeFieldExec(typeName, f, m, sf, methodIndex, fieldIndex, methodHasReceiver)
 		if err != nil {
-			return nil, fmt.Errorf("%s\n\treturned by (%s).%s", err, resolverType, m.Name)
+			return nil, fmt.Errorf("%s\n\tused by (%s).%s", err, resolverType, m.Name)
 		}
 		Fields[f.Name] = fe
 	}
