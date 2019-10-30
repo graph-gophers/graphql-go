@@ -313,6 +313,236 @@ func TestHelloSnakeArguments(t *testing.T) {
 	})
 }
 
+func TestRootOperations_invalidSchema(t *testing.T) {
+	type args struct {
+		Schema string
+	}
+	type want struct {
+		Error string
+	}
+	testTable := map[string]struct {
+		Args args
+		Want want
+	}{
+		"Empty schema": {
+			Want: want{Error: `root operation "query" must be defined`},
+		},
+		"Query declared by schema, but type not present": {
+			Args: args{
+				Schema: `
+					schema {
+						query: Query
+					}
+				`,
+			},
+			Want: want{Error: `graphql: type "Query" not found`},
+		},
+		"Query as incorrect type": {
+			Args: args{
+				Schema: `
+					schema {
+						query: String
+					}
+				`,
+			},
+			Want: want{Error: `root operation "query" must be an OBJECT`},
+		},
+		"Query with custom name, schema omitted": {
+			Args: args{
+				Schema: `
+					type QueryType {
+						hello: String!
+					}
+				`,
+			},
+			Want: want{Error: `root operation "query" must be defined`},
+		},
+		"Mutation as incorrect type": {
+			Args: args{
+				Schema: `
+					schema {
+						query: Query
+						mutation: String
+					}
+					type Query {
+						thing: String
+					}
+				`,
+			},
+			Want: want{Error: `root operation "mutation" must be an OBJECT`},
+		},
+		"Mutation declared by schema, but type not present": {
+			Args: args{
+				Schema: `
+					schema {
+						query: Query
+						mutation: Mutation
+					}
+					type Query {
+						hello: String!
+					}
+				`,
+			},
+			Want: want{Error: `graphql: type "Mutation" not found`},
+		},
+	}
+
+	for name, tt := range testTable {
+		tt := tt
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := graphql.ParseSchema(tt.Args.Schema, nil)
+			if err == nil || err.Error() != tt.Want.Error {
+				t.Logf("got:  %v", err)
+				t.Logf("want: %s", tt.Want.Error)
+				t.Fail()
+			}
+		})
+	}
+}
+
+func TestRootOperations_validSchema(t *testing.T) {
+	type resolver struct {
+		helloSaidResolver
+		helloWorldResolver1
+		theNumberResolver
+	}
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			// Query only, default name with `schema` omitted
+			Schema: graphql.MustParseSchema(`
+				type Query {
+					hello: String!
+				}
+			`, &resolver{}),
+			Query:          `{ hello }`,
+			ExpectedResult: `{"hello": "Hello world!"}`,
+		},
+		{
+			// Query only, default name with `schema` present
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+				type Query {
+					hello: String!
+				}
+			`, &resolver{}),
+			Query:          `{ hello }`,
+			ExpectedResult: `{"hello": "Hello world!"}`,
+		},
+		{
+			// Query only, custom name
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: QueryType
+				}
+				type QueryType {
+					hello: String!
+				}
+			`, &resolver{}),
+			Query:          `{ hello }`,
+			ExpectedResult: `{"hello": "Hello world!"}`,
+		},
+		{
+			// Query+Mutation, default names with `schema` omitted
+			Schema: graphql.MustParseSchema(`
+				type Query {
+					hello: String!
+				}
+				type Mutation {
+					changeTheNumber(newNumber: Int!): ChangedNumber!
+				}
+				type ChangedNumber {
+					theNumber: Int!
+				}
+			`, &resolver{}),
+			Query: `
+				mutation {
+					changeTheNumber(newNumber: 1) {
+						theNumber
+					}
+				}
+			`,
+			ExpectedResult: `{"changeTheNumber": {"theNumber": 1}}`,
+		},
+		{
+			// Query+Mutation, custom names
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: QueryType
+					mutation: MutationType
+				}
+				type QueryType {
+					hello: String!
+				}
+				type MutationType {
+					changeTheNumber(newNumber: Int!): ChangedNumber!
+				}
+				type ChangedNumber {
+					theNumber: Int!
+				}
+			`, &resolver{}),
+			Query: `
+				mutation {
+					changeTheNumber(newNumber: 1) {
+						theNumber
+					}
+				}
+			`,
+			ExpectedResult: `{"changeTheNumber": {"theNumber": 1}}`,
+		},
+		{
+			// Mutation with custom name, schema omitted
+			Schema: graphql.MustParseSchema(`
+				type Query {
+					hello: String!
+				}
+				type MutationType {
+					changeTheNumber(newNumber: Int!): ChangedNumber!
+				}
+				type ChangedNumber {
+					theNumber: Int!
+				}
+			`, &resolver{}),
+			Query: `
+				mutation {
+					changeTheNumber(newNumber: 1) {
+						theNumber
+					}
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{{Message: "no mutations are offered by the schema"}},
+		},
+		{
+			// Explicit schema without mutation field
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+				type Query {
+					hello: String!
+				}
+				type Mutation {
+					changeTheNumber(newNumber: Int!): ChangedNumber!
+				}
+				type ChangedNumber {
+					theNumber: Int!
+				}
+			`, &resolver{}),
+			Query: `
+				mutation {
+					changeTheNumber(newNumber: 1) {
+						theNumber
+					}
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{{Message: "no mutations are offered by the schema"}},
+		},
+	})
+}
+
 func TestBasic(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
@@ -3204,16 +3434,22 @@ func (r *subscriptionsInExecResolver) AppUpdated() <-chan string {
 }
 
 func TestSubscriptions_In_Exec(t *testing.T) {
+	r := &struct {
+		*helloResolver
+		*subscriptionsInExecResolver
+	}{
+		helloResolver:               &helloResolver{},
+		subscriptionsInExecResolver: &subscriptionsInExecResolver{},
+	}
 	gqltesting.RunTest(t, &gqltesting.Test{
 		Schema: graphql.MustParseSchema(`
-			schema {
-				subscription: Subscription
+			type Query {
+				hello: String!
 			}
-
 			type Subscription {
 				appUpdated : String!
 			}
-	`, &subscriptionsInExecResolver{}),
+		`, r),
 		Query: `
 			subscription {
 				appUpdated

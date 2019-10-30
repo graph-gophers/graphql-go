@@ -276,6 +276,146 @@ func TestSchemaSubscribe(t *testing.T) {
 	})
 }
 
+func TestRootOperations_invalidSubscriptionSchema(t *testing.T) {
+	type args struct {
+		Schema string
+	}
+	type want struct {
+		Error string
+	}
+	testTable := map[string]struct {
+		Args args
+		Want want
+	}{
+		"Subscription as incorrect type": {
+			Args: args{
+				Schema: `
+					schema {
+						query: Query
+						subscription: String
+					}
+					type Query {
+						thing: String
+					}
+				`,
+			},
+			Want: want{Error: `root operation "subscription" must be an OBJECT`},
+		},
+		"Subscription declared by schema, but type not present": {
+			Args: args{
+				Schema: `
+					schema {
+						query: Query
+						subscription: Subscription
+					}
+					type Query {
+						hello: String!
+					}
+				`,
+			},
+			Want: want{Error: `graphql: type "Subscription" not found`},
+		},
+	}
+
+	for name, tt := range testTable {
+		tt := tt
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := graphql.ParseSchema(tt.Args.Schema, nil)
+			if err == nil || err.Error() != tt.Want.Error {
+				t.Logf("got:  %v", err)
+				t.Logf("want: %s", tt.Want.Error)
+				t.Fail()
+			}
+		})
+	}
+}
+
+func TestRootOperations_validSubscriptionSchema(t *testing.T) {
+	gqltesting.RunSubscribes(t, []*gqltesting.TestSubscription{
+		{
+			Name: "Default name, schema omitted",
+			Schema: graphql.MustParseSchema(`
+				type Query {
+					hello: String!
+				}
+				type Subscription {
+					helloSaid: HelloSaidEvent!
+				}
+				type HelloSaidEvent {
+					msg: String!
+				}
+			`, &rootResolver{helloSaidResolver: &helloSaidResolver{upstream: closedUpstream(&helloSaidEventResolver{msg: "Hello world!"})}}),
+			Query: `subscription { helloSaid { msg } }`,
+			ExpectedResults: []gqltesting.TestResponse{
+				{
+					Data: json.RawMessage(`{"helloSaid": {"msg": "Hello world!"}}`),
+				},
+			},
+		},
+		{
+			Name: "Custom name, schema omitted",
+			Schema: graphql.MustParseSchema(`
+				type Query {
+					hello: String!
+				}
+				type SubscriptionType {
+					helloSaid: HelloSaidEvent!
+				}
+				type HelloSaidEvent {
+					msg: String!
+				}
+			`, &rootResolver{}),
+			Query:       `subscription { helloSaid { msg } }`,
+			ExpectedErr: errors.New("no subscriptions are offered by the schema"),
+		},
+		{
+			Name: "Custom name, schema required",
+			Schema: graphql.MustParseSchema(`
+					schema {
+						query: Query
+						subscription: SubscriptionType
+					}
+					type Query {
+						hello: String!
+					}
+					type SubscriptionType {
+						helloSaid: HelloSaidEvent!
+					}
+					type HelloSaidEvent {
+						msg: String!
+					}
+			`, &rootResolver{helloSaidResolver: &helloSaidResolver{upstream: closedUpstream(&helloSaidEventResolver{msg: "Hello world!"})}}),
+			Query: `subscription { helloSaid { msg } }`,
+			ExpectedResults: []gqltesting.TestResponse{
+				{
+					Data: json.RawMessage(`{"helloSaid": {"msg": "Hello world!"}}`),
+				},
+			},
+		},
+		{
+			Name: "Explicit schema without subscription field",
+			Schema: graphql.MustParseSchema(`
+					schema {
+						query: Query
+					}
+					type Query {
+						hello: String!
+					}
+					type Subscription {
+						helloSaid: HelloSaidEvent!
+					}
+					type HelloSaidEvent {
+						msg: String!
+					}
+			`, &rootResolver{helloSaidResolver: &helloSaidResolver{upstream: closedUpstream(&helloSaidEventResolver{msg: "Hello world!"})}}),
+			Query:       `subscription { helloSaid { msg } }`,
+			ExpectedErr: errors.New("no subscriptions are offered by the schema"),
+		},
+	})
+}
+
 const schema = `
 	schema {
 		subscription: Subscription,

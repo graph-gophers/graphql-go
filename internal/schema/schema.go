@@ -286,6 +286,21 @@ func (s *Schema) Parse(schemaString string, useStringDescriptions bool) error {
 		}
 	}
 
+	// https://graphql.github.io/graphql-spec/June2018/#sec-Root-Operation-Types
+	// > While any type can be the root operation type for a GraphQL operation, the type system definition language can
+	// > omit the schema definition when the query, mutation, and subscription root types are named Query, Mutation,
+	// > and Subscription respectively.
+	if len(s.entryPointNames) == 0 {
+		if _, ok := s.Types["Query"]; ok {
+			s.entryPointNames["query"] = "Query"
+		}
+		if _, ok := s.Types["Mutation"]; ok {
+			s.entryPointNames["mutation"] = "Mutation"
+		}
+		if _, ok := s.Types["Subscription"]; ok {
+			s.entryPointNames["subscription"] = "Subscription"
+		}
+	}
 	s.EntryPoints = make(map[string]NamedType)
 	for key, name := range s.entryPointNames {
 		t, ok := s.Types[name]
