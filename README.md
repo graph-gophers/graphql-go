@@ -45,9 +45,6 @@ func (_ *query) Hello() string { return "Hello, world!" }
 
 func main() {
         s := `
-                schema {
-                        query: Query
-                }
                 type Query {
                         hello: String!
                 }

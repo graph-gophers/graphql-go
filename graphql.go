@@ -37,6 +37,9 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 	if err := s.schema.Parse(schemaString, s.useStringDescriptions); err != nil {
 		return nil, err
 	}
+	if err := s.validateSchema(); err != nil {
+		return nil, err
+	}
 
 	r, err := resolvable.ApplyResolver(s.schema, resolver)
 	if err != nil {
@@ -183,6 +186,11 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	if op.Type == query.Subscription {
 		return &Response{Errors: []*errors.QueryError{&errors.QueryError{ Message: "graphql-ws protocol header is missing" }}}
 	}
+	if op.Type == query.Mutation {
+		if _, ok := s.schema.EntryPoints["mutation"]; !ok {
+			return &Response{Errors: []*errors.QueryError{{ Message: "no mutations are offered by the schema" }}}
+		}
+	}
 
 	// Fill in variables with the defaults from the operation
 	if variables == nil {
@@ -221,6 +229,39 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		Data:   data,
 		Errors: errs,
 	}
+}
+
+func (s *Schema) validateSchema() error {
+	// https://graphql.github.io/graphql-spec/June2018/#sec-Root-Operation-Types
+	// > The query root operation type must be provided and must be an Object type.
+	if err := validateRootOp(s.schema, "query", true); err != nil {
+		return err
+	}
+	// > The mutation root operation type is optional; if it is not provided, the service does not support mutations.
+	// > If it is provided, it must be an Object type.
+	if err := validateRootOp(s.schema, "mutation", false); err != nil {
+		return err
+	}
+	// > Similarly, the subscription root operation type is also optional; if it is not provided, the service does not
+	// > support subscriptions. If it is provided, it must be an Object type.
+	if err := validateRootOp(s.schema, "subscription", false); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateRootOp(s *schema.Schema, name string, mandatory bool) error {
+	t, ok := s.EntryPoints[name]
+	if !ok {
+		if mandatory {
+			return fmt.Errorf("root operation %q must be defined", name)
+		}
+		return nil
+	}
+	if t.Kind() != "OBJECT" {
+		return fmt.Errorf("root operation %q must be an OBJECT", name)
+	}
+	return nil
 }
 
 func getOperation(document *query.Document, operationName string) (*query.Operation, error) {
