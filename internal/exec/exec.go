@@ -216,7 +216,20 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 				err := errors.Errorf("%s", resolverErr)
 				err.Path = path.toSlice()
 				err.ResolverError = resolverErr
-				return err
+				errs := errors.QueryError{
+					Message:       "",
+					Locations:     nil,
+					Path:          nil,
+					Rule:          "",
+					ResolverError: nil,
+					Extensions: errors.Extensions{
+						Code:             0,
+						DeveloperMessage: err.Message,
+						MoreInfo:         fmt.Sprintf("%s", err.Path),
+						Timestamp:        "",
+					},
+				}
+				return &errs
 			}
 		} else {
 			// TODO extract out unwrapping ptr logic to a common place
