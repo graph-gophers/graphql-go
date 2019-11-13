@@ -104,7 +104,7 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 
 Errors returned by resolvers can include custom extensions by implementing the `ResolverError` interface:
 
-```
+```go
 type ResolverError interface {
 	error
 	Extensions() map[string]interface{}
@@ -113,7 +113,7 @@ type ResolverError interface {
 
 Example of a simple custom error:
 
-```
+```go
 type droidNotFoundError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -133,7 +133,7 @@ func (e droidNotFoundError) Extensions() map[string]interface{} {
 
 Which could produce a GraphQL error such as:
 
-```
+```go
 {
   "errors": [
     {
