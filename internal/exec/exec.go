@@ -217,11 +217,11 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 				err.Path = path.toSlice()
 				err.ResolverError = resolverErr
 				errs := errors.QueryError{
-					Message:       "",
-					Locations:     nil,
-					Path:          nil,
+					Message:       err.Message,
+					Locations:     err.Locations,
+					Path:          err.Path,
 					Rule:          "",
-					ResolverError: nil,
+					ResolverError: err.ResolverError,
 					Extensions: errors.Extensions{
 						Code:             0,
 						DeveloperMessage: err.Message,
