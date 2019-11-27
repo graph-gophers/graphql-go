@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"runtime/debug"
 	"sync"
 
 	"github.com/JoinCAD/graphql-go/errors"
@@ -37,7 +38,8 @@ type extensionser interface {
 }
 
 func makePanicError(value interface{}) *errors.QueryError {
-	return errors.Errorf("graphql: panic occurred: %v", value)
+	stack := string(debug.Stack())
+	return errors.Errorf("graphql: panic occurred: %v \n %v", value, stack)
 }
 
 func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *query.Operation) ([]byte, []*errors.QueryError) {
