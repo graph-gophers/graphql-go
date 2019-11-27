@@ -76,14 +76,14 @@ func logOperations(doc *query.Document) []LoggedOperation {
 
 // ValidateAndLog validates the query and simultaneously produces a loggable
 // summary of the operations it contains.
-func (s *Schema) ValidateAndLog(queryString string) ([]*errors.QueryError, []LoggedOperation) {
+func (s *Schema) ValidateAndLog(queryString string, variables map[string]interface{}) ([]*errors.QueryError, []LoggedOperation) {
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
 		return []*errors.QueryError{qErr}, nil
 	}
 
 	validationFinish := s.validationTracer.TraceValidation()
-	errs := validation.Validate(s.schema, doc, s.maxDepth)
+	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
 	validationFinish(errs)
 	if len(errs) != 0 {
 		return errs, []LoggedOperation{}

@@ -41,10 +41,13 @@ type Schema struct {
 	// http://facebook.github.io/graphql/draft/#sec-Type-System.Directives
 	Directives map[string]*DirectiveDecl
 
+	UseFieldResolvers bool
+
 	entryPointNames map[string]string
 	objects         []*Object
 	unions          []*Union
 	enums           []*Enum
+	extensions      []*Extension
 }
 
 // Resolve a named type in the schema by its name.
@@ -157,13 +160,22 @@ type InputObject struct {
 	// TODO: Add a list of directives?
 }
 
+// Extension type defines a GraphQL type extension.
+// Schemas, Objects, Inputs and Scalars can be extended.
+//
+// https://facebook.github.io/graphql/draft/#sec-Type-System-Extensions
+type Extension struct {
+	Type NamedType
+	// TODO: Add a list of directives
+}
+
 // FieldsList is a list of an Object's Fields.
 //
 // http://facebook.github.io/graphql/draft/#FieldsDefinition
 type FieldList []*Field
 
 // Get iterates over the field list, returning a pointer-to-Field when the field name matches the
-// provided `name` arguement.
+// provided `name` argument.
 // Returns nil when no field was found by that name.
 func (l FieldList) Get(name string) *Field {
 	for _, f := range l {
@@ -236,21 +248,26 @@ func New() *Schema {
 		Types:           make(map[string]NamedType),
 		Directives:      make(map[string]*DirectiveDecl),
 	}
-	for n, t := range Meta.Types {
+	m := newMeta()
+	for n, t := range m.Types {
 		s.Types[n] = t
 	}
-	for n, d := range Meta.Directives {
+	for n, d := range m.Directives {
 		s.Directives[n] = d
 	}
 	return s
 }
 
 // Parse the schema string.
-func (s *Schema) Parse(schemaString string) error {
-	l := common.NewLexer(schemaString)
+func (s *Schema) Parse(schemaString string, useStringDescriptions bool) error {
+	l := common.NewLexer(schemaString, useStringDescriptions)
 
 	err := l.CatchSyntaxError(func() { parseSchema(s, l) })
 	if err != nil {
+		return err
+	}
+
+	if err := mergeExtensions(s); err != nil {
 		return err
 	}
 
@@ -269,6 +286,21 @@ func (s *Schema) Parse(schemaString string) error {
 		}
 	}
 
+	// https://graphql.github.io/graphql-spec/June2018/#sec-Root-Operation-Types
+	// > While any type can be the root operation type for a GraphQL operation, the type system definition language can
+	// > omit the schema definition when the query, mutation, and subscription root types are named Query, Mutation,
+	// > and Subscription respectively.
+	if len(s.entryPointNames) == 0 {
+		if _, ok := s.Types["Query"]; ok {
+			s.entryPointNames["query"] = "Query"
+		}
+		if _, ok := s.Types["Mutation"]; ok {
+			s.entryPointNames["mutation"] = "Mutation"
+		}
+		if _, ok := s.Types["Subscription"]; ok {
+			s.entryPointNames["subscription"] = "Subscription"
+		}
+	}
 	s.EntryPoints = make(map[string]NamedType)
 	for key, name := range s.entryPointNames {
 		t, ok := s.Types[name]
@@ -290,6 +322,11 @@ func (s *Schema) Parse(schemaString string) error {
 			intf, ok := t.(*Interface)
 			if !ok {
 				return errors.Errorf("type %q is not an interface", intfName)
+			}
+			for _, f := range intf.Fields.Names() {
+				if obj.Fields.Get(f) == nil {
+					return errors.Errorf("interface %q expects field %q but %q does not provide it", intfName, f, obj.Name)
+				}
 			}
 			obj.Interfaces[i] = intf
 			intf.PossibleTypes = append(intf.PossibleTypes, obj)
@@ -316,6 +353,88 @@ func (s *Schema) Parse(schemaString string) error {
 			if err := resolveDirectives(s, value.Directives); err != nil {
 				return err
 			}
+		}
+	}
+
+	return nil
+}
+
+func mergeExtensions(s *Schema) error {
+	for _, ext := range s.extensions {
+		typ := s.Types[ext.Type.TypeName()]
+		if typ == nil {
+			return fmt.Errorf("trying to extend unknown type %q", ext.Type.TypeName())
+		}
+
+		if typ.Kind() != ext.Type.Kind() {
+			return fmt.Errorf("trying to extend type %q with type %q", typ.Kind(), ext.Type.Kind())
+		}
+
+		switch og := typ.(type) {
+		case *Object:
+			e := ext.Type.(*Object)
+
+			for _, field := range e.Fields {
+				if og.Fields.Get(field.Name) != nil {
+					return fmt.Errorf("extended field %q already exists", field.Name)
+				}
+			}
+			og.Fields = append(og.Fields, e.Fields...)
+
+			for _, en := range e.interfaceNames {
+				for _, on := range og.interfaceNames {
+					if on == en {
+						return fmt.Errorf("interface %q implemented in the extension is already implemented in %q", on, og.Name)
+					}
+				}
+			}
+			og.interfaceNames = append(og.interfaceNames, e.interfaceNames...)
+
+		case *InputObject:
+			e := ext.Type.(*InputObject)
+
+			for _, field := range e.Values {
+				if og.Values.Get(field.Name.Name) != nil {
+					return fmt.Errorf("extended field %q already exists", field.Name)
+				}
+			}
+			og.Values = append(og.Values, e.Values...)
+
+		case *Interface:
+			e := ext.Type.(*Interface)
+
+			for _, field := range e.Fields {
+				if og.Fields.Get(field.Name) != nil {
+					return fmt.Errorf("extended field %s already exists", field.Name)
+				}
+			}
+			og.Fields = append(og.Fields, e.Fields...)
+
+		case *Union:
+			e := ext.Type.(*Union)
+
+			for _, en := range e.typeNames {
+				for _, on := range og.typeNames {
+					if on == en {
+						return fmt.Errorf("union type %q already declared in %q", on, og.Name)
+					}
+				}
+			}
+			og.typeNames = append(og.typeNames, e.typeNames...)
+
+		case *Enum:
+			e := ext.Type.(*Enum)
+
+			for _, en := range e.Values {
+				for _, on := range og.Values {
+					if on.Name == en.Name {
+						return fmt.Errorf("enum value %q already declared in %q", on.Name, og.Name)
+					}
+				}
+			}
+			og.Values = append(og.Values, e.Values...)
+		default:
+			return fmt.Errorf(`unexpected %q, expecting "schema", "type", "enum", "interface", "union" or "input"`, og.TypeName())
 		}
 	}
 
@@ -389,7 +508,7 @@ func resolveInputObject(s *Schema, values common.InputValueList) error {
 }
 
 func parseSchema(s *Schema, l *common.Lexer) {
-	l.Consume()
+	l.ConsumeWhitespace()
 
 	for l.Peek() != scanner.EOF {
 		desc := l.DescComment()
@@ -441,6 +560,9 @@ func parseSchema(s *Schema, l *common.Lexer) {
 			directive := parseDirectiveDef(l)
 			directive.Desc = desc
 			s.Directives[directive.Name] = directive
+
+		case "extend":
+			parseExtension(s, l)
 
 		default:
 			// TODO: Add support for type extensions.
@@ -546,6 +668,44 @@ func parseDirectiveDef(l *common.Lexer) *DirectiveDecl {
 		l.ConsumeToken('|')
 	}
 	return d
+}
+
+func parseExtension(s *Schema, l *common.Lexer) {
+	switch x := l.ConsumeIdent(); x {
+	case "schema":
+		l.ConsumeToken('{')
+		for l.Peek() != '}' {
+			name := l.ConsumeIdent()
+			l.ConsumeToken(':')
+			typ := l.ConsumeIdent()
+			s.entryPointNames[name] = typ
+		}
+		l.ConsumeToken('}')
+
+	case "type":
+		obj := parseObjectDef(l)
+		s.extensions = append(s.extensions, &Extension{Type: obj})
+
+	case "interface":
+		iface := parseInterfaceDef(l)
+		s.extensions = append(s.extensions, &Extension{Type: iface})
+
+	case "union":
+		union := parseUnionDef(l)
+		s.extensions = append(s.extensions, &Extension{Type: union})
+
+	case "enum":
+		enum := parseEnumDef(l)
+		s.extensions = append(s.extensions, &Extension{Type: enum})
+
+	case "input":
+		input := parseInputDef(l)
+		s.extensions = append(s.extensions, &Extension{Type: input})
+
+	default:
+		// TODO: Add Scalar when adding directives
+		l.SyntaxError(fmt.Sprintf(`unexpected %q, expecting "schema", "type", "enum", "interface", "union" or "input"`, x))
+	}
 }
 
 func parseFieldsDef(l *common.Lexer) FieldList {
