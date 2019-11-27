@@ -1,4 +1,4 @@
-# graphql-go [![Sourcegraph](https://sourcegraph.com/github.com/graph-gophers/graphql-go/-/badge.svg)](https://sourcegraph.com/github.com/graph-gophers/graphql-go?badge) [![Build Status](https://semaphoreci.com/api/v1/graph-gophers/graphql-go/branches/master/badge.svg)](https://semaphoreci.com/graph-gophers/graphql-go) [![GoDoc](https://godoc.org/github.com/graph-gophers/graphql-go?status.svg)](https://godoc.org/github.com/graph-gophers/graphql-go)
+# graphql-go [![Sourcegraph](https://sourcegraph.com/github.com/JoinCAD/graphql-go/-/badge.svg)](https://sourcegraph.com/github.com/JoinCAD/graphql-go?badge) [![Build Status](https://semaphoreci.com/api/v1/JoinCAD/graphql-go/branches/master/badge.svg)](https://semaphoreci.com/JoinCAD/graphql-go) [![GoDoc](https://godoc.org/github.com/JoinCAD/graphql-go?status.svg)](https://godoc.org/github.com/JoinCAD/graphql-go)
 
 <p align="center"><img src="docs/img/logo.png" width="300"></p>
 
@@ -21,7 +21,7 @@ safe for production use.
 
 ## Roadmap
 
-We're trying out the GitHub Project feature to manage `graphql-go`'s [development roadmap](https://github.com/graph-gophers/graphql-go/projects/1).
+We're trying out the GitHub Project feature to manage `graphql-go`'s [development roadmap](https://github.com/JoinCAD/graphql-go/projects/1).
 Feedback is welcome and appreciated.
 
 ## (Some) Documentation
@@ -35,8 +35,8 @@ import (
         "log"
         "net/http"
 
-        graphql "github.com/graph-gophers/graphql-go"
-        "github.com/graph-gophers/graphql-go/relay"
+        graphql "github.com/JoinCAD/graphql-go"
+        "github.com/JoinCAD/graphql-go/relay"
 )
 
 type query struct{}
