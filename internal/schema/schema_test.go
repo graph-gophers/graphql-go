@@ -73,7 +73,7 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
-			name: "Parses type with multi-line description string",
+			name: "Parses type with simple multi-line 'BlockString' description",
 			sdl: `
 			"""
 			Multi-line description.
@@ -95,7 +95,120 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
-			name: "Parses type with multi-line description and ignores comments",
+			name: "Parses type with empty multi-line 'BlockString' description",
+			sdl: `
+			"""
+			"""
+			type Type {
+				field: String
+			}`,
+			useStringDescriptions: true,
+			validateSchema: func(s *schema.Schema) error {
+				const typeName = "Type"
+				typ, ok := s.Types[typeName].(*schema.Object)
+				if !ok {
+					return fmt.Errorf("type %q not found", typeName)
+				}
+				if want, have := "", typ.Description(); want != have {
+					return fmt.Errorf("invalid description: want %q, have %q", want, have)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Parses type with multi-line 'BlockString' description",
+			sdl: `
+			"""
+			First line of the description.
+
+			Second line of the description.
+
+				query {
+					code {
+						example
+					}
+				}
+
+			Notes:
+
+			 * First note
+			 * Second note
+			"""
+			type Type {
+				field: String
+			}`,
+			useStringDescriptions: true,
+			validateSchema: func(s *schema.Schema) error {
+				const typeName = "Type"
+				typ, ok := s.Types[typeName].(*schema.Object)
+				if !ok {
+					return fmt.Errorf("type %q not found", typeName)
+				}
+				want := "First line of the description.\n\nSecond line of the description.\n\n\tquery {\n\t\tcode {\n\t\t\texample\n\t\t}\n\t}\n\nNotes:\n\n * First note\n * Second note"
+				if have := typ.Description(); want != have {
+					return fmt.Errorf("invalid description: want %q, have %q", want, have)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Parses type with un-indented multi-line 'BlockString' description",
+			sdl: `
+			"""
+First line of the description.
+
+Second line of the description.
+			"""
+			type Type {
+				field: String
+			}`,
+			useStringDescriptions: true,
+			validateSchema: func(s *schema.Schema) error {
+				const typeName = "Type"
+				typ, ok := s.Types[typeName].(*schema.Object)
+				if !ok {
+					return fmt.Errorf("type %q not found", typeName)
+				}
+				want := "First line of the description.\n\nSecond line of the description."
+				if have := typ.Description(); want != have {
+					return fmt.Errorf("invalid description: want %q, have %q", want, have)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Parses type with space-indented multi-line 'BlockString' description",
+			sdl: `
+            """
+            First line of the description.
+
+            Second line of the description.
+
+                query {
+                    code {
+                        example
+                    }
+                }
+            """
+            type Type {
+                field: String
+            }`,
+			useStringDescriptions: true,
+			validateSchema: func(s *schema.Schema) error {
+				const typeName = "Type"
+				typ, ok := s.Types[typeName].(*schema.Object)
+				if !ok {
+					return fmt.Errorf("type %q not found", typeName)
+				}
+				want := "First line of the description.\n\nSecond line of the description.\n\n    query {\n        code {\n            example\n        }\n    }"
+				if have := typ.Description(); want != have {
+					return fmt.Errorf("invalid description: want %q, have %q", want, have)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Parses type with multi-line 'BlockString' description and ignores comments",
 			sdl: `
 			"""
 			Multi-line description with ignored comments.
@@ -161,6 +274,46 @@ func TestParse(t *testing.T) {
 				}
 				if want, have := "", typ.Description(); want != have {
 					return fmt.Errorf("description does not match: want %q, have %q ", want, have)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Default Root schema",
+			sdl: `
+			type Query {
+				hello: String!
+			}
+			type Mutation {
+				concat(a: String!, b: String!): String!
+			}
+			`,
+			validateSchema: func(s *schema.Schema) error {
+				typq, ok := s.Types["Query"].(*schema.Object)
+				if !ok {
+					return fmt.Errorf("type %q not found", "Query")
+				}
+				helloField := typq.Fields.Get("hello")
+				if helloField == nil {
+					return fmt.Errorf("field %q not found", "hello")
+				}
+				if helloField.Type.String() != "String!" {
+					return fmt.Errorf("field %q has an invalid type: %q", "hello", helloField.Type.String())
+				}
+
+				typm, ok := s.Types["Mutation"].(*schema.Object)
+				if !ok {
+					return fmt.Errorf("type %q not found", "Mutation")
+				}
+				concatField := typm.Fields.Get("concat")
+				if concatField == nil {
+					return fmt.Errorf("field %q not found", "concat")
+				}
+				if concatField.Type.String() != "String!" {
+					return fmt.Errorf("field %q has an invalid type: %q", "concat", concatField.Type.String())
+				}
+				if len(concatField.Args) != 2 || concatField.Args[0] == nil || concatField.Args[1] == nil || concatField.Args[0].Type.String() != "String!" || concatField.Args[1].Type.String() != "String!" {
+					return fmt.Errorf("field %q has an invalid args: %+v", "concat", concatField.Args)
 				}
 				return nil
 			},

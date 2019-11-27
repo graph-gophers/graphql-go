@@ -184,8 +184,7 @@ func (l *Lexer) consumeTripleQuoteComment() string {
 	}
 	val := buf.String()
 	val = val[:len(val)-numQuotes]
-	val = strings.TrimSpace(val)
-	return val
+	return blockString(val)
 }
 
 func (l *Lexer) consumeStringComment() string {

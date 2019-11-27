@@ -255,7 +255,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 		}
 		fe, err := b.makeFieldExec(typeName, f, m, sf, methodIndex, fieldIndex, methodHasReceiver)
 		if err != nil {
-			return nil, fmt.Errorf("%s\n\treturned by (%s).%s", err, resolverType, m.Name)
+			return nil, fmt.Errorf("%s\n\tused by (%s).%s", err, resolverType, m.Name)
 		}
 		Fields[f.Name] = fe
 	}
@@ -362,7 +362,8 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 	var out reflect.Type
 	if methodIndex != -1 {
 		out = m.Type.Out(0)
-		if typeName == "Subscription" && out.Kind() == reflect.Chan {
+		sub, ok := b.schema.EntryPoints["subscription"]
+		if ok && typeName == sub.TypeName() && out.Kind() == reflect.Chan {
 			out = m.Type.Out(0).Elem()
 		}
 	} else {
