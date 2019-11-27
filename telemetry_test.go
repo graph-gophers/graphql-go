@@ -91,7 +91,7 @@ func TestValidateAndLog(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			errs, got := tt.schema.ValidateAndLog(tt.queryString)
+			errs, got := tt.schema.ValidateAndLog(tt.queryString, map[string]interface{}{})
 			if !tt.wantErrs && len(errs) > 0 {
 				t.Errorf("Schema.ValidateAndLog() got errors %+v", errs)
 			}
