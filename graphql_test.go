@@ -2,10 +2,13 @@ package graphql_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/JoinCAD/graphql-go"
+	gqlerrors "github.com/JoinCAD/graphql-go/errors"
 	"github.com/JoinCAD/graphql-go/example/starwars"
 	"github.com/JoinCAD/graphql-go/gqltesting"
 )
@@ -61,9 +64,108 @@ func (r *timeResolver) AddHour(args struct{ Time graphql.Time }) graphql.Time {
 	return graphql.Time{Time: args.Time.Add(time.Hour)}
 }
 
+type echoResolver struct{}
+
+func (r *echoResolver) Echo(args struct{ Value *string }) *string {
+	return args.Value
+}
+
 var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
 
+type ResolverError interface {
+	error
+	Extensions() map[string]interface{}
+}
+
+type resolverNotFoundError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (e resolverNotFoundError) Error() string {
+	return fmt.Sprintf("Error [%s]: %s", e.Code, e.Message)
+}
+
+func (e resolverNotFoundError) Extensions() map[string]interface{} {
+	return map[string]interface{}{
+		"code":    e.Code,
+		"message": e.Message,
+	}
+}
+
+type findDroidResolver struct{}
+
+func (r *findDroidResolver) FindDroid(ctx context.Context) (string, error) {
+	return "", resolverNotFoundError{
+		Code:    "NotFound",
+		Message: "This is not the droid you are looking for",
+	}
+}
+
+var (
+	droidNotFoundError = resolverNotFoundError{
+		Code:    "NotFound",
+		Message: "This is not the droid you are looking for",
+	}
+	quoteError = errors.New("Bleep bloop")
+
+	r2d2          = &droidResolver{name: "R2-D2"}
+	c3po          = &droidResolver{name: "C-3PO"}
+	notFoundDroid = &droidResolver{err: droidNotFoundError}
+)
+
+type findDroidsResolver struct{}
+
+func (r *findDroidsResolver) FindDroids(ctx context.Context) []*droidResolver {
+	return []*droidResolver{r2d2, notFoundDroid, c3po}
+}
+
+func (r *findDroidsResolver) FindNilDroids(ctx context.Context) *[]*droidResolver {
+	return &[]*droidResolver{r2d2, nil, c3po}
+}
+
+type findDroidOrHumanResolver struct{}
+
+func (r *findDroidOrHumanResolver) FindHuman(ctx context.Context) (*string, error) {
+	human := "human"
+	return &human, nil
+}
+
+func (r *findDroidOrHumanResolver) FindDroid(ctx context.Context) (*droidResolver, error) {
+	return nil, notFoundDroid.err
+}
+
+type droidResolver struct {
+	name string
+	err  error
+}
+
+func (d *droidResolver) Name() (string, error) {
+	if d.err != nil {
+		return "", d.err
+	}
+	return d.name, nil
+}
+
+func (d *droidResolver) Quotes() ([]string, error) {
+	switch d.name {
+	case r2d2.name:
+		return nil, quoteError
+	case c3po.name:
+		return []string{"We're doomed!", "R2-D2, where are you?"}, nil
+	}
+	return nil, nil
+}
+
+type discussPlanResolver struct{}
+
+func (r *discussPlanResolver) DismissVader(ctx context.Context) (string, error) {
+	return "", errors.New("I find your lack of faith disturbing")
+}
+
 func TestHelloWorld(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -112,6 +214,8 @@ func TestHelloWorld(t *testing.T) {
 }
 
 func TestHelloSnake(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -160,6 +264,8 @@ func TestHelloSnake(t *testing.T) {
 }
 
 func TestHelloSnakeArguments(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -207,6 +313,236 @@ func TestHelloSnakeArguments(t *testing.T) {
 	})
 }
 
+func TestRootOperations_invalidSchema(t *testing.T) {
+	type args struct {
+		Schema string
+	}
+	type want struct {
+		Error string
+	}
+	testTable := map[string]struct {
+		Args args
+		Want want
+	}{
+		"Empty schema": {
+			Want: want{Error: `root operation "query" must be defined`},
+		},
+		"Query declared by schema, but type not present": {
+			Args: args{
+				Schema: `
+					schema {
+						query: Query
+					}
+				`,
+			},
+			Want: want{Error: `graphql: type "Query" not found`},
+		},
+		"Query as incorrect type": {
+			Args: args{
+				Schema: `
+					schema {
+						query: String
+					}
+				`,
+			},
+			Want: want{Error: `root operation "query" must be an OBJECT`},
+		},
+		"Query with custom name, schema omitted": {
+			Args: args{
+				Schema: `
+					type QueryType {
+						hello: String!
+					}
+				`,
+			},
+			Want: want{Error: `root operation "query" must be defined`},
+		},
+		"Mutation as incorrect type": {
+			Args: args{
+				Schema: `
+					schema {
+						query: Query
+						mutation: String
+					}
+					type Query {
+						thing: String
+					}
+				`,
+			},
+			Want: want{Error: `root operation "mutation" must be an OBJECT`},
+		},
+		"Mutation declared by schema, but type not present": {
+			Args: args{
+				Schema: `
+					schema {
+						query: Query
+						mutation: Mutation
+					}
+					type Query {
+						hello: String!
+					}
+				`,
+			},
+			Want: want{Error: `graphql: type "Mutation" not found`},
+		},
+	}
+
+	for name, tt := range testTable {
+		tt := tt
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := graphql.ParseSchema(tt.Args.Schema, nil)
+			if err == nil || err.Error() != tt.Want.Error {
+				t.Logf("got:  %v", err)
+				t.Logf("want: %s", tt.Want.Error)
+				t.Fail()
+			}
+		})
+	}
+}
+
+func TestRootOperations_validSchema(t *testing.T) {
+	type resolver struct {
+		helloSaidResolver
+		helloWorldResolver1
+		theNumberResolver
+	}
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			// Query only, default name with `schema` omitted
+			Schema: graphql.MustParseSchema(`
+				type Query {
+					hello: String!
+				}
+			`, &resolver{}),
+			Query:          `{ hello }`,
+			ExpectedResult: `{"hello": "Hello world!"}`,
+		},
+		{
+			// Query only, default name with `schema` present
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+				type Query {
+					hello: String!
+				}
+			`, &resolver{}),
+			Query:          `{ hello }`,
+			ExpectedResult: `{"hello": "Hello world!"}`,
+		},
+		{
+			// Query only, custom name
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: QueryType
+				}
+				type QueryType {
+					hello: String!
+				}
+			`, &resolver{}),
+			Query:          `{ hello }`,
+			ExpectedResult: `{"hello": "Hello world!"}`,
+		},
+		{
+			// Query+Mutation, default names with `schema` omitted
+			Schema: graphql.MustParseSchema(`
+				type Query {
+					hello: String!
+				}
+				type Mutation {
+					changeTheNumber(newNumber: Int!): ChangedNumber!
+				}
+				type ChangedNumber {
+					theNumber: Int!
+				}
+			`, &resolver{}),
+			Query: `
+				mutation {
+					changeTheNumber(newNumber: 1) {
+						theNumber
+					}
+				}
+			`,
+			ExpectedResult: `{"changeTheNumber": {"theNumber": 1}}`,
+		},
+		{
+			// Query+Mutation, custom names
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: QueryType
+					mutation: MutationType
+				}
+				type QueryType {
+					hello: String!
+				}
+				type MutationType {
+					changeTheNumber(newNumber: Int!): ChangedNumber!
+				}
+				type ChangedNumber {
+					theNumber: Int!
+				}
+			`, &resolver{}),
+			Query: `
+				mutation {
+					changeTheNumber(newNumber: 1) {
+						theNumber
+					}
+				}
+			`,
+			ExpectedResult: `{"changeTheNumber": {"theNumber": 1}}`,
+		},
+		{
+			// Mutation with custom name, schema omitted
+			Schema: graphql.MustParseSchema(`
+				type Query {
+					hello: String!
+				}
+				type MutationType {
+					changeTheNumber(newNumber: Int!): ChangedNumber!
+				}
+				type ChangedNumber {
+					theNumber: Int!
+				}
+			`, &resolver{}),
+			Query: `
+				mutation {
+					changeTheNumber(newNumber: 1) {
+						theNumber
+					}
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{{Message: "no mutations are offered by the schema"}},
+		},
+		{
+			// Explicit schema without mutation field
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+				type Query {
+					hello: String!
+				}
+				type Mutation {
+					changeTheNumber(newNumber: Int!): ChangedNumber!
+				}
+				type ChangedNumber {
+					theNumber: Int!
+				}
+			`, &resolver{}),
+			Query: `
+				mutation {
+					changeTheNumber(newNumber: 1) {
+						theNumber
+					}
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{{Message: "no mutations are offered by the schema"}},
+		},
+	})
+}
+
 func TestBasic(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
@@ -241,6 +577,454 @@ func TestBasic(t *testing.T) {
 					}
 				}
 			`,
+		},
+	})
+}
+
+type testEmbeddedStructResolver struct{}
+
+func (_ *testEmbeddedStructResolver) Course() courseResolver {
+	return courseResolver{
+		CourseMeta: CourseMeta{
+			Name:       "Biology",
+			Timestamps: Timestamps{CreatedAt: "yesterday", UpdatedAt: "today"},
+		},
+		Instructor: Instructor{Name: "Socrates"},
+	}
+}
+
+type courseResolver struct {
+	CourseMeta
+	Instructor Instructor
+}
+
+type CourseMeta struct {
+	Name string
+	Timestamps
+}
+
+type Instructor struct {
+	Name string
+}
+
+type Timestamps struct {
+	CreatedAt string
+	UpdatedAt string
+}
+
+func TestEmbeddedStruct(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					course: Course!
+				}
+				
+				type Course {
+					name: String!
+					createdAt: String!
+					updatedAt: String!
+					instructor: Instructor!
+				}
+
+				type Instructor {
+					name: String!
+				}
+			`, &testEmbeddedStructResolver{}, graphql.UseFieldResolvers()),
+			Query: `
+				{
+					course{
+						name
+						createdAt
+						updatedAt
+						instructor {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"course": {
+						"name": "Biology",
+						"createdAt": "yesterday",
+						"updatedAt": "today",
+						"instructor": {
+							"name":"Socrates"
+						}
+					}
+				}
+			`,
+		},
+	})
+}
+
+type testNilInterfaceResolver struct{}
+
+func (r *testNilInterfaceResolver) A() interface{ Z() int32 } {
+	return nil
+}
+
+func (r *testNilInterfaceResolver) B() (interface{ Z() int32 }, error) {
+	return nil, errors.New("x")
+}
+
+func (r *testNilInterfaceResolver) C() (interface{ Z() int32 }, error) {
+	return nil, nil
+}
+
+func TestNilInterface(t *testing.T) {
+	t.Parallel()
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					a: T
+					b: T
+					c: T
+				}
+
+				type T {
+					z: Int!
+				}
+			`, &testNilInterfaceResolver{}),
+			Query: `
+				{
+					a { z }
+					b { z }
+					c { z }
+				}
+			`,
+			ExpectedResult: `
+				{
+					"a": null,
+					"b": null,
+					"c": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       "x",
+					Path:          []interface{}{"b"},
+					ResolverError: errors.New("x"),
+				},
+			},
+		},
+	})
+}
+
+func TestErrorPropagationInLists(t *testing.T) {
+	t.Parallel()
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					findDroids: [Droid!]!
+				}
+				type Droid {
+					name: String!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					findDroids {
+						name
+					}
+				}
+			`,
+			ExpectedResult: `
+				null
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       droidNotFoundError.Error(),
+					Path:          []interface{}{"findDroids", 1, "name"},
+					ResolverError: droidNotFoundError,
+					Extensions:    map[string]interface{}{"code": droidNotFoundError.Code, "message": droidNotFoundError.Message},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					findDroids: [Droid]!
+				}
+				type Droid {
+					name: String!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					findDroids {
+						name
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"findDroids": [
+						{
+							"name": "R2-D2"
+						},
+						null,
+						{
+							"name": "C-3PO"
+						}
+					]
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       droidNotFoundError.Error(),
+					Path:          []interface{}{"findDroids", 1, "name"},
+					ResolverError: droidNotFoundError,
+					Extensions:    map[string]interface{}{"code": droidNotFoundError.Code, "message": droidNotFoundError.Message},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					findNilDroids: [Droid!]
+				}
+				type Droid {
+					name: String!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					findNilDroids {
+						name
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"findNilDroids": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message: `graphql: got nil for non-null "Droid"`,
+					Path:    []interface{}{"findNilDroids", 1},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					findNilDroids: [Droid]
+				}
+				type Droid {
+					name: String!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					findNilDroids {
+						name
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"findNilDroids": [
+						{
+							"name": "R2-D2"
+						},
+						null,
+						{
+							"name": "C-3PO"
+						}
+					]
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					findDroids: [Droid]!
+				}
+				type Droid {
+					quotes: [String!]!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					findDroids {
+						quotes
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"findDroids": [
+						null,
+						{
+							"quotes": []
+						},
+						{
+							"quotes": [
+								"We're doomed!",
+								"R2-D2, where are you?"
+							]
+						}
+					]
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       quoteError.Error(),
+					ResolverError: quoteError,
+					Path:          []interface{}{"findDroids", 0, "quotes"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					findNilDroids: [Droid!]
+				}
+				type Droid {
+					name: String!
+					quotes: [String!]!
+				}
+			`, &findDroidsResolver{}),
+			Query: `
+				{
+					findNilDroids {
+						name
+						quotes
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"findNilDroids": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       quoteError.Error(),
+					ResolverError: quoteError,
+					Path:          []interface{}{"findNilDroids", 0, "quotes"},
+				},
+				&gqlerrors.QueryError{
+					Message: `graphql: got nil for non-null "Droid"`,
+					Path:    []interface{}{"findNilDroids", 1},
+				},
+			},
+		},
+	})
+}
+
+func TestErrorWithExtensions(t *testing.T) {
+	t.Parallel()
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					FindDroid: Droid!
+					FindHuman: String
+				}
+				type Droid {
+					Name: String!
+				}
+			`, &findDroidOrHumanResolver{}),
+			Query: `
+				{
+					FindDroid {
+						Name
+					}
+					FindHuman
+				}
+			`,
+			ExpectedResult: `
+				null
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       droidNotFoundError.Error(),
+					Path:          []interface{}{"FindDroid"},
+					ResolverError: droidNotFoundError,
+					Extensions:    map[string]interface{}{"code": droidNotFoundError.Code, "message": droidNotFoundError.Message},
+				},
+			},
+		},
+	})
+}
+
+func TestErrorWithNoExtensions(t *testing.T) {
+	t.Parallel()
+
+	err := errors.New("I find your lack of faith disturbing")
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					DismissVader: String!
+				}
+			`, &discussPlanResolver{}),
+			Query: `
+				{
+					DismissVader
+				}
+			`,
+			ExpectedResult: `
+				null
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				&gqlerrors.QueryError{
+					Message:       err.Error(),
+					Path:          []interface{}{"DismissVader"},
+					ResolverError: err,
+					Extensions:    nil,
+				},
+			},
 		},
 	})
 }
@@ -438,6 +1222,28 @@ func TestVariables(t *testing.T) {
 				}
 			`,
 		},
+
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					echo(value: String): String
+				}
+			`, &echoResolver{}),
+			Query: `
+				query Echo($value:String = "default"){
+					echo(value:$value)
+				}
+			`,
+			ExpectedResult: `
+				{
+					"echo": "default"
+				}
+			`,
+		},
 	})
 }
 
@@ -594,6 +1400,8 @@ func (r *testDeprecatedDirectiveResolver) C() int32 {
 }
 
 func TestDeprecatedDirective(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -679,6 +1487,161 @@ func TestDeprecatedDirective(t *testing.T) {
 					}
 				}
 			`,
+		},
+	})
+}
+
+type testBadEnumResolver struct{}
+
+func (r *testBadEnumResolver) Hero() *testBadEnumCharacterResolver {
+	return &testBadEnumCharacterResolver{}
+}
+
+type testBadEnumCharacterResolver struct{}
+
+func (r *testBadEnumCharacterResolver) Name() string {
+	return "Spock"
+}
+
+func (r *testBadEnumCharacterResolver) AppearsIn() []string {
+	return []string{"STAR_TREK"}
+}
+
+func TestEnums(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		// Valid input enum supplied in query text
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query HeroForEpisode {
+					hero(episode: EMPIRE) {
+						name
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hero": {
+						"name": "Luke Skywalker"
+					}
+				}
+			`,
+		},
+		// Invalid input enum supplied in query text
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query HeroForEpisode {
+					hero(episode: WRATH_OF_KHAN) {
+						name
+					}
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message:   "Argument \"episode\" has invalid value WRATH_OF_KHAN.\nExpected type \"Episode\", found WRATH_OF_KHAN.",
+					Locations: []gqlerrors.Location{{Column: 20, Line: 3}},
+					Rule:      "ArgumentsOfCorrectType",
+				},
+			},
+		},
+		// Valid input enum supplied in variables
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query HeroForEpisode($episode: Episode!) {
+					hero(episode: $episode) {
+						name
+					}
+				}
+			`,
+			Variables: map[string]interface{}{"episode": "JEDI"},
+			ExpectedResult: `
+				{
+					"hero": {
+						"name": "R2-D2"
+					}
+				}
+			`,
+		},
+		// Invalid input enum supplied in variables
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query HeroForEpisode($episode: Episode!) {
+					hero(episode: $episode) {
+						name
+					}
+				}
+			`,
+			Variables: map[string]interface{}{"episode": "FINAL_FRONTIER"},
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message:   "Variable \"episode\" has invalid value FINAL_FRONTIER.\nExpected type \"Episode\", found FINAL_FRONTIER.",
+					Locations: []gqlerrors.Location{{Column: 26, Line: 2}},
+					Rule:      "VariablesOfCorrectType",
+				},
+			},
+		},
+		// Valid enum value in response
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query Hero {
+					hero {
+						name
+						appearsIn
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hero": {
+						"name": "R2-D2",
+						"appearsIn": ["NEWHOPE","EMPIRE","JEDI"]
+					}
+				}
+			`,
+		},
+		// Invalid enum value in response
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hero: Character
+				}
+
+				enum Episode {
+					NEWHOPE
+					EMPIRE
+					JEDI
+				}
+
+				type Character {
+					name: String!
+					appearsIn: [Episode!]!
+				}
+			`, &testBadEnumResolver{}),
+			Query: `
+				query Hero {
+					hero {
+						name
+						appearsIn
+					}
+				}
+			`,
+			ExpectedResult: `{
+				"hero": null
+			}`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: "Invalid value STAR_TREK.\nExpected type Episode, found STAR_TREK.",
+					Path:    []interface{}{"hero", "appearsIn", 0},
+				},
+			},
 		},
 	})
 }
@@ -1425,7 +2388,167 @@ func TestIntrospection(t *testing.T) {
 	})
 }
 
+var starwarsSchemaNoIntrospection = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{}, []graphql.SchemaOpt{graphql.DisableIntrospection()}...)
+
+func TestIntrospectionDisableIntrospection(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: starwarsSchemaNoIntrospection,
+			Query: `
+				{
+					__schema {
+						types {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+				}
+			`,
+		},
+
+		{
+			Schema: starwarsSchemaNoIntrospection,
+			Query: `
+				{
+					__schema {
+						queryType {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+				}
+			`,
+		},
+
+		{
+			Schema: starwarsSchemaNoIntrospection,
+			Query: `
+				{
+					a: __type(name: "Droid") {
+						name
+						kind
+						interfaces {
+							name
+						}
+						possibleTypes {
+							name
+						}
+					},
+					b: __type(name: "Character") {
+						name
+						kind
+						interfaces {
+							name
+						}
+						possibleTypes {
+							name
+						}
+					}
+					c: __type(name: "SearchResult") {
+						name
+						kind
+						interfaces {
+							name
+						}
+						possibleTypes {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+				}
+			`,
+		},
+
+		{
+			Schema: starwarsSchemaNoIntrospection,
+			Query: `
+				{
+					__type(name: "Droid") {
+						name
+						fields {
+							name
+							args {
+								name
+								type {
+									name
+								}
+								defaultValue
+							}
+							type {
+								name
+								kind
+							}
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+				}
+			`,
+		},
+
+		{
+			Schema: starwarsSchemaNoIntrospection,
+			Query: `
+				{
+					__type(name: "Episode") {
+						enumValues {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+				}
+			`,
+		},
+
+		{
+			Schema: starwarsSchemaNoIntrospection,
+			Query: `
+				{
+					__schema {
+						directives {
+							name
+							description
+							locations
+							args {
+								name
+								description
+								type {
+									kind
+									ofType {
+										kind
+										name
+									}
+								}
+							}
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+				}
+			`,
+		},
+	})
+}
+
 func TestMutationOrder(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -1473,6 +2596,8 @@ func TestMutationOrder(t *testing.T) {
 }
 
 func TestTime(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -1512,6 +2637,8 @@ func (r *resolverWithUnexportedMethod) changeTheNumber(args struct{ NewNumber in
 }
 
 func TestUnexportedMethod(t *testing.T) {
+	t.Parallel()
+
 	_, err := graphql.ParseSchema(`
 		schema {
 			mutation: Mutation
@@ -1533,6 +2660,8 @@ func (r *resolverWithUnexportedField) ChangeTheNumber(args struct{ newNumber int
 }
 
 func TestUnexportedField(t *testing.T) {
+	t.Parallel()
+
 	_, err := graphql.ParseSchema(`
 		schema {
 			mutation: Mutation
@@ -1547,12 +2676,49 @@ func TestUnexportedField(t *testing.T) {
 	}
 }
 
-type Enum string
+type StringEnum string
 
 const (
-	EnumOption1 Enum = "Option1"
-	EnumOption2 Enum = "Option2"
+	EnumOption1 StringEnum = "Option1"
+	EnumOption2 StringEnum = "Option2"
 )
+
+type IntEnum int
+
+const (
+	IntEnum0 IntEnum = iota
+	IntEnum1
+)
+
+func (e IntEnum) String() string {
+	switch int(e) {
+	case 0:
+		return "Int0"
+	case 1:
+		return "Int1"
+	default:
+		return "IntN"
+	}
+}
+
+func (IntEnum) ImplementsGraphQLType(name string) bool {
+	return name == "IntEnum"
+}
+
+func (e *IntEnum) UnmarshalGraphQL(input interface{}) error {
+	if str, ok := input.(string); ok {
+		switch str {
+		case "Int0":
+			*e = IntEnum(0)
+		case "Int1":
+			*e = IntEnum(1)
+		default:
+			*e = IntEnum(-1)
+		}
+		return nil
+	}
+	return fmt.Errorf("wrong type for IntEnum: %T", input)
+}
 
 type inputResolver struct{}
 
@@ -1597,19 +2763,35 @@ func (r *inputResolver) NullableList(args struct{ Value *[]*struct{ V int32 } })
 	return &l
 }
 
-func (r *inputResolver) EnumString(args struct{ Value string }) string {
+func (r *inputResolver) StringEnumValue(args struct{ Value string }) string {
 	return args.Value
 }
 
-func (r *inputResolver) NullableEnumString(args struct{ Value *string }) *string {
+func (r *inputResolver) NullableStringEnumValue(args struct{ Value *string }) *string {
 	return args.Value
 }
 
-func (r *inputResolver) Enum(args struct{ Value Enum }) Enum {
+func (r *inputResolver) StringEnum(args struct{ Value StringEnum }) StringEnum {
 	return args.Value
 }
 
-func (r *inputResolver) NullableEnum(args struct{ Value *Enum }) *Enum {
+func (r *inputResolver) NullableStringEnum(args struct{ Value *StringEnum }) *StringEnum {
+	return args.Value
+}
+
+func (r *inputResolver) IntEnumValue(args struct{ Value string }) string {
+	return args.Value
+}
+
+func (r *inputResolver) NullableIntEnumValue(args struct{ Value *string }) *string {
+	return args.Value
+}
+
+func (r *inputResolver) IntEnum(args struct{ Value IntEnum }) IntEnum {
+	return args.Value
+}
+
+func (r *inputResolver) NullableIntEnum(args struct{ Value *IntEnum }) *IntEnum {
 	return args.Value
 }
 
@@ -1632,6 +2814,8 @@ func (r *inputResolver) ID(args struct{ Value graphql.ID }) graphql.ID {
 }
 
 func TestInput(t *testing.T) {
+	t.Parallel()
+
 	coercionSchema := graphql.MustParseSchema(`
 		schema {
 			query: Query
@@ -1645,10 +2829,14 @@ func TestInput(t *testing.T) {
 			nullable(value: Int): Int
 			list(value: [Input!]!): [Int!]!
 			nullableList(value: [Input]): [Int]
-			enumString(value: Enum!): Enum!
-			nullableEnumString(value: Enum): Enum
-			enum(value: Enum!): Enum!
-			nullableEnum(value: Enum): Enum
+			stringEnumValue(value: StringEnum!): StringEnum!
+			nullableStringEnumValue(value: StringEnum): StringEnum
+			stringEnum(value: StringEnum!): StringEnum!
+			nullableStringEnum(value: StringEnum): StringEnum
+			intEnumValue(value: IntEnum!): IntEnum!
+			nullableIntEnumValue(value: IntEnum): IntEnum
+			intEnum(value: IntEnum!): IntEnum!
+			nullableIntEnum(value: IntEnum): IntEnum
 			recursive(value: RecursiveInput!): Int!
 			id(value: ID!): ID!
 		}
@@ -1661,9 +2849,14 @@ func TestInput(t *testing.T) {
 			next: RecursiveInput
 		}
 
-		enum Enum {
+		enum StringEnum {
 			Option1
 			Option2
+		}
+
+		enum IntEnum {
+			Int0
+			Int1
 		}
 	`, &inputResolver{})
 	gqltesting.RunTests(t, []*gqltesting.Test{
@@ -1682,12 +2875,18 @@ func TestInput(t *testing.T) {
 					list2: list(value: {v: 42})
 					nullableList1: nullableList(value: [{v: 41}, null, {v: 43}])
 					nullableList2: nullableList(value: null)
-					enumString(value: Option1)
-					nullableEnumString1: nullableEnum(value: Option1)
-					nullableEnumString2: nullableEnum(value: null)
-					enum(value: Option2)
-					nullableEnum1: nullableEnum(value: Option2)
-					nullableEnum2: nullableEnum(value: null)
+					stringEnumValue(value: Option1)
+					nullableStringEnumValue1: nullableStringEnum(value: Option1)
+					nullableStringEnumValue2: nullableStringEnum(value: null)
+					stringEnum(value: Option2)
+					nullableStringEnum1: nullableStringEnum(value: Option2)
+					nullableStringEnum2: nullableStringEnum(value: null)
+					intEnumValue(value: Int1)
+					nullableIntEnumValue1: nullableIntEnumValue(value: Int1)
+					nullableIntEnumValue2: nullableIntEnumValue(value: null)
+					intEnum(value: Int1)
+					nullableIntEnum1: nullableIntEnum(value: Int1)
+					nullableIntEnum2: nullableIntEnum(value: null)
 					recursive(value: {next: {next: {}}})
 					intID: id(value: 1234)
 					strID: id(value: "1234")
@@ -1706,12 +2905,18 @@ func TestInput(t *testing.T) {
 					"list2": [42],
 					"nullableList1": [41, null, 43],
 					"nullableList2": null,
-					"enumString": "Option1",
-					"nullableEnumString1": "Option1",
-					"nullableEnumString2": null,
-					"enum": "Option2",
-					"nullableEnum1": "Option2",
-					"nullableEnum2": null,
+					"stringEnumValue": "Option1",
+					"nullableStringEnumValue1": "Option1",
+					"nullableStringEnumValue2": null,
+					"stringEnum": "Option2",
+					"nullableStringEnum1": "Option2",
+					"nullableStringEnum2": null,
+					"intEnumValue": "Int1",
+					"nullableIntEnumValue1": "Int1",
+					"nullableIntEnumValue2": null,
+					"intEnum": "Int1",
+					"nullableIntEnum1": "Int1",
+					"nullableIntEnum2": null,
 					"recursive": 3,
 					"intID": "1234",
 					"strID": "1234"
@@ -1719,6 +2924,179 @@ func TestInput(t *testing.T) {
 			`,
 		},
 	})
+}
+
+type inputArgumentsHello struct{}
+
+type inputArgumentsScalarMismatch1 struct{}
+
+type inputArgumentsScalarMismatch2 struct{}
+
+type inputArgumentsObjectMismatch1 struct{}
+
+type inputArgumentsObjectMismatch2 struct{}
+
+type inputArgumentsObjectMismatch3 struct{}
+
+type helloInput struct {
+	Name string
+}
+
+type helloInputMismatch struct {
+	World string
+}
+
+func (r *inputArgumentsHello) Hello(args struct{ Input *helloInput }) string {
+	return "Hello " + args.Input.Name + "!"
+}
+
+func (r *inputArgumentsScalarMismatch1) Hello(name string) string {
+	return "Hello " + name + "!"
+}
+
+func (r *inputArgumentsScalarMismatch2) Hello(args struct{ World string }) string {
+	return "Hello " + args.World + "!"
+}
+
+func (r *inputArgumentsObjectMismatch1) Hello(in helloInput) string {
+	return "Hello " + in.Name + "!"
+}
+
+func (r *inputArgumentsObjectMismatch2) Hello(args struct{ Input *helloInputMismatch }) string {
+	return "Hello " + args.Input.World + "!"
+}
+
+func (r *inputArgumentsObjectMismatch3) Hello(args struct{ Input *struct{ Thing string } }) string {
+	return "Hello " + args.Input.Thing + "!"
+}
+
+func TestInputArguments_failSchemaParsing(t *testing.T) {
+	type args struct {
+		Resolver interface{}
+		Schema   string
+	}
+	type want struct {
+		Error string
+	}
+	testTable := map[string]struct {
+		Args args
+		Want want
+	}{
+		"Non-input type used with field arguments": {
+			Args: args{
+				Resolver: &inputArgumentsHello{},
+				Schema: `
+					schema {
+						query: Query
+					}
+					type Query {
+						hello(input: HelloInput): String!
+					}
+					type HelloInput {
+						name: String
+					}
+				`,
+			},
+			Want: want{Error: "field \"Input\": type of kind OBJECT can not be used as input\n\tused by (*graphql_test.inputArgumentsHello).Hello"},
+		},
+		"Missing Args Wrapper for scalar input": {
+			Args: args{
+				Resolver: &inputArgumentsScalarMismatch1{},
+				Schema: `
+					schema {
+						query: Query
+					}
+					type Query {
+						hello(name: String): String!
+					}
+					input HelloInput {
+						name: String
+					}
+				`,
+			},
+			Want: want{Error: "expected struct or pointer to struct, got string (hint: missing `args struct { ... }` wrapper for field arguments?)\n\tused by (*graphql_test.inputArgumentsScalarMismatch1).Hello"},
+		},
+		"Mismatching field name for scalar input": {
+			Args: args{
+				Resolver: &inputArgumentsScalarMismatch2{},
+				Schema: `
+					schema {
+						query: Query
+					}
+					type Query {
+						hello(name: String): String!
+					}
+				`,
+			},
+			Want: want{Error: "struct { World string } does not define field \"name\" (hint: missing `args struct { ... }` wrapper for field arguments, or missing field on input struct)\n\tused by (*graphql_test.inputArgumentsScalarMismatch2).Hello"},
+		},
+		"Missing Args Wrapper for Input type": {
+			Args: args{
+				Resolver: &inputArgumentsObjectMismatch1{},
+				Schema: `
+					schema {
+						query: Query
+					}
+					type Query {
+						hello(input: HelloInput): String!
+					}
+					input HelloInput {
+						name: String
+					}
+				`,
+			},
+			Want: want{Error: "graphql_test.helloInput does not define field \"input\" (hint: missing `args struct { ... }` wrapper for field arguments, or missing field on input struct)\n\tused by (*graphql_test.inputArgumentsObjectMismatch1).Hello"},
+		},
+		"Input struct missing field": {
+			Args: args{
+				Resolver: &inputArgumentsObjectMismatch2{},
+				Schema: `
+					schema {
+						query: Query
+					}
+					type Query {
+						hello(input: HelloInput): String!
+					}
+					input HelloInput {
+						name: String
+					}
+				`,
+			},
+			Want: want{Error: "field \"Input\": *graphql_test.helloInputMismatch does not define field \"name\" (hint: missing `args struct { ... }` wrapper for field arguments, or missing field on input struct)\n\tused by (*graphql_test.inputArgumentsObjectMismatch2).Hello"},
+		},
+		"Inline Input struct missing field": {
+			Args: args{
+				Resolver: &inputArgumentsObjectMismatch3{},
+				Schema: `
+					schema {
+						query: Query
+					}
+					type Query {
+						hello(input: HelloInput): String!
+					}
+					input HelloInput {
+						name: String
+					}
+				`,
+			},
+			Want: want{Error: "field \"Input\": *struct { Thing string } does not define field \"name\" (hint: missing `args struct { ... }` wrapper for field arguments, or missing field on input struct)\n\tused by (*graphql_test.inputArgumentsObjectMismatch3).Hello"},
+		},
+	}
+
+	for name, tt := range testTable {
+		tt := tt
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := graphql.ParseSchema(tt.Args.Schema, tt.Args.Resolver)
+			if err == nil || err.Error() != tt.Want.Error {
+				t.Log("Schema parsing error mismatch")
+				t.Logf("got: %s", err)
+				t.Logf("exp: %s", tt.Want.Error)
+				t.Fail()
+			}
+		})
+	}
 }
 
 func TestComposedFragments(t *testing.T) {
@@ -1773,6 +3151,487 @@ func TestComposedFragments(t *testing.T) {
 					}
 				}
 			`,
+		},
+	})
+}
+
+var (
+	exampleError = fmt.Errorf("This is an error")
+
+	nilChildErrorString = `graphql: got nil for non-null "Child"`
+)
+
+type childResolver struct{}
+
+func (r *childResolver) TriggerError() (string, error) {
+	return "This will never be returned to the client", exampleError
+}
+func (r *childResolver) NoError() string {
+	return "no error"
+}
+func (r *childResolver) Child() *childResolver {
+	return &childResolver{}
+}
+func (r *childResolver) NilChild() *childResolver {
+	return nil
+}
+
+func TestErrorPropagation(t *testing.T) {
+	t.Parallel()
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					noError: String!
+					triggerError: String!
+				}
+			`, &childResolver{}),
+			Query: `
+				{
+					noError
+					triggerError
+				}
+			`,
+			ExpectedResult: `
+				null
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message:       exampleError.Error(),
+					ResolverError: exampleError,
+					Path:          []interface{}{"triggerError"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					noError: String!
+					child: Child
+				}
+
+				type Child {
+					noError: String!
+					triggerError: String!
+				}
+			`, &childResolver{}),
+			Query: `
+				{
+					noError
+					child {
+						noError
+						triggerError
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"noError": "no error",
+					"child": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message:       exampleError.Error(),
+					ResolverError: exampleError,
+					Path:          []interface{}{"child", "triggerError"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					noError: String!
+					child: Child
+				}
+
+				type Child {
+					noError: String!
+					triggerError: String!
+					child: Child!
+				}
+			`, &childResolver{}),
+			Query: `
+				{
+					noError
+					child {
+						noError
+						child {
+							noError
+							triggerError
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"noError": "no error",
+					"child": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message:       exampleError.Error(),
+					ResolverError: exampleError,
+					Path:          []interface{}{"child", "child", "triggerError"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					noError: String!
+					child: Child
+				}
+
+				type Child {
+					noError: String!
+					triggerError: String!
+					child: Child
+				}
+			`, &childResolver{}),
+			Query: `
+				{
+					noError
+					child {
+						noError
+						child {
+							noError
+							triggerError
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"noError": "no error",
+					"child": {
+						"noError": "no error",
+						"child": null
+					}
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message:       exampleError.Error(),
+					ResolverError: exampleError,
+					Path:          []interface{}{"child", "child", "triggerError"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					noError: String!
+					child: Child!
+				}
+
+				type Child {
+					noError: String!
+					nilChild: Child!
+				}
+			`, &childResolver{}),
+			Query: `
+				{
+					noError
+					child {
+						nilChild {
+							noError
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				null
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: nilChildErrorString,
+					Path:    []interface{}{"child", "nilChild"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					noError: String!
+					child: Child
+				}
+
+				type Child {
+					noError: String!
+					nilChild: Child!
+				}
+			`, &childResolver{}),
+			Query: `
+				{
+					noError
+					child {
+						noError
+						nilChild {
+							noError
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+			{
+				"noError": "no error",
+				"child": null
+			}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: nilChildErrorString,
+					Path:    []interface{}{"child", "nilChild"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					child: Child
+				}
+
+				type Child {
+					triggerError: String!
+					child: Child
+					nilChild: Child!
+				}
+			`, &childResolver{}),
+			Query: `
+				{
+					child {
+						child {
+							triggerError
+							child {
+								nilChild {
+									triggerError
+								}
+							}
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+			{
+				"child": {
+					"child": null
+				}
+			}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: nilChildErrorString,
+					Path:    []interface{}{"child", "child", "child", "nilChild"},
+				},
+				{
+					Message:       exampleError.Error(),
+					ResolverError: exampleError,
+					Path:          []interface{}{"child", "child", "triggerError"},
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					child: Child
+				}
+
+				type Child {
+					noError: String!
+					child: Child!
+					nilChild: Child!
+				}
+			`, &childResolver{}),
+			Query: `
+				{
+					child {
+						child {
+							nilChild {
+								noError
+							}
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+			{
+				"child": null
+			}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: nilChildErrorString,
+					Path:    []interface{}{"child", "child", "nilChild"},
+				},
+			},
+		},
+	})
+}
+
+type ambiguousResolver struct {
+	Name string // ambiguous
+	University
+}
+
+type University struct {
+	Name string // ambiguous
+}
+
+func TestPanicAmbiguity(t *testing.T) {
+	panicMessage := `*graphql_test.ambiguousResolver does not resolve "Query": ambiguous field "name"`
+
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected schema parse to panic")
+		}
+
+		if r.(error).Error() != panicMessage {
+			t.Logf("got:  %s", r)
+			t.Logf("want: %s", panicMessage)
+			t.Fail()
+		}
+	}()
+
+	schema := `
+		schema {
+			query: Query
+		}
+
+		type Query {
+			name: String!
+			university: University!
+		}
+		
+		type University {
+			name: String!
+		}
+	`
+	graphql.MustParseSchema(schema, &ambiguousResolver{}, graphql.UseFieldResolvers())
+}
+
+func TestSchema_Exec_without_resolver(t *testing.T) {
+	t.Parallel()
+
+	type args struct {
+		Query  string
+		Schema string
+	}
+	type want struct {
+		Panic interface{}
+	}
+	testTable := []struct {
+		Name string
+		Args args
+		Want want
+	}{
+		{
+			Name: "schema_without_resolver_errors",
+			Args: args{
+				Query: `
+					query {
+						hero {
+							id
+							name
+							friends {
+								name
+							}
+						}
+					}
+				`,
+				Schema: starwars.Schema,
+			},
+			Want: want{Panic: "schema created without resolver, can not exec"},
+		},
+	}
+
+	for _, tt := range testTable {
+		t.Run(tt.Name, func(t *testing.T) {
+			s := graphql.MustParseSchema(tt.Args.Schema, nil)
+
+			defer func() {
+				r := recover()
+				if r == nil {
+					t.Fatal("expected query to panic")
+				}
+				if r != tt.Want.Panic {
+					t.Logf("got:  %s", r)
+					t.Logf("want: %s", tt.Want.Panic)
+					t.Fail()
+				}
+			}()
+			_ = s.Exec(context.Background(), tt.Args.Query, "", map[string]interface{}{})
+		})
+	}
+}
+
+type subscriptionsInExecResolver struct{}
+
+func (r *subscriptionsInExecResolver) AppUpdated() <-chan string {
+	return make(chan string)
+}
+
+func TestSubscriptions_In_Exec(t *testing.T) {
+	r := &struct {
+		*helloResolver
+		*subscriptionsInExecResolver
+	}{
+		helloResolver:               &helloResolver{},
+		subscriptionsInExecResolver: &subscriptionsInExecResolver{},
+	}
+	gqltesting.RunTest(t, &gqltesting.Test{
+		Schema: graphql.MustParseSchema(`
+			type Query {
+				hello: String!
+			}
+			type Subscription {
+				appUpdated : String!
+			}
+		`, r),
+		Query: `
+			subscription {
+				appUpdated
+		  	}
+		`,
+		ExpectedErrors: []*gqlerrors.QueryError{
+			{
+				Message: "graphql-ws protocol header is missing",
+			},
 		},
 	})
 }

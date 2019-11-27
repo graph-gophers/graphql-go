@@ -160,7 +160,7 @@ func (b *Builder) MakeStructPacker(values common.InputValueList, typ reflect.Typ
 		usePtr = true
 	}
 	if structType.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("expected struct or pointer to struct, got %s", typ)
+		return nil, fmt.Errorf("expected struct or pointer to struct, got %s (hint: missing `args struct { ... }` wrapper for field arguments?)", typ)
 	}
 
 	var fields []*structPackerField
@@ -172,7 +172,7 @@ func (b *Builder) MakeStructPacker(values common.InputValueList, typ reflect.Typ
 
 		sf, ok := structType.FieldByNameFunc(fx)
 		if !ok {
-			return nil, fmt.Errorf("missing argument %q", v.Name)
+			return nil, fmt.Errorf("%s does not define field %q (hint: missing `args struct { ... }` wrapper for field arguments, or missing field on input struct)", typ, v.Name.Name)
 		}
 		if sf.PkgPath != "" {
 			return nil, fmt.Errorf("field %q must be exported", sf.Name)
