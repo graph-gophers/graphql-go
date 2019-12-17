@@ -72,9 +72,9 @@ type NamedType interface {
 //
 // http://facebook.github.io/graphql/draft/#sec-Scalars
 type Scalar struct {
-	Name string
-	Desc string
-	// TODO: Add a list of directives?
+	Name       string
+	Desc       string
+	Directives common.DirectiveList
 }
 
 // Object types represent a list of named fields, each of which yield a value of a specific type.
@@ -89,7 +89,7 @@ type Object struct {
 	Interfaces []*Interface
 	Fields     FieldList
 	Desc       string
-	// TODO: Add a list of directives?
+	Directives common.DirectiveList
 
 	interfaceNames []string
 }
@@ -105,7 +105,7 @@ type Interface struct {
 	PossibleTypes []*Object
 	Fields        FieldList // NOTE: the spec refers to this as `FieldsDefinition`.
 	Desc          string
-	// TODO: Add a list of directives?
+	Directives    common.DirectiveList
 }
 
 // Union types represent objects that could be one of a list of GraphQL object types, but provides no
@@ -119,7 +119,7 @@ type Union struct {
 	Name          string
 	PossibleTypes []*Object // NOTE: the spec refers to this as `UnionMemberTypes`.
 	Desc          string
-	// TODO: Add a list of directives?
+	Directives    common.DirectiveList
 
 	typeNames []string
 }
@@ -130,10 +130,10 @@ type Union struct {
 //
 // http://facebook.github.io/graphql/draft/#sec-Enums
 type Enum struct {
-	Name   string
-	Values []*EnumValue // NOTE: the spec refers to this as `EnumValuesDefinition`.
-	Desc   string
-	// TODO: Add a list of directives?
+	Name       string
+	Values     []*EnumValue // NOTE: the spec refers to this as `EnumValuesDefinition`.
+	Desc       string
+	Directives common.DirectiveList
 }
 
 // EnumValue types are unique values that may be serialized as a string: the name of the
@@ -144,7 +144,6 @@ type EnumValue struct {
 	Name       string
 	Directives common.DirectiveList
 	Desc       string
-	// TODO: Add a list of directives?
 }
 
 // InputObject types define a set of input fields; the input fields are either scalars, enums, or
@@ -154,10 +153,10 @@ type EnumValue struct {
 //
 // http://facebook.github.io/graphql/draft/#sec-Input-Objects
 type InputObject struct {
-	Name   string
-	Desc   string
-	Values common.InputValueList
-	// TODO: Add a list of directives?
+	Name       string
+	Desc       string
+	Values     common.InputValueList
+	Directives common.DirectiveList
 }
 
 // Extension type defines a GraphQL type extension.
@@ -165,8 +164,8 @@ type InputObject struct {
 //
 // https://facebook.github.io/graphql/draft/#sec-Type-System-Extensions
 type Extension struct {
-	Type NamedType
-	// TODO: Add a list of directives
+	Type       NamedType
+	Directives common.DirectiveList
 }
 
 // FieldsList is a list of an Object's Fields.
@@ -314,6 +313,14 @@ func (s *Schema) Parse(schemaString string, useStringDescriptions bool) error {
 
 	for _, obj := range s.objects {
 		obj.Interfaces = make([]*Interface, len(obj.interfaceNames))
+		if err := resolveDirectives(s, obj.Directives, "OBJECT"); err != nil {
+			return err
+		}
+		for _, field := range obj.Fields {
+			if err := resolveDirectives(s, field.Directives, "FIELD_DEFINITION"); err != nil {
+				return err
+			}
+		}
 		for i, intfName := range obj.interfaceNames {
 			t, ok := s.Types[intfName]
 			if !ok {
@@ -334,6 +341,9 @@ func (s *Schema) Parse(schemaString string, useStringDescriptions bool) error {
 	}
 
 	for _, union := range s.unions {
+		if err := resolveDirectives(s, union.Directives, "UNION"); err != nil {
+			return err
+		}
 		union.PossibleTypes = make([]*Object, len(union.typeNames))
 		for i, name := range union.typeNames {
 			t, ok := s.Types[name]
@@ -349,8 +359,11 @@ func (s *Schema) Parse(schemaString string, useStringDescriptions bool) error {
 	}
 
 	for _, enum := range s.enums {
+		if err := resolveDirectives(s, enum.Directives, "ENUM"); err != nil {
+			return err
+		}
 		for _, value := range enum.Values {
-			if err := resolveDirectives(s, value.Directives); err != nil {
+			if err := resolveDirectives(s, value.Directives, "ENUM_VALUE"); err != nil {
 				return err
 			}
 		}
@@ -469,18 +482,28 @@ func resolveField(s *Schema, f *Field) error {
 		return err
 	}
 	f.Type = t
-	if err := resolveDirectives(s, f.Directives); err != nil {
+	if err := resolveDirectives(s, f.Directives, "FIELD_DEFINITION"); err != nil {
 		return err
 	}
 	return resolveInputObject(s, f.Args)
 }
 
-func resolveDirectives(s *Schema, directives common.DirectiveList) error {
+func resolveDirectives(s *Schema, directives common.DirectiveList, loc string) error {
 	for _, d := range directives {
 		dirName := d.Name.Name
 		dd, ok := s.Directives[dirName]
 		if !ok {
 			return errors.Errorf("directive %q not found", dirName)
+		}
+		validLoc := false
+		for _, l := range dd.Locs {
+			if l == loc {
+				validLoc = true
+				break
+			}
+		}
+		if !validLoc {
+			return errors.Errorf("invalid location %q for directive %q (must be one of %v)", loc, dirName, dd.Locs)
 		}
 		for _, arg := range d.Args {
 			if dd.Args.Get(arg.Name.Name) == nil {
@@ -554,7 +577,8 @@ func parseSchema(s *Schema, l *common.Lexer) {
 
 		case "scalar":
 			name := l.ConsumeIdent()
-			s.Types[name] = &Scalar{Name: name, Desc: desc}
+			directives := common.ParseDirectives(l)
+			s.Types[name] = &Scalar{Name: name, Desc: desc, Directives: directives}
 
 		case "directive":
 			directive := parseDirectiveDef(l)
@@ -574,16 +598,30 @@ func parseSchema(s *Schema, l *common.Lexer) {
 func parseObjectDef(l *common.Lexer) *Object {
 	object := &Object{Name: l.ConsumeIdent()}
 
-	if l.Peek() == scanner.Ident {
-		l.ConsumeKeyword("implements")
-
-		for l.Peek() != '{' {
-			if l.Peek() == '&' {
-				l.ConsumeToken('&')
-			}
-
-			object.interfaceNames = append(object.interfaceNames, l.ConsumeIdent())
+	for {
+		if l.Peek() == '{' {
+			break
 		}
+
+		if l.Peek() == '@' {
+			object.Directives = common.ParseDirectives(l)
+			continue
+		}
+
+		if l.Peek() == scanner.Ident {
+			l.ConsumeKeyword("implements")
+
+			for l.Peek() != '{' && l.Peek() != '@' {
+				if l.Peek() == '&' {
+					l.ConsumeToken('&')
+				}
+
+				object.interfaceNames = append(object.interfaceNames, l.ConsumeIdent())
+			}
+			continue
+		}
+
+		l.SyntaxError(fmt.Sprintf(`unexpected %q, expecting "implements", "directive" or "{"`, l.Peek()))
 	}
 
 	l.ConsumeToken('{')
@@ -596,6 +634,7 @@ func parseObjectDef(l *common.Lexer) *Object {
 func parseInterfaceDef(l *common.Lexer) *Interface {
 	i := &Interface{Name: l.ConsumeIdent()}
 
+	i.Directives = common.ParseDirectives(l)
 	l.ConsumeToken('{')
 	i.Fields = parseFieldsDef(l)
 	l.ConsumeToken('}')
@@ -606,6 +645,7 @@ func parseInterfaceDef(l *common.Lexer) *Interface {
 func parseUnionDef(l *common.Lexer) *Union {
 	union := &Union{Name: l.ConsumeIdent()}
 
+	union.Directives = common.ParseDirectives(l)
 	l.ConsumeToken('=')
 	union.typeNames = []string{l.ConsumeIdent()}
 	for l.Peek() == '|' {
@@ -619,6 +659,7 @@ func parseUnionDef(l *common.Lexer) *Union {
 func parseInputDef(l *common.Lexer) *InputObject {
 	i := &InputObject{}
 	i.Name = l.ConsumeIdent()
+	i.Directives = common.ParseDirectives(l)
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
 		i.Values = append(i.Values, common.ParseInputValue(l))
@@ -630,6 +671,7 @@ func parseInputDef(l *common.Lexer) *InputObject {
 func parseEnumDef(l *common.Lexer) *Enum {
 	enum := &Enum{Name: l.ConsumeIdent()}
 
+	enum.Directives = common.ParseDirectives(l)
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
 		v := &EnumValue{
