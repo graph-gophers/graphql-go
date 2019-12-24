@@ -44,10 +44,22 @@ func UnmarshalSpec(id graphql.ID, v interface{}) error {
 }
 
 type Handler struct {
-	Schema *graphql.Schema
+	Schema  *graphql.Schema
+	Headers map[string]string
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "OPTIONS" {
+		w.Header().Set("X-Powered-By", "graphql-go")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET,HEAD,PUT,PATCH,POST,DELETE")
+		w.Header().Set("Vary", "Access-Control-Request-Headers")
+		w.Header().Set("Access-Control-Allow-Headers", "authorization,client-name,client-version,content-type")
+		w.Header().Set("Connection", "keep-alive")
+		w.WriteHeader(204)
+		return
+	}
+
 	var params struct {
 		Query         string                 `json:"query"`
 		OperationName string                 `json:"operationName"`
@@ -66,5 +78,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	if h.Headers != nil {
+		for key, value := range h.Headers {
+			w.Header().Set(key, value)
+		}
+	} else {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+	}
 	w.Write(responseJSON)
 }
