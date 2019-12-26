@@ -39,4 +39,4 @@ func (err *QueryError) Error() string {
 	return str
 }
 
-var _ error = &QueryError{}
+var _ error = (*QueryError)(nil)
