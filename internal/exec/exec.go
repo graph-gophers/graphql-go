@@ -38,7 +38,7 @@ func makePanicError(value interface{}) *errors.QueryError {
 	return errors.Errorf("graphql: panic occurred: %v", value)
 }
 
-func (r *Request) process(ctx context.Context, w *objWriter, nodes []*execNode, s *resolvable.Schema) {
+func (r *Request) process(ctx context.Context, nodes []*execNode, s *resolvable.Schema) {
 	queue := nodes
 	for len(queue) > 0 {
 		batch := queue
@@ -62,10 +62,6 @@ func (r *Request) process(ctx context.Context, w *objWriter, nodes []*execNode, 
 			queue = append(queue, n.children...)
 		}
 	}
-
-	for _, n := range nodes {
-		w.Write(r, n)
-	}
 }
 
 func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *query.Operation) ([]byte, []*errors.QueryError) {
@@ -82,10 +78,14 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *query.O
 		if op.Type == query.Mutation {
 			// process mutations sequentially.
 			for _, n := range nodes {
-				r.process(ctx, w, []*execNode{n}, s)
+				r.process(ctx, []*execNode{n}, s)
+				w.Write(r, n)
 			}
 		} else {
-			r.process(ctx, w, nodes, s)
+			r.process(ctx, nodes, s)
+			for _, n := range nodes {
+				w.Write(r, n)
+			}
 		}
 	}()
 
@@ -208,6 +208,9 @@ func (r *Request) resolveNode(ctx context.Context, n *execNode, applyLimiter boo
 		}
 
 		res := n.resolver
+		if isNull(res) {
+			return
+		}
 		if n.field.UseMethodResolver() {
 			var in []reflect.Value
 			if n.field.HasContext {
