@@ -176,7 +176,6 @@ func selectionToSelectedFields(internalSelection []selected.Selection) []*select
 				Name:           field.Name,
 				SelectedFields: nestedSelections,
 			})
-			fieldSelection = append(fieldSelection, nestedSelections...)
 		}
 	}
 	return fieldSelection

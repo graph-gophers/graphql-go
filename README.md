@@ -76,7 +76,7 @@ When using `UseFieldResolvers` schema option, a struct field will be used *only*
 
 The method has up to two arguments:
 
-- Optional `context.Context` argument.
+- Optional `context.Context` argument. If the graphql query had nested subfields, then use the `SelctedFieldsFromContext(ctx context.Context)` getter method
 - Mandatory `*struct { ... }` argument if the corresponding GraphQL field has arguments. The names of the struct fields have to be [exported](https://golang.org/ref/spec#Exported_identifiers) and have to match the names of the GraphQL arguments in a non-case-sensitive way.
 
 The method has up to two results:
