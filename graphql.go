@@ -182,13 +182,19 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		return &Response{Errors: []*errors.QueryError{errors.Errorf("%s", err)}}
 	}
 
+	// If the optional "operationName" POST parameter is not provided then
+	// use the query's operation name for improved tracing.
+	if operationName == "" {
+		operationName = op.Name.Name
+	}
+
 	// Subscriptions are not valid in Exec. Use schema.Subscribe() instead.
 	if op.Type == query.Subscription {
-		return &Response{Errors: []*errors.QueryError{&errors.QueryError{ Message: "graphql-ws protocol header is missing" }}}
+		return &Response{Errors: []*errors.QueryError{&errors.QueryError{Message: "graphql-ws protocol header is missing"}}}
 	}
 	if op.Type == query.Mutation {
 		if _, ok := s.schema.EntryPoints["mutation"]; !ok {
-			return &Response{Errors: []*errors.QueryError{{ Message: "no mutations are offered by the schema" }}}
+			return &Response{Errors: []*errors.QueryError{{Message: "no mutations are offered by the schema"}}}
 		}
 	}
 
