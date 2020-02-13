@@ -28,6 +28,7 @@ type Object struct {
 	Name           string
 	Fields         map[string]*Field
 	TypeAssertions map[string]*TypeAssertion
+	Interfaces     map[string]struct{}
 }
 
 type Field struct {
@@ -158,13 +159,13 @@ func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type) (Resolv
 
 	switch t := t.(type) {
 	case *schema.Object:
-		return b.makeObjectExec(t.Name, t.Fields, nil, nonNull, resolverType)
+		return b.makeObjectExec(t.Name, t.Fields, nil, t.Interfaces, nonNull, resolverType)
 
 	case *schema.Interface:
-		return b.makeObjectExec(t.Name, t.Fields, t.PossibleTypes, nonNull, resolverType)
+		return b.makeObjectExec(t.Name, t.Fields, t.PossibleTypes, nil, nonNull, resolverType)
 
 	case *schema.Union:
-		return b.makeObjectExec(t.Name, nil, t.PossibleTypes, nonNull, resolverType)
+		return b.makeObjectExec(t.Name, nil, t.PossibleTypes, nil, nonNull, resolverType)
 	}
 
 	if !nonNull {
@@ -217,7 +218,7 @@ func makeScalarExec(t *schema.Scalar, resolverType reflect.Type) (Resolvable, er
 }
 
 func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, possibleTypes []*schema.Object,
-	nonNull bool, resolverType reflect.Type) (*Object, error) {
+	interfaces []*schema.Interface, nonNull bool, resolverType reflect.Type) (*Object, error) {
 	if !nonNull {
 		if resolverType.Kind() != reflect.Ptr && resolverType.Kind() != reflect.Interface {
 			return nil, fmt.Errorf("%s is not a pointer or interface", resolverType)
@@ -282,11 +283,16 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 			typeAssertions[impl.Name] = a
 		}
 	}
+	ifaces := make(map[string]struct{})
+	for _, iface := range interfaces {
+		ifaces[iface.Name] = struct{}{}
+	}
 
 	return &Object{
 		Name:           typeName,
 		Fields:         Fields,
 		TypeAssertions: typeAssertions,
+		Interfaces:     ifaces,
 	}, nil
 }
 

@@ -174,6 +174,10 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 
 func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag *query.Fragment) []Selection {
 	if frag.On.Name != "" && frag.On.Name != e.Name {
+		if _, ok := e.Interfaces[frag.On.Name]; ok {
+			return applyInterfaceFragment(r, s, e, frag)
+		}
+
 		a, ok := e.TypeAssertions[frag.On.Name]
 		if !ok {
 			panic(fmt.Errorf("%q does not implement %q", frag.On, e.Name)) // TODO proper error handling
@@ -185,6 +189,36 @@ func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag 
 		}}
 	}
 	return applySelectionSet(r, s, e, frag.Selections)
+}
+
+func applyInterfaceFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag *query.Fragment) []Selection {
+	// if the fragment is on an interface the object type implements, then filter out
+	// selections for any fragments that don't match this type.
+	var sels []query.Selection
+
+	for _, sel := range frag.Selections {
+		switch sel := sel.(type) {
+		case *query.Field:
+			sels = append(sels, sel)
+		case *query.InlineFragment:
+			if sel.On.Name != e.Name {
+				if _, ok := e.Interfaces[sel.On.Name]; !ok {
+					continue
+				}
+			}
+			sels = append(sels, sel)
+		case *query.FragmentSpread:
+			f := &r.Doc.Fragments.Get(sel.Name.Name).Fragment
+			if f.On.Name != e.Name {
+				if _, ok := e.Interfaces[f.On.Name]; !ok {
+					continue
+				}
+			}
+			sels = append(sels, sel)
+		}
+	}
+
+	return applySelectionSet(r, s, e, sels)
 }
 
 func applyField(r *Request, s *resolvable.Schema, e resolvable.Resolvable, sels []query.Selection) []Selection {
