@@ -96,7 +96,7 @@ func checkErrors(t *testing.T, want, got []*errors.QueryError) {
 		t.Log("unexpected error:")
 		t.Log("  Got: \n", formatErrors(got))
 		t.Log("  Want: \n", formatErrors(want))
-		t.Fatal()
+		t.FailNow()
 	}
 }
 
