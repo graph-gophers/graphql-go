@@ -1,7 +1,6 @@
 package gqltesting
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,6 +8,8 @@ import (
 	"sort"
 	"strconv"
 	"testing"
+
+	"github.com/nsf/jsondiff"
 
 	graphql "github.com/graph-gophers/graphql-go"
 	"github.com/graph-gophers/graphql-go/errors"
@@ -27,6 +28,7 @@ type Test struct {
 
 // RunTests runs the given GraphQL test cases as subtests.
 func RunTests(t *testing.T, tests []*Test) {
+	t.Helper()
 	if len(tests) == 1 {
 		RunTest(t, tests[0])
 		return
@@ -34,6 +36,7 @@ func RunTests(t *testing.T, tests []*Test) {
 
 	for i, test := range tests {
 		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
+			t.Helper()
 			RunTest(t, test)
 		})
 	}
@@ -41,6 +44,7 @@ func RunTests(t *testing.T, tests []*Test) {
 
 // RunTest runs a single GraphQL test case.
 func RunTest(t *testing.T, test *Test) {
+	t.Helper()
 	if test.Context == nil {
 		test.Context = context.Background()
 	}
@@ -56,19 +60,17 @@ func RunTest(t *testing.T, test *Test) {
 		return
 	}
 
-	// Verify JSON to avoid red herring errors.
-	got, err := formatJSON(result.Data)
-	if err != nil {
-		t.Fatalf("got: invalid JSON: %s", err)
+	// opts := jsondiff.DefaultConsoleOptions()
+	opts := jsondiff.Options{
+		Added:   jsondiff.Tag{Begin: "+++", End: "+++"},
+		Removed: jsondiff.Tag{Begin: "---", End: "---"},
+		Changed: jsondiff.Tag{Begin: "|||", End: "|||"},
+		Indent:  "    ",
 	}
-	want, err := formatJSON([]byte(test.ExpectedResult))
-	if err != nil {
-		t.Fatalf("want: invalid JSON: %s", err)
-	}
-
-	if !bytes.Equal(got, want) {
-		t.Logf("got:  %s", got)
-		t.Logf("want: %s", want)
+	diff, output := jsondiff.Compare([]byte(test.ExpectedResult), result.Data, &opts)
+	if diff != jsondiff.FullMatch {
+		t.Log("Did not get expected result:\n", output)
+		t.Log("Got:", string(result.Data))
 		t.Fail()
 	}
 }
@@ -86,6 +88,7 @@ func formatJSON(data []byte) ([]byte, error) {
 }
 
 func checkErrors(t *testing.T, want, got []*errors.QueryError) {
+	t.Helper()
 	sortErrors(want)
 	sortErrors(got)
 
