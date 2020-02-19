@@ -93,8 +93,38 @@ func checkErrors(t *testing.T, want, got []*errors.QueryError) {
 	sortErrors(got)
 
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("unexpected error: got %+v, want %+v", got, want)
+		t.Log("unexpected error:")
+		t.Log("  Got: \n", formatErrors(got))
+		t.Log("  Want: \n", formatErrors(want))
+		t.Fatal()
 	}
+}
+
+func formatErrors(errs []*errors.QueryError) string {
+	var errorStr string
+	for _, err := range errs {
+		if err == nil {
+			errorStr = errorStr + "(nil)\n"
+		} else {
+			errorStr = errorStr + formatError(*err)
+		}
+	}
+	return errorStr
+}
+
+func formatError(err errors.QueryError) string {
+	return fmt.Sprintf(
+		`%s
+Path: %v
+Rule: %s
+Resolver: %s
+Extensions: %+v
+`,
+		err.Error(),
+		err.Path,
+		err.Rule,
+		err.ResolverError,
+		err.Extensions)
 }
 
 func sortErrors(errors []*errors.QueryError) {
