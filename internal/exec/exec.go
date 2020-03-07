@@ -73,18 +73,28 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 
 	var fields []*fieldToExec
 	collectFieldsToResolve(sels, s, resolver, &fields, make(map[string]*fieldToExec))
-
 	if async {
 		var wg sync.WaitGroup
-		wg.Add(len(fields))
-		for _, f := range fields {
-			go func(f *fieldToExec) {
+		const numberOfExecutors = 4
+		wg.Add(numberOfExecutors)
+
+		c := make(chan *fieldToExec)
+
+		for i := 0; i < numberOfExecutors; i++ {
+			go func(ch <-chan *fieldToExec) {
 				defer wg.Done()
-				defer r.handlePanic(ctx)
-				f.out = new(bytes.Buffer)
-				execFieldSelection(ctx, r, s, f, &pathSegment{path, f.field.Alias}, true)
-			}(f)
+				for f := range ch {
+					defer r.handlePanic(ctx)
+					f.out = new(bytes.Buffer)
+					execFieldSelection(ctx, r, s, f, &pathSegment{path, f.field.Alias}, true)
+				}
+			}(c)
 		}
+
+		for _, f := range fields {
+			c <- f
+		}
+		close(c)
 		wg.Wait()
 	} else {
 		for _, f := range fields {
@@ -315,15 +325,26 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 	entryouts := make([]bytes.Buffer, l)
 
 	if selected.HasAsyncSel(sels) {
+		const numberOfExecutors = 4
 		var wg sync.WaitGroup
-		wg.Add(l)
-		for i := 0; i < l; i++ {
-			go func(i int) {
+		wg.Add(numberOfExecutors)
+
+		c := make(chan int)
+
+		for i := 0; i < numberOfExecutors; i++ {
+			go func(ch <-chan int) {
 				defer wg.Done()
-				defer r.handlePanic(ctx)
-				r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), &entryouts[i])
-			}(i)
+				for i := range ch {
+					defer r.handlePanic(ctx)
+					r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), &entryouts[i])
+				}
+			}(c)
 		}
+
+		for i := 0; i < l; i++ {
+			c <- i
+		}
+		close(c)
 		wg.Wait()
 	} else {
 		for i := 0; i < l; i++ {
