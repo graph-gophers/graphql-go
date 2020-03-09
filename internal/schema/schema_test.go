@@ -782,6 +782,77 @@ Second line of the description.
 				return nil
 			},
 		},
+		{
+			name: "Parses directives",
+			sdl: `
+			directive @objectdirective on OBJECT
+			directive @fielddirective on FIELD_DEFINITION
+			directive @enumdirective on ENUM
+			directive @uniondirective on UNION
+			directive @directive on SCALAR
+				| OBJECT
+				| FIELD_DEFINITION
+				| ARGUMENT_DEFINITION
+				| INTERFACE
+				| UNION
+				| ENUM
+				| ENUM_VALUE
+				| INPUT_OBJECT
+				| INPUT_FIELD_DEFINITION
+
+			interface NamedEntity @directive { name: String }
+
+			scalar Time @directive
+
+			type Photo @objectdirective {
+				id: ID! @deprecated @fielddirective
+			}
+
+			type Person implements NamedEntity @objectdirective {
+				name: String
+			}
+
+			enum Direction @enumdirective {
+				NORTH @deprecated
+				EAST
+				SOUTH
+				WEST
+			}
+
+			union Union @uniondirective = Photo | Person
+			`,
+			validateSchema: func(s *schema.Schema) error {
+				namedEntityDirectives := s.Types["NamedEntity"].(*schema.Interface).Directives
+				if len(namedEntityDirectives) != 1 || namedEntityDirectives[0].Name.Name != "directive" {
+					return fmt.Errorf("missing directive on NamedEntity interface, expected @directive but got %v", namedEntityDirectives)
+				}
+
+				timeDirectives := s.Types["Time"].(*schema.Scalar).Directives
+				if len(timeDirectives) != 1 || timeDirectives[0].Name.Name != "directive" {
+					return fmt.Errorf("missing directive on Time scalar, expected @directive but got %v", timeDirectives)
+				}
+
+				photo := s.Types["Photo"].(*schema.Object)
+				photoDirectives := photo.Directives
+				if len(photoDirectives) != 1 || photoDirectives[0].Name.Name != "objectdirective" {
+					return fmt.Errorf("missing directive on Time scalar, expected @objectdirective but got %v", photoDirectives)
+				}
+				if len(photo.Fields.Get("id").Directives) != 2 {
+					return fmt.Errorf("expected Photo.id to have 2 directives but got %v", photoDirectives)
+				}
+
+				directionDirectives := s.Types["Direction"].(*schema.Enum).Directives
+				if len(directionDirectives) != 1 || directionDirectives[0].Name.Name != "enumdirective" {
+					return fmt.Errorf("missing directive on Direction enum, expected @enumdirective but got %v", directionDirectives)
+				}
+
+				unionDirectives := s.Types["Union"].(*schema.Union).Directives
+				if len(unionDirectives) != 1 || unionDirectives[0].Name.Name != "uniondirective" {
+					return fmt.Errorf("missing directive on Union union, expected @uniondirective but got %v", unionDirectives)
+				}
+				return nil
+			},
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			s := schema.New()
