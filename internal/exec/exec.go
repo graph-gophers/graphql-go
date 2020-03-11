@@ -19,6 +19,8 @@ import (
 	"github.com/JoinCAD/graphql-go/trace"
 )
 
+const asyncDisabled = true
+
 type Request struct {
 	selected.Request
 	Limiter chan struct{}
@@ -74,7 +76,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 	var fields []*fieldToExec
 	collectFieldsToResolve(sels, s, resolver, &fields, make(map[string]*fieldToExec))
 
-	if async {
+	if async && !asyncDisabled {
 		var wg sync.WaitGroup
 		wg.Add(len(fields))
 		for _, f := range fields {
@@ -314,7 +316,7 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 	l := resolver.Len()
 	entryouts := make([]bytes.Buffer, l)
 
-	if selected.HasAsyncSel(sels) {
+	if selected.HasAsyncSel(sels) && !asyncDisabled {
 		var wg sync.WaitGroup
 		wg.Add(l)
 		for i := 0; i < l; i++ {
