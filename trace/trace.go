@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/neelance/graphql-go/errors"
-	"github.com/neelance/graphql-go/introspection"
+	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/introspection"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
+	"github.com/opentracing/opentracing-go/log"
 )
 
 type TraceQueryFinishFunc func([]*errors.QueryError)
@@ -29,7 +30,7 @@ func (OpenTracingTracer) TraceQuery(ctx context.Context, queryString string, ope
 	}
 
 	if len(variables) != 0 {
-		span.SetTag("graphql.variables", variables)
+		span.LogFields(log.Object("graphql.variables", variables))
 	}
 
 	return spanCtx, func(errs []*errors.QueryError) {

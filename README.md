@@ -1,34 +1,78 @@
-# graphql-go
+# graphql-go [![Sourcegraph](https://sourcegraph.com/github.com/graph-gophers/graphql-go/-/badge.svg)](https://sourcegraph.com/github.com/graph-gophers/graphql-go?badge) [![Build Status](https://semaphoreci.com/api/v1/graph-gophers/graphql-go/branches/master/badge.svg)](https://semaphoreci.com/graph-gophers/graphql-go) [![GoDoc](https://godoc.org/github.com/graph-gophers/graphql-go?status.svg)](https://godoc.org/github.com/graph-gophers/graphql-go)
 
-[![Sourcegraph](https://sourcegraph.com/github.com/neelance/graphql-go/-/badge.svg)](https://sourcegraph.com/github.com/neelance/graphql-go?badge)
-[![Build Status](https://semaphoreci.com/api/v1/neelance/graphql-go/branches/master/badge.svg)](https://semaphoreci.com/neelance/graphql-go)
-[![GoDoc](https://godoc.org/github.com/neelance/graphql-go?status.svg)](https://godoc.org/github.com/neelance/graphql-go)
+<p align="center"><img src="docs/img/logo.png" width="300"></p>
 
-## Status
+The goal of this project is to provide full support of the [GraphQL draft specification](https://facebook.github.io/graphql/draft) with a set of idiomatic, easy to use Go packages.
 
-The project is under heavy development. It is stable enough so we use it in production at [Sourcegraph](https://sourcegraph.com), but expect changes.
+While still under heavy development (`internal` APIs are almost certainly subject to change), this library is
+safe for production use.
 
-## Goals
+## Features
 
-* [ ] full support of [GraphQL spec (October 2016)](https://facebook.github.io/graphql/)
-  * [ ] propagation of `null` on resolver errors
-  * [x] everything else
-* [x] minimal API
-* [x] support for context.Context and OpenTracing
-* [x] early error detection at application startup by type-checking if the given resolver matches the schema 
-* [x] resolvers are purely based on method sets (e.g. it's up to you if you want to resolve a GraphQL interface with a Go interface or a Go struct)
-* [ ] nice error messages (no internal panics, even with an invalid schema or resolver; please file a bug if you see an internal panic)
-  * [x] nice errors on resolver validation
-  * [ ] nice errors on all invalid schemas
-  * [ ] nice errors on all invalid queries
-* [x] panic handling (a panic in a resolver should not take down the whole app)
-* [x] parallel execution of resolvers
+- minimal API
+- support for `context.Context`
+- support for the `OpenTracing` standard
+- schema type-checking against resolvers
+- resolvers are matched to the schema based on method sets (can resolve a GraphQL schema with a Go interface or Go struct).
+- handles panics in resolvers
+- parallel execution of resolvers
+- subscriptions
+   - [sample WS transport](https://github.com/graph-gophers/graphql-transport-ws)
+
+## Roadmap
+
+We're trying out the GitHub Project feature to manage `graphql-go`'s [development roadmap](https://github.com/graph-gophers/graphql-go/projects/1).
+Feedback is welcome and appreciated.
 
 ## (Some) Documentation
 
+### Basic Sample
+
+```go
+package main
+
+import (
+        "log"
+        "net/http"
+
+        graphql "github.com/graph-gophers/graphql-go"
+        "github.com/graph-gophers/graphql-go/relay"
+)
+
+type query struct{}
+
+func (_ *query) Hello() string { return "Hello, world!" }
+
+func main() {
+        s := `
+                type Query {
+                        hello: String!
+                }
+        `
+        schema := graphql.MustParseSchema(s, &query{})
+        http.Handle("/query", &relay.Handler{Schema: schema})
+        log.Fatal(http.ListenAndServe(":8080", nil))
+}
+```
+
+To test:
+```sh
+$ curl -XPOST -d '{"query": "{ hello }"}' localhost:8080/query
+```
+
 ### Resolvers
 
-A resolver must have one method for each field of the GraphQL type it resolves. The method name has to be [exported](https://golang.org/ref/spec#Exported_identifiers) and match the field's name in a non-case-sensitive way.
+A resolver must have one method or field for each field of the GraphQL type it resolves. The method or field name has to be [exported](https://golang.org/ref/spec#Exported_identifiers) and match the schema's field's name in a non-case-sensitive way.
+You can use struct fields as resolvers by using `SchemaOpt: UseFieldResolvers()`. For example,
+```
+opts := []graphql.SchemaOpt{graphql.UseFieldResolvers()}
+schema := graphql.MustParseSchema(s, &query{}, opts...)
+```   
+
+When using `UseFieldResolvers` schema option, a struct field will be used *only* when:
+- there is no method for a struct field
+- a struct field does not implement an interface method
+- a struct field does not have arguments
 
 The method has up to two arguments:
 
@@ -55,3 +99,64 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 	return "Hello world!", nil
 }
 ```
+
+### Custom Errors
+
+Errors returned by resolvers can include custom extensions by implementing the `ResolverError` interface:
+
+```go
+type ResolverError interface {
+	error
+	Extensions() map[string]interface{}
+}
+```
+
+Example of a simple custom error:
+
+```go
+type droidNotFoundError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (e droidNotFoundError) Error() string {
+	return fmt.Sprintf("error [%s]: %s", e.Code, e.Message)
+}
+
+func (e droidNotFoundError) Extensions() map[string]interface{} {
+	return map[string]interface{}{
+		"code":    e.Code,
+		"message": e.Message,
+	}
+}
+```
+
+Which could produce a GraphQL error such as:
+
+```go
+{
+  "errors": [
+    {
+      "message": "error [NotFound]: This is not the droid you are looking for",
+      "path": [
+        "droid"
+      ],
+      "extensions": {
+        "code": "NotFound",
+        "message": "This is not the droid you are looking for"
+      }
+    }
+  ],
+  "data": null
+}
+```
+
+### Community Examples
+
+[tonyghita/graphql-go-example](https://github.com/tonyghita/graphql-go-example) - A more "productionized" version of the Star Wars API example given in this repository.
+
+[deltaskelta/graphql-go-pets-example](https://github.com/deltaskelta/graphql-go-pets-example) - graphql-go resolving against a sqlite database.
+
+[OscarYuen/go-graphql-starter](https://github.com/OscarYuen/go-graphql-starter) - A starter application integrated with dataloader, psql and basic authentication.
+
+[zaydek/graphql-go-walkthrough](https://github.com/ZAYDEK/graphql-go-walkthrough) - A beginner friendly walkthrough for prospective developers.

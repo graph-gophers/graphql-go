@@ -4,19 +4,25 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"reflect"
+	"sort"
 	"strconv"
 	"testing"
 
-	graphql "github.com/neelance/graphql-go"
+	graphql "github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/errors"
 )
 
 // Test is a GraphQL test case to be used with RunTest(s).
 type Test struct {
+	Context        context.Context
 	Schema         *graphql.Schema
 	Query          string
 	OperationName  string
 	Variables      map[string]interface{}
 	ExpectedResult string
+	ExpectedErrors []*errors.QueryError
 }
 
 // RunTests runs the given GraphQL test cases as subtests.
@@ -35,13 +41,30 @@ func RunTests(t *testing.T, tests []*Test) {
 
 // RunTest runs a single GraphQL test case.
 func RunTest(t *testing.T, test *Test) {
-	result := test.Schema.Exec(context.Background(), test.Query, test.OperationName, test.Variables)
-	if len(result.Errors) != 0 {
-		t.Fatal(result.Errors[0])
+	if test.Context == nil {
+		test.Context = context.Background()
 	}
-	got := formatJSON(t, result.Data)
+	result := test.Schema.Exec(test.Context, test.Query, test.OperationName, test.Variables)
 
-	want := formatJSON(t, []byte(test.ExpectedResult))
+	checkErrors(t, test.ExpectedErrors, result.Errors)
+
+	if test.ExpectedResult == "" {
+		if result.Data != nil {
+			t.Fatalf("got: %s", result.Data)
+			t.Fatalf("want: null")
+		}
+		return
+	}
+
+	// Verify JSON to avoid red herring errors.
+	got, err := formatJSON(result.Data)
+	if err != nil {
+		t.Fatalf("got: invalid JSON: %s", err)
+	}
+	want, err := formatJSON([]byte(test.ExpectedResult))
+	if err != nil {
+		t.Fatalf("want: invalid JSON: %s", err)
+	}
 
 	if !bytes.Equal(got, want) {
 		t.Logf("got:  %s", got)
@@ -50,14 +73,32 @@ func RunTest(t *testing.T, test *Test) {
 	}
 }
 
-func formatJSON(t *testing.T, data []byte) []byte {
+func formatJSON(data []byte) ([]byte, error) {
 	var v interface{}
 	if err := json.Unmarshal(data, &v); err != nil {
-		t.Fatalf("invalid JSON: %s", err)
+		return nil, err
 	}
 	formatted, err := json.Marshal(v)
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
-	return formatted
+	return formatted, nil
+}
+
+func checkErrors(t *testing.T, want, got []*errors.QueryError) {
+	sortErrors(want)
+	sortErrors(got)
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected error: got %+v, want %+v", got, want)
+	}
+}
+
+func sortErrors(errors []*errors.QueryError) {
+	if len(errors) <= 1 {
+		return
+	}
+	sort.Slice(errors, func(i, j int) bool {
+		return fmt.Sprintf("%s", errors[i].Path) < fmt.Sprintf("%s", errors[j].Path)
+	})
 }

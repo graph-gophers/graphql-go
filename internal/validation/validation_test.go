@@ -1,4 +1,4 @@
-package tests
+package validation_test
 
 import (
 	"os"
@@ -8,10 +8,10 @@ import (
 
 	"encoding/json"
 
-	"github.com/neelance/graphql-go/errors"
-	"github.com/neelance/graphql-go/internal/query"
-	"github.com/neelance/graphql-go/internal/schema"
-	"github.com/neelance/graphql-go/internal/validation"
+	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/internal/query"
+	"github.com/graph-gophers/graphql-go/internal/schema"
+	"github.com/graph-gophers/graphql-go/internal/validation"
 )
 
 type Test struct {
@@ -19,10 +19,11 @@ type Test struct {
 	Rule   string
 	Schema int
 	Query  string
+	Vars   map[string]interface{}
 	Errors []*errors.QueryError
 }
 
-func TestAll(t *testing.T) {
+func TestValidate(t *testing.T) {
 	f, err := os.Open("testdata/tests.json")
 	if err != nil {
 		t.Fatal(err)
@@ -39,7 +40,7 @@ func TestAll(t *testing.T) {
 	schemas := make([]*schema.Schema, len(testData.Schemas))
 	for i, schemaStr := range testData.Schemas {
 		schemas[i] = schema.New()
-		if err := schemas[i].Parse(schemaStr); err != nil {
+		if err := schemas[i].Parse(schemaStr, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -50,7 +51,7 @@ func TestAll(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			errs := validation.Validate(schemas[test.Schema], d)
+			errs := validation.Validate(schemas[test.Schema], d, test.Vars, 0)
 			got := []*errors.QueryError{}
 			for _, err := range errs {
 				if err.Rule == test.Rule {

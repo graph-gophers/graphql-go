@@ -2,71 +2,50 @@ package graphql
 
 import (
 	"context"
-	"fmt"
-
 	"encoding/json"
+	"fmt"
+	"reflect"
 
-	"strconv"
-
-	"github.com/neelance/graphql-go/errors"
-	"github.com/neelance/graphql-go/internal/common"
-	"github.com/neelance/graphql-go/internal/exec"
-	"github.com/neelance/graphql-go/internal/exec/resolvable"
-	"github.com/neelance/graphql-go/internal/exec/selected"
-	"github.com/neelance/graphql-go/internal/query"
-	"github.com/neelance/graphql-go/internal/schema"
-	"github.com/neelance/graphql-go/internal/validation"
-	"github.com/neelance/graphql-go/introspection"
-	"github.com/neelance/graphql-go/log"
-	"github.com/neelance/graphql-go/trace"
+	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/internal/common"
+	"github.com/graph-gophers/graphql-go/internal/exec"
+	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
+	"github.com/graph-gophers/graphql-go/internal/exec/selected"
+	"github.com/graph-gophers/graphql-go/internal/query"
+	"github.com/graph-gophers/graphql-go/internal/schema"
+	"github.com/graph-gophers/graphql-go/internal/validation"
+	"github.com/graph-gophers/graphql-go/introspection"
+	"github.com/graph-gophers/graphql-go/log"
+	"github.com/graph-gophers/graphql-go/trace"
 )
-
-// ID represents GraphQL's "ID" type. A custom type may be used instead.
-type ID string
-
-func (_ ID) ImplementsGraphQLType(name string) bool {
-	return name == "ID"
-}
-
-func (id *ID) UnmarshalGraphQL(input interface{}) error {
-	switch input := input.(type) {
-	case string:
-		*id = ID(input)
-		return nil
-	default:
-		return fmt.Errorf("wrong type")
-	}
-}
-
-func (id ID) MarshalJSON() ([]byte, error) {
-	return strconv.AppendQuote(nil, string(id)), nil
-}
 
 // ParseSchema parses a GraphQL schema and attaches the given root resolver. It returns an error if
 // the Go type signature of the resolvers does not match the schema. If nil is passed as the
 // resolver, then the schema can not be executed, but it may be inspected (e.g. with ToJSON).
 func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (*Schema, error) {
 	s := &Schema{
-		schema:         schema.New(),
-		maxParallelism: 10,
-		tracer:         trace.OpenTracingTracer{},
-		logger:         &log.DefaultLogger{},
+		schema:           schema.New(),
+		maxParallelism:   10,
+		tracer:           trace.OpenTracingTracer{},
+		validationTracer: trace.NoopValidationTracer{},
+		logger:           &log.DefaultLogger{},
 	}
 	for _, opt := range opts {
 		opt(s)
 	}
 
-	if err := s.schema.Parse(schemaString); err != nil {
+	if err := s.schema.Parse(schemaString, s.useStringDescriptions); err != nil {
+		return nil, err
+	}
+	if err := s.validateSchema(); err != nil {
 		return nil, err
 	}
 
-	if resolver != nil {
-		r, err := resolvable.ApplyResolver(s.schema, resolver)
-		if err != nil {
-			return nil, err
-		}
-		s.res = r
+	r, err := resolvable.ApplyResolver(s.schema, resolver)
+	if err != nil {
+		return nil, err
 	}
+	s.res = r
 
 	return s, nil
 }
@@ -85,13 +64,41 @@ type Schema struct {
 	schema *schema.Schema
 	res    *resolvable.Schema
 
-	maxParallelism int
-	tracer         trace.Tracer
-	logger         log.Logger
+	maxDepth              int
+	maxParallelism        int
+	tracer                trace.Tracer
+	validationTracer      trace.ValidationTracer
+	logger                log.Logger
+	useStringDescriptions bool
+	disableIntrospection  bool
 }
 
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
 type SchemaOpt func(*Schema)
+
+// UseStringDescriptions enables the usage of double quoted and triple quoted
+// strings as descriptions as per the June 2018 spec
+// https://facebook.github.io/graphql/June2018/. When this is not enabled,
+// comments are parsed as descriptions instead.
+func UseStringDescriptions() SchemaOpt {
+	return func(s *Schema) {
+		s.useStringDescriptions = true
+	}
+}
+
+// UseFieldResolvers specifies whether to use struct field resolvers
+func UseFieldResolvers() SchemaOpt {
+	return func(s *Schema) {
+		s.schema.UseFieldResolvers = true
+	}
+}
+
+// MaxDepth specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
+func MaxDepth(n int) SchemaOpt {
+	return func(s *Schema) {
+		s.maxDepth = n
+	}
+}
 
 // MaxParallelism specifies the maximum number of resolvers per request allowed to run in parallel. The default is 10.
 func MaxParallelism(n int) SchemaOpt {
@@ -107,18 +114,33 @@ func Tracer(tracer trace.Tracer) SchemaOpt {
 	}
 }
 
-// Logger is used to log panics durring query execution. It defaults to exec.DefaultLogger.
+// ValidationTracer is used to trace validation errors. It defaults to trace.NoopValidationTracer.
+func ValidationTracer(tracer trace.ValidationTracer) SchemaOpt {
+	return func(s *Schema) {
+		s.validationTracer = tracer
+	}
+}
+
+// Logger is used to log panics during query execution. It defaults to exec.DefaultLogger.
 func Logger(logger log.Logger) SchemaOpt {
 	return func(s *Schema) {
 		s.logger = logger
 	}
 }
 
+// DisableIntrospection disables introspection queries.
+func DisableIntrospection() SchemaOpt {
+	return func(s *Schema) {
+		s.disableIntrospection = true
+	}
+}
+
 // Response represents a typical response of a GraphQL server. It may be encoded to JSON directly or
 // it may be further processed to a custom response type, for example to include custom error data.
+// Errors are intentionally serialized first based on the advice in https://github.com/facebook/graphql/commit/7b40390d48680b15cb93e02d46ac5eb249689876#diff-757cea6edf0288677a9eea4cfc801d87R107
 type Response struct {
-	Data       json.RawMessage        `json:"data,omitempty"`
 	Errors     []*errors.QueryError   `json:"errors,omitempty"`
+	Data       json.RawMessage        `json:"data,omitempty"`
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
@@ -129,14 +151,14 @@ func (s *Schema) Validate(queryString string) []*errors.QueryError {
 		return []*errors.QueryError{qErr}
 	}
 
-	return validation.Validate(s.schema, doc)
+	return validation.Validate(s.schema, doc, nil, s.maxDepth)
 }
 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
 // without a resolver. If the context get cancelled, no further resolvers will be called and a
 // the context error will be returned as soon as possible (not immediately).
 func (s *Schema) Exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}) *Response {
-	if s.res == nil {
+	if s.res.Resolver == (reflect.Value{}) {
 		panic("schema created without resolver, can not exec")
 	}
 	return s.exec(ctx, queryString, operationName, variables, s.res)
@@ -148,7 +170,9 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		return &Response{Errors: []*errors.QueryError{qErr}}
 	}
 
-	errs := validation.Validate(s.schema, doc)
+	validationFinish := s.validationTracer.TraceValidation()
+	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
+	validationFinish(errs)
 	if len(errs) != 0 {
 		return &Response{Errors: errs}
 	}
@@ -158,11 +182,38 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		return &Response{Errors: []*errors.QueryError{errors.Errorf("%s", err)}}
 	}
 
+	// If the optional "operationName" POST parameter is not provided then
+	// use the query's operation name for improved tracing.
+	if operationName == "" {
+		operationName = op.Name.Name
+	}
+
+	// Subscriptions are not valid in Exec. Use schema.Subscribe() instead.
+	if op.Type == query.Subscription {
+		return &Response{Errors: []*errors.QueryError{&errors.QueryError{Message: "graphql-ws protocol header is missing"}}}
+	}
+	if op.Type == query.Mutation {
+		if _, ok := s.schema.EntryPoints["mutation"]; !ok {
+			return &Response{Errors: []*errors.QueryError{{Message: "no mutations are offered by the schema"}}}
+		}
+	}
+
+	// Fill in variables with the defaults from the operation
+	if variables == nil {
+		variables = make(map[string]interface{}, len(op.Vars))
+	}
+	for _, v := range op.Vars {
+		if _, ok := variables[v.Name.Name]; !ok && v.Default != nil {
+			variables[v.Name.Name] = v.Default.Value(nil)
+		}
+	}
+
 	r := &exec.Request{
 		Request: selected.Request{
-			Doc:    doc,
-			Vars:   variables,
-			Schema: s.schema,
+			Doc:                  doc,
+			Vars:                 variables,
+			Schema:               s.schema,
+			DisableIntrospection: s.disableIntrospection,
 		},
 		Limiter: make(chan struct{}, s.maxParallelism),
 		Tracer:  s.tracer,
@@ -184,6 +235,39 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		Data:   data,
 		Errors: errs,
 	}
+}
+
+func (s *Schema) validateSchema() error {
+	// https://graphql.github.io/graphql-spec/June2018/#sec-Root-Operation-Types
+	// > The query root operation type must be provided and must be an Object type.
+	if err := validateRootOp(s.schema, "query", true); err != nil {
+		return err
+	}
+	// > The mutation root operation type is optional; if it is not provided, the service does not support mutations.
+	// > If it is provided, it must be an Object type.
+	if err := validateRootOp(s.schema, "mutation", false); err != nil {
+		return err
+	}
+	// > Similarly, the subscription root operation type is also optional; if it is not provided, the service does not
+	// > support subscriptions. If it is provided, it must be an Object type.
+	if err := validateRootOp(s.schema, "subscription", false); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateRootOp(s *schema.Schema, name string, mandatory bool) error {
+	t, ok := s.EntryPoints[name]
+	if !ok {
+		if mandatory {
+			return fmt.Errorf("root operation %q must be defined", name)
+		}
+		return nil
+	}
+	if t.Kind() != "OBJECT" {
+		return fmt.Errorf("root operation %q must be an OBJECT", name)
+	}
+	return nil
 }
 
 func getOperation(document *query.Document, operationName string) (*query.Operation, error) {

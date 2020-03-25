@@ -1,16 +1,18 @@
 package common
 
 import (
-	"github.com/neelance/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/errors"
 )
 
+// http://facebook.github.io/graphql/draft/#InputValueDefinition
 type InputValue struct {
-	Name    Ident
-	Type    Type
-	Default Literal
-	Desc    string
-	Loc     errors.Location
-	TypeLoc errors.Location
+	Name       Ident
+	Type       Type
+	Default    Literal
+	Desc       string
+	Directives DirectiveList
+	Loc        errors.Location
+	TypeLoc    errors.Location
 }
 
 type InputValueList []*InputValue
@@ -36,6 +38,7 @@ func ParseInputValue(l *Lexer) *InputValue {
 		l.ConsumeToken('=')
 		p.Default = ParseLiteral(l, true)
 	}
+	p.Directives = ParseDirectives(l)
 	return p
 }
 
