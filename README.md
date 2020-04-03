@@ -151,6 +151,10 @@ Which could produce a GraphQL error such as:
 }
 ```
 
+### Testing clients/IDEs
+ - [Firecamp](https://firecamp.io/graphql)
+ - [GraphiQL](https://github.com/graphql/graphiql)
+
 ### Community Examples
 
 [tonyghita/graphql-go-example](https://github.com/tonyghita/graphql-go-example) - A more "productionized" version of the Star Wars API example given in this repository.
