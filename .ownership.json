@@ -1,6 +1,14 @@
 {
-  "name": "graphql-go",
-  "description": "Fork of Golang based Graphql (graph-gophers/graphql-go)",
-  "owner": "bmishra",
-  "slack_channel": "gql-alerts"
+  "repository_name": "graphql-go",
+  "description": "Forked from graphq-gophers/graphql-go. This is implementation of GraphQL specification in golang. Core dependency for tokopedia/gqlserver Golang based Graphql service.",
+  "security_owner": "bmishra",
+  "slack_channel": "gql-core",
+  "app": [
+    {
+      "name": "graphql-go",
+      "description": "Forked from graphq-gophers/graphql-go. This is implementation of GraphQL specification in golang. Core dependency for tokopedia/gqlserver Golang based Graphql service.",
+      "owner": "bmishra",
+      "slack_channel": "gql-core"
+    }
+  ]
 }
