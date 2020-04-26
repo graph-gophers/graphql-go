@@ -23,11 +23,12 @@ type Request struct {
 	Limiter chan struct{}
 	Tracer  trace.Tracer
 	Logger  log.Logger
+	LoggerInfo interface{}
 }
 
 func (r *Request) handlePanic(ctx context.Context) {
 	if value := recover(); value != nil {
-		r.Logger.LogPanic(ctx, value)
+		r.Logger.LogPanic(ctx, value, r.LoggerInfo)
 		r.AddError(makePanicError(value))
 	}
 }
@@ -176,7 +177,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 	err = func() (err *errors.QueryError) {
 		defer func() {
 			if panicValue := recover(); panicValue != nil {
-				r.Logger.LogPanic(ctx, panicValue)
+				r.Logger.LogPanic(ctx, panicValue, r.LoggerInfo)
 				err = makePanicError(panicValue)
 				err.Path = path.toSlice()
 			}

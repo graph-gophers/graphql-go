@@ -128,6 +128,13 @@ func Logger(logger log.Logger) SchemaOpt {
 	}
 }
 
+// VerboseLogger is used to log panics with query info during query execution. It defaults to exec.VerboseLogger.
+func VerboseLogger(logger log.VerboseLogger) SchemaOpt {
+	return func(s *Schema) {
+		s.logger = logger
+	}
+}
+
 // DisableIntrospection disables introspection queries.
 func DisableIntrospection() SchemaOpt {
 	return func(s *Schema) {
@@ -218,6 +225,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		Limiter: make(chan struct{}, s.maxParallelism),
 		Tracer:  s.tracer,
 		Logger:  s.logger,
+		LoggerInfo: fmt.Sprintf("Query: %v\nOperationName: %v\nVariables: %+v", queryString, operationName, variables),
 	}
 	varTypes := make(map[string]*introspection.Type)
 	for _, v := range op.Vars {
