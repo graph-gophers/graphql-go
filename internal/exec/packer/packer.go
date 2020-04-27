@@ -355,11 +355,11 @@ func unmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
 	case reflect.Int64:
 		switch input.(type) {
 		case int32:
-			return input, nil
+			return int64(input.(int32)), nil
 		case string:
-			return strconv.ParseInt(input.(string), 10, 64), nil
+			return strconv.ParseInt(input.(string), 10, 64)
 		case int:
-			return input, nil
+			return int64(input.(int)), nil
 		}
 
 	case reflect.String:
