@@ -199,7 +199,7 @@ func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type) (Resolv
 func makeScalarExec(t *schema.Scalar, resolverType reflect.Type) (Resolvable, error) {
 	implementsType := false
 	switch r := reflect.New(resolverType).Interface().(type) {
-	case *int32:
+	case *int32, *int64:
 		implementsType = t.Name == "Int"
 	case *float64:
 		implementsType = t.Name == "Float"

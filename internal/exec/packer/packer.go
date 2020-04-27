@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/graph-gophers/graphql-go/errors"
@@ -348,6 +349,17 @@ func unmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
 			return float64(input), nil
 		case int:
 			return float64(input), nil
+		}
+
+	// by wangjiaping
+	case reflect.Int64:
+		switch input.(type) {
+		case int32:
+			return input, nil
+		case string:
+			return strconv.ParseInt(input.(string), 10, 64), nil
+		case int:
+			return input, nil
 		}
 
 	case reflect.String:
