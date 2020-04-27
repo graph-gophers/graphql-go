@@ -377,12 +377,19 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 }
 
 func findMethod(t reflect.Type, name string) int {
+	var index = -1
 	for i := 0; i < t.NumMethod(); i++ {
+
 		if strings.EqualFold(stripUnderscore(name), stripUnderscore(t.Method(i).Name)) {
-			return i
+			index = i
+		}
+
+		if strings.EqualFold(stripUnderscore("get"+name), stripUnderscore(t.Method(i).Name)) {
+			index = i
+			return index
 		}
 	}
-	return -1
+	return index
 }
 
 func findField(t reflect.Type, name string, index []int) []int {
