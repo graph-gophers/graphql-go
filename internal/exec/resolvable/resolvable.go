@@ -384,10 +384,10 @@ func findMethod(t reflect.Type, name string) int {
 			index = i
 		}
 
-		if strings.EqualFold(stripUnderscore("get"+name), stripUnderscore(t.Method(i).Name)) {
-			index = i
-			return index
-		}
+		//if strings.EqualFold(stripUnderscore("get"+name), stripUnderscore(t.Method(i).Name)) {
+		//	index = i
+		//	return index
+		//}
 	}
 	return index
 }
