@@ -360,6 +360,12 @@ func unmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
 			return strconv.ParseInt(input.(string), 10, 64)
 		case int:
 			return int64(input.(int)), nil
+		case float64:
+			coerced := input.(int64)
+			if float64(coerced) != input {
+				return nil, fmt.Errorf("not a 64-bit integer")
+			}
+			return coerced, nil
 		}
 
 	case reflect.String:
