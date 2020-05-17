@@ -55,7 +55,7 @@ type Schema struct {
 
 
 type ResolverProvider interface {
-	GetResolver(field Field) *reflect.Value
+	GetResolver(fieldSchemaType, fieldSchemaName string) *reflect.Value
 }
 
 // Resolve a named type in the schema by its name.

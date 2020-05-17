@@ -240,8 +240,8 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 		realResolverType := resolverType
 		if methodIndex == -1 && len(fieldIndex) == 0 {
 			// @luoxiaomin: use customer registered type resolver
-			if b.schema.UseFieldResolvers && b.schema.ResolverProvider != nil && b.schema.ResolverProvider.GetResolver(*f) != nil{
-				customerResolver := b.schema.ResolverProvider.GetResolver(*f)
+			if b.schema.UseFieldResolvers && b.schema.ResolverProvider != nil && b.schema.ResolverProvider.GetResolver(f.Type.String(), f.Name) != nil{
+				customerResolver := b.schema.ResolverProvider.GetResolver(f.Type.String(), f.Name)
 				if customerResolver != nil {
 					fmt.Printf("found resolver provider for field: %+v\n", f)
 					methodIndex = findMethod(customerResolver.Type(), f.Name)
