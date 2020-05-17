@@ -2,8 +2,8 @@ package autogen
 
 import (
 	"fmt"
-	"github.com/graph-gophers/graphql-go/internal/common"
-	"github.com/graph-gophers/graphql-go/internal/schema"
+	"github.com/ricklxm/graphql-go/internal/common"
+	"github.com/ricklxm/graphql-go/internal/schema"
 	"io/ioutil"
 	"os"
 	"path/filepath"

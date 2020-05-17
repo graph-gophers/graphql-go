@@ -2,14 +2,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/graph-gophers/graphql-go/internal/schema"
+	"github.com/ricklxm/graphql-go/internal/schema"
 	"log"
 	"net/http"
 	"reflect"
 
-	"github.com/graph-gophers/graphql-go"
-	"github.com/graph-gophers/graphql-go/example/social"
-	"github.com/graph-gophers/graphql-go/relay"
+	"github.com/ricklxm/graphql-go"
+	"github.com/ricklxm/graphql-go/example/social"
+	"github.com/ricklxm/graphql-go/relay"
 )
 
 type MyProvider struct {
