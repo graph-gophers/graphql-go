@@ -93,6 +93,13 @@ func UseFieldResolvers() SchemaOpt {
 	}
 }
 
+// UseResolverProvider specifies whether to use customer provided resolvers
+func UseResolverProvider(p schema.ResolverProvider) SchemaOpt {
+	return func(s *Schema) {
+		s.schema.ResolverProvider = p
+	}
+}
+
 // MaxDepth specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
 func MaxDepth(n int) SchemaOpt {
 	return func(s *Schema) {

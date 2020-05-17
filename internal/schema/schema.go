@@ -2,6 +2,7 @@ package schema
 
 import (
 	"fmt"
+	"reflect"
 	"text/scanner"
 
 	"github.com/graph-gophers/graphql-go/errors"
@@ -43,11 +44,18 @@ type Schema struct {
 
 	UseFieldResolvers bool
 
+	ResolverProvider ResolverProvider
+
 	entryPointNames map[string]string
 	objects         []*Object
 	unions          []*Union
 	enums           []*Enum
 	extensions      []*Extension
+}
+
+
+type ResolverProvider interface {
+	GetResolver(field Field) *reflect.Value
 }
 
 // Resolve a named type in the schema by its name.

@@ -200,6 +200,13 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			if f.field.ArgsPacker != nil {
 				in = append(in, f.field.PackedArgs)
 			}
+			resolverTypeName := res.Type().Name()
+			fmt.Println(resolverTypeName)
+			if f.field.UseCustomResolver {
+				// @luoxiaomin use customer resolver provider instead
+				resolver := s.ResolverProvider.GetResolver(f.field.Field.Field)
+				res = *resolver
+			}
 			callOut := res.Method(f.field.MethodIndex).Call(in)
 			result = callOut[0]
 			if f.field.HasError && !callOut[1].IsNil() {
