@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"github.com/ricklxm/graphql-go/internal/schema"
 	"log"
 	"net/http"
 	"reflect"
@@ -11,14 +9,6 @@ import (
 	"github.com/ricklxm/graphql-go/example/social"
 	"github.com/ricklxm/graphql-go/relay"
 )
-
-type MyProvider struct {
-
-}
-
-func (MyProvider) Misc() (*MiscResolver, error)  {
-	return &MiscResolver{}, nil
-}
 
 type MiscResolver struct {
 
@@ -38,18 +28,16 @@ func (m MiscResolverProvider) Misc() (*MiscResolver, error)  {
 	return &MiscResolver{}, nil
 }
 
-func (m MyProvider) GetResolver(field schema.Field) *reflect.Value {
-	fmt.Println(field.Type.String())
-	fmt.Println(field.Type.Kind())
-	if field.Type.String() == "Misc!" {
-		ty := reflect.ValueOf(MiscResolverProvider{})
+func (m MiscResolverProvider) GetResolver(fieldSchemaType, fieldSchemaName string) *reflect.Value {
+	if fieldSchemaType == "Misc!" {
+		ty := reflect.ValueOf(m)
 		return &ty
 	}
 	return nil
 }
 
 func main() {
-	opts := []graphql.SchemaOpt{graphql.UseFieldResolvers(), graphql.MaxParallelism(20), graphql.UseResolverProvider(MyProvider{})}
+	opts := []graphql.SchemaOpt{graphql.UseFieldResolvers(), graphql.MaxParallelism(20), graphql.UseResolverProvider(MiscResolverProvider{})}
 	schema := graphql.MustParseSchema(social.Schema, &social.Resolver{}, opts...)
 
 	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

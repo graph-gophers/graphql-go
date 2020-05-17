@@ -204,7 +204,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			fmt.Println(resolverTypeName)
 			if f.field.UseCustomResolver {
 				// @luoxiaomin use customer resolver provider instead
-				resolver := s.ResolverProvider.GetResolver(f.field.Field.Field)
+				resolver := s.ResolverProvider.GetResolver(f.field.Field.Field.Type.String(), f.field.Field.Field.Name)
 				res = *resolver
 			}
 			callOut := res.Method(f.field.MethodIndex).Call(in)
