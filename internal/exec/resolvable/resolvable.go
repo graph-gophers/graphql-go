@@ -268,7 +268,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 		}
 
 		methodHasReceiver := realResolverType.Kind() != reflect.Interface
-		fe, err := b.makeFieldExec(typeName, f, m, sf, methodIndex, fieldIndex, methodHasReceiver)
+		fe, err := b.makeFieldExec(typeName, f, m, sf, methodIndex, fieldIndex, methodHasReceiver, realResolverType != resolverType)
 		if err != nil {
 			return nil, fmt.Errorf("%s\n\tused by (%s).%s", err, realResolverType, m.Name)
 		}
@@ -312,7 +312,7 @@ var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
 
 func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.Method, sf reflect.StructField,
-	methodIndex int, fieldIndex []int, methodHasReceiver bool) (*Field, error) {
+	methodIndex int, fieldIndex []int, methodHasReceiver, useCustomerResolver bool) (*Field, error) {
 
 	var argsPacker *packer.StructPacker
 	var hasError bool
@@ -342,6 +342,10 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 			if err != nil {
 				return nil, err
 			}
+			in = in[1:]
+		}
+
+		if useCustomerResolver {
 			in = in[1:]
 		}
 
