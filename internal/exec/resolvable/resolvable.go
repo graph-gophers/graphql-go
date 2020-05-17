@@ -6,9 +6,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/graph-gophers/graphql-go/internal/common"
-	"github.com/graph-gophers/graphql-go/internal/exec/packer"
-	"github.com/graph-gophers/graphql-go/internal/schema"
+	"github.com/ricklxm/graphql-go/internal/common"
+	"github.com/ricklxm/graphql-go/internal/exec/packer"
+	"github.com/ricklxm/graphql-go/internal/schema"
 )
 
 type Schema struct {
@@ -40,6 +40,7 @@ type Field struct {
 	ArgsPacker  *packer.StructPacker
 	ValueExec   Resolvable
 	TraceLabel  string
+	UseCustomResolver bool
 }
 
 func (f *Field) UseMethodResolver() bool {
@@ -224,8 +225,6 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 		}
 	}
 
-	methodHasReceiver := resolverType.Kind() != reflect.Interface
-
 	Fields := make(map[string]*Field)
 	rt := unwrapPtr(resolverType)
 	fieldsCount := fieldCount(rt, map[string]int{})
@@ -238,24 +237,43 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 			}
 			fieldIndex = findField(rt, f.Name, []int{})
 		}
+		realResolverType := resolverType
+		if methodIndex == -1 && len(fieldIndex) == 0 {
+			// @luoxiaomin: use customer registered type resolver
+			if b.schema.UseFieldResolvers && b.schema.ResolverProvider != nil && b.schema.ResolverProvider.GetResolver(*f) != nil{
+				customerResolver := b.schema.ResolverProvider.GetResolver(*f)
+				if customerResolver != nil {
+					fmt.Printf("found resolver provider for field: %+v\n", f)
+					methodIndex = findMethod(customerResolver.Type(), f.Name)
+					if methodIndex >= 0 {
+						realResolverType = customerResolver.Type()
+					}
+				}
+			}
+		}
 		if methodIndex == -1 && len(fieldIndex) == 0 {
 			hint := ""
-			if findMethod(reflect.PtrTo(resolverType), f.Name) != -1 {
+			if findMethod(reflect.PtrTo(realResolverType), f.Name) != -1 {
 				hint = " (hint: the method exists on the pointer type)"
 			}
-			return nil, fmt.Errorf("%s does not resolve %q: missing method for field %q%s", resolverType, typeName, f.Name, hint)
+			return nil, fmt.Errorf("%s does not resolve %q: missing method for field %q%s", realResolverType, typeName, f.Name, hint)
 		}
 
 		var m reflect.Method
 		var sf reflect.StructField
 		if methodIndex != -1 {
-			m = resolverType.Method(methodIndex)
-		} else {
+			m = realResolverType.Method(methodIndex)
+		} else if len(fieldIndex) > 0 {
 			sf = rt.FieldByIndex(fieldIndex)
 		}
+
+		methodHasReceiver := realResolverType.Kind() != reflect.Interface
 		fe, err := b.makeFieldExec(typeName, f, m, sf, methodIndex, fieldIndex, methodHasReceiver)
 		if err != nil {
-			return nil, fmt.Errorf("%s\n\tused by (%s).%s", err, resolverType, m.Name)
+			return nil, fmt.Errorf("%s\n\tused by (%s).%s", err, realResolverType, m.Name)
+		}
+		if realResolverType != resolverType {
+			fe.UseCustomResolver = true // @luoxiaomin: mark use custom registered resolver for this field
 		}
 		Fields[f.Name] = fe
 	}

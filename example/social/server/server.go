@@ -1,16 +1,55 @@
 package main
 
 import (
+	"fmt"
+	"github.com/ricklxm/graphql-go/internal/schema"
 	"log"
 	"net/http"
+	"reflect"
 
-	"github.com/graph-gophers/graphql-go"
-	"github.com/graph-gophers/graphql-go/example/social"
-	"github.com/graph-gophers/graphql-go/relay"
+	"github.com/ricklxm/graphql-go"
+	"github.com/ricklxm/graphql-go/example/social"
+	"github.com/ricklxm/graphql-go/relay"
 )
 
+type MyProvider struct {
+
+}
+
+func (MyProvider) Misc() (*MiscResolver, error)  {
+	return &MiscResolver{}, nil
+}
+
+type MiscResolver struct {
+
+}
+
+func (m *MiscResolver) ID() string {
+	return "100"
+}
+
+func (m *MiscResolver) Name() string {
+	return "xxxx"
+}
+
+type MiscResolverProvider struct {}
+
+func (m MiscResolverProvider) Misc() (*MiscResolver, error)  {
+	return &MiscResolver{}, nil
+}
+
+func (m MyProvider) GetResolver(field schema.Field) *reflect.Value {
+	fmt.Println(field.Type.String())
+	fmt.Println(field.Type.Kind())
+	if field.Type.String() == "Misc!" {
+		ty := reflect.ValueOf(MiscResolverProvider{})
+		return &ty
+	}
+	return nil
+}
+
 func main() {
-	opts := []graphql.SchemaOpt{graphql.UseFieldResolvers(), graphql.MaxParallelism(20)}
+	opts := []graphql.SchemaOpt{graphql.UseFieldResolvers(), graphql.MaxParallelism(20), graphql.UseResolverProvider(MyProvider{})}
 	schema := graphql.MustParseSchema(social.Schema, &social.Resolver{}, opts...)
 
 	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

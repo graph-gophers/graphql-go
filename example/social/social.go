@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/graph-gophers/graphql-go"
+	"github.com/ricklxm/graphql-go"
 )
 
 const Schema = `
@@ -38,7 +38,13 @@ const Schema = `
 		address: [String!]
 		friends(page: Pagination): [User]
 		createdAt: Time!
+		misc: Misc!
 	}
+
+	type Misc {
+		id: String!
+		name: String!
+    }
 
 	input Pagination {
 	  	first: Int
@@ -86,6 +92,12 @@ type user struct {
 	Friends   *[]*user
 	CreatedAt graphql.Time
 	contact
+	MyMisc misc
+}
+
+type misc struct {
+	ID string
+	Name string
 }
 
 func (u user) ID() graphql.ID {

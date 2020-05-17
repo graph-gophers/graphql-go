@@ -8,14 +8,14 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/internal/common"
-	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
-	"github.com/graph-gophers/graphql-go/internal/exec/selected"
-	"github.com/graph-gophers/graphql-go/internal/query"
-	"github.com/graph-gophers/graphql-go/internal/schema"
-	"github.com/graph-gophers/graphql-go/log"
-	"github.com/graph-gophers/graphql-go/trace"
+	"github.com/ricklxm/graphql-go/errors"
+	"github.com/ricklxm/graphql-go/internal/common"
+	"github.com/ricklxm/graphql-go/internal/exec/resolvable"
+	"github.com/ricklxm/graphql-go/internal/exec/selected"
+	"github.com/ricklxm/graphql-go/internal/query"
+	"github.com/ricklxm/graphql-go/internal/schema"
+	"github.com/ricklxm/graphql-go/log"
+	"github.com/ricklxm/graphql-go/trace"
 )
 
 type Request struct {
@@ -199,6 +199,13 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			}
 			if f.field.ArgsPacker != nil {
 				in = append(in, f.field.PackedArgs)
+			}
+			resolverTypeName := res.Type().Name()
+			fmt.Println(resolverTypeName)
+			if f.field.UseCustomResolver {
+				// @luoxiaomin use customer resolver provider instead
+				resolver := s.ResolverProvider.GetResolver(f.field.Field.Field)
+				res = *resolver
 			}
 			callOut := res.Method(f.field.MethodIndex).Call(in)
 			result = callOut[0]
