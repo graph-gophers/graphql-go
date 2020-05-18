@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/ricklxm/graphql-go/errors"
@@ -348,6 +349,24 @@ func unmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
 			return float64(input), nil
 		case int:
 			return float64(input), nil
+		}
+
+	// by wangjiaping
+	case reflect.Int64:
+		switch input.(type) {
+		case int32:
+			return int64(input.(int32)), nil
+		case string:
+			return strconv.ParseInt(input.(string), 10, 64)
+		case int:
+			return int64(input.(int)), nil
+		case float64:
+			i := input.(float64)
+			coerced := int64(i)
+			if float64(coerced) != input {
+				return nil, fmt.Errorf("not a 64-bit integer")
+			}
+			return coerced, nil
 		}
 
 	case reflect.String:
