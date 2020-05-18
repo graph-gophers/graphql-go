@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"reflect"
@@ -24,7 +26,9 @@ func (m *MiscResolver) Name() string {
 
 type MiscResolverProvider struct {}
 
-func (m MiscResolverProvider) Misc() (*MiscResolver, error)  {
+func (m MiscResolverProvider) Misc(ctx context.Context, misc social.Misc) (*MiscResolver, error)  {
+	fmt.Println(ctx)
+	fmt.Println("misc: ", misc)
 	return &MiscResolver{}, nil
 }
 
