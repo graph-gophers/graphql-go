@@ -1,0 +1,522 @@
+# The Query type represents all of the entry points into the API.
+type Query {
+    #根据id批量获取一组加速主域名的详情
+    MGetMainAccelerDomain(ids: [String!]!): [MainAccelerDomain!]!
+    #根据id批量获取一组加速子域名的详情
+    MGetSubAccelerDomain(ids: [String!]!): [SubAccelerDomain!]!
+    #过滤域名列表
+    FilterAccelerDomain(req: FilterAccelerDomainReq!):FilterAccelerDomainResp!
+    #获取域名支持过滤的字段信息
+    ListAccelerDomainFilterableField:[FilterFieldSchema!]!
+
+    #根据id批量获取一组平台的详情
+    MGetPlatform(ids: [String!]!): [Platform!]!
+
+    #根据名称过滤标签, 若keyword为null或空字符串, 则返回所有标签
+    FilterAccelerDomainTag(keyword: String): FilterAccelerDomainTagResp!
+}
+#域名抽象接口，可以为主域名或者子域名
+type AccelerDomain {
+    #id
+    id: String!
+    #域名名称
+    name: String!
+    #业务信息
+    core: DomainCoreConfig!
+    #分发平台
+    distribute: DomainDistributeConfig!
+    #cdn配置信息
+    cdn: DomainCdnConfig!
+}
+
+#过滤域名请求
+input FilterAccelerDomainReq {
+    #过滤规则
+    filters: [FilterRule!]!
+    #分页参数
+    pagination: PagingOption!
+}
+
+#过滤域名响应
+type FilterAccelerDomainResp {
+    #域名列表
+    domains: [AccelerDomain!]!
+    #分页结果
+    pagination: PagingResult!
+}
+#融合源站
+type FusionOrigin implements Origin {
+    #id
+    id: String!
+    #名称
+    name: String!
+}
+#cdn平台
+type Platform {
+    id: String!
+    #平台名称
+    name: String!
+}
+#分页参数
+input PagingOption {
+    #每页条目数量
+    page_size: Int!
+    #起始页码，从1开始
+    page_num: Int!
+}
+
+#分页结果
+type PagingResult {
+    #每页条目数量
+    page_size: Int!
+    #起始页码，从1开始
+    page_num: Int!
+    #总页数
+    total: Int!
+}
+
+#过滤条件
+input FilterRule {
+    #需要过滤的字段名称
+    field: String!
+    #目标值
+    value: String!
+    #匹配类型: contain, not_contain, equal, not_equal
+    match_mode: String!
+}
+
+#匹配模式
+type MatchMode {
+    #匹配类型: contain, not_contain, equal, not_equal
+    mode: String!
+    #匹配类型对应的展示名称
+    display_name: String!
+}
+
+type DisplayedOption {
+    #选项值
+    value: String!
+    #选项值展示给用户的名称
+    display_name: String!
+}
+
+type FieldSchema {
+    #字段名称
+    field: String!
+    #字段显示名称
+    title: String!
+    #字段类型: string
+    value_type: String!
+    #字段选项
+    options: [DisplayedOption!]!
+}
+
+type FilterFieldSchema {
+    #字段定义
+    field: FieldSchema!
+    #字段可用的匹配模式
+    supported_match_modes: [MatchMode]!
+}
+type Response {
+    code: Int!
+    message: String!
+    trace_id: String
+}
+#服务树节点信息
+type ServiceTreeNode {
+    id: String!
+    #节点名称
+    name: String!
+}
+#融合线路
+type FusionLine {
+    #id
+    id: String!
+    #名称
+    name: String!
+}
+
+type Mutation {
+    #创建主域名
+    CreateMainAccelerDomain(req: CreateMainAccelerDomainReq): Response!
+    #创建子域名
+    CreateSubAccelerDomain(req: CreateSubAccelerDomainReq): Response!
+    #批量全量更新主域名
+    MUpdateMainAccelerDomain(req: MUpdateMainAccelerDomainReq): Response!
+    #批量全量更新子域名
+    MUpdateSubAccelerDomain(req: MUpdateSubAccelerDomainReq): Response!
+    #批量删除域名
+    MDeleteAccelerDomain(ids: [String!]!): Response!
+    #创建域名标签。name:标签名称, desc:备注
+    CreateAccelerDomainTag(name: String!, desc: String!): Response!
+}
+
+input CreateMainAccelerDomainReq {
+    name: String!
+}
+
+input CreateSubAccelerDomainReq {
+    name: String!
+}
+
+input MUpdateMainAccelerDomainReq {
+    name: String!
+}
+
+input MUpdateSubAccelerDomainReq {
+    name: String!
+}
+#域名业务信息
+type DomainCoreConfig  {
+    #服务树节点
+    service_tree_node: ServiceTreeNode!
+    #域名的业务类型: image, play, download, dynamic, live, upload, other
+    business_type: String!
+    #域名的账单类型: vod, imagex, fusion_cdn
+    bill_type: String!
+    #服务区域: china, other
+    regions: [String!]!
+    #是否是主域名
+    is_main: Boolean!
+    #域名形态, true: 单域名, false: 多域名。子域名无此字段
+    is_single_form: Boolean
+    #标签, 只允许最多一个标签
+    tags:[String!]!
+    #测试资源
+    test_uri: String!
+    #域名负责人
+    owner: String!
+    #创建时间
+    created_at: Int!
+    #更新时间
+    updated_at: Int!
+    #数据版本号
+    version: Int!
+    #域名状态
+    status: String!
+}
+
+#域名分发平台
+type DomainDistributeConfig {
+    items: [DomainDistributeEntry!]!
+}
+
+type DomainDistributeEntry {
+    #域名, 在主域名多域名调度方式下存在，在其它情况下不存在
+    domain: SubAccelerDomain
+    #平台
+    platform: Platform!
+    #基础线路
+    base_line: BaseLine!
+    #基础线路CName
+    base_line_cname: String!
+}
+
+type DomainCdnConfig {
+    #源站信息
+    origin_server: DomainOriginServerConfig!
+    #回源配置
+    back_to_origin: DomainBackToOriginConfig!
+    #访问控制
+    access_control: DomainAccessControlConfig!
+    #https配置
+    https: DomainHttpsConfig!
+    #缓存配置
+    cache: DomainCacheConfig!
+    #用户自定义配置
+    other: DomainOtherConfig!
+}
+
+type DomainOriginServerConfig {
+    #源站规则列表
+    items: [DomainOriginServerRule!]!
+}
+
+type DomainOriginServerRule {
+    #匹配规则
+    match_rule: String!
+    #主源站
+    main: DomainOriginServerInfo!
+    #备源站
+    backup: DomainOriginServerInfo
+}
+
+type DomainOriginServerInfo {
+    #true 为融合源站，false 则为基础源站
+    is_fusion_origin: Boolean!
+    #绑定的融合源站，当is_fusion_origin=true时有效
+    fusion_origin: FusionOrigin
+    #绑定的基础源站，当is_fusion_origin=false时有效
+    base_origin: BaseOrigin
+    #源站地址
+    endpoint: String!
+    #开启分平台配置回源鉴权信息
+    enable_per_platform: Boolean!
+    #回源鉴权配置
+    auths: [DomainPerPlatformOriginServerAuth!]!
+}
+
+type DomainPerPlatformOriginServerAuth {
+    #目标平台, 若不是分平台配置，则此字段不存在
+    platform: Platform
+    #鉴权信息，若不开启鉴权，则需传递一个特殊的NoAuth
+    auth_info: AuthInfo!
+}
+
+type AuthInfo {
+    #签算方式名称
+    name: String!
+    #具体的签算的描述, 包含算法
+    description: String!
+    #参数描述
+    params:[AuthParam!]!
+}
+
+type AuthParam {
+    #参数名
+    name: String!
+    #参数值
+    value: String!
+    #参数描述
+    description: String!
+}
+
+type DomainBackToOriginConfig {
+    #回源host
+    host: String!
+    #回源协议: http, https, follow(保持原协议)
+    scheme: String!
+    #回源改写
+    rewrites:[RewriteRule!]!
+    #回源请求http头部
+    headers:[KeyValuePair!]!
+    #是否开启range回源
+    enable_range: Boolean!
+    #是否follow 302
+    enable_follow_302: Boolean!
+}
+
+type RewriteRule {
+    #模式
+    pattern: String!
+    #改写
+    replace: String!
+}
+
+type KeyValuePair {
+    key: String!
+    value: String!
+}
+
+type DomainAccessControlConfig {
+    #防盗链
+    refer: DomainReferAuth!
+    #url鉴权
+    url: DomainUrlAuth!
+    #ip黑白名单
+    ip: DomainIPAuth!
+}
+
+#域名cdn防盗链配置
+type DomainReferAuth {
+    #是否开启防盗链
+    enabled: Boolean!
+    #当前是否是白名单模式
+    is_white_mode: Boolean!
+    #IP列表
+    values: [String!]!
+    #是否允许空白refer
+    allow_empty: Boolean!
+}
+
+#域名cdn防盗链配置
+type DomainUrlAuth {
+    #鉴权信息
+    auth: AuthInfo!
+}
+
+#域名cdn IP黑白名单配置
+type DomainIPAuth {
+    #是否开启黑白名单
+    enabled: Boolean!
+    #当前是否是白名单模式
+    is_white_mode: Boolean!
+    #IP列表
+    values: [String!]!
+}
+
+#域名https配置信息
+type DomainHttpsConfig {
+    #是否开启https
+    enabled: Boolean!
+    #是否强制https
+    forced: Boolean!
+    #是否开启分平台配置证书
+    enable_per_platform: Boolean!
+    #证书配置，若未开启分平台配置，则只能有一个证书
+    certificates: [DomainPlatformCertificate!]!
+}
+
+#域名在某个平台上的证书
+type DomainPlatformCertificate {
+    #平台
+    platform: Platform
+    #证书
+    certificate: Certificate!
+}
+
+#域名缓存配置
+type DomainCacheConfig {
+    #cdn缓存规则
+    rules:[DomainCacheRule!]!
+    #根据状态码缓存
+    status:[DomainStatusCacheRule!]!
+    #是否去问号缓存
+    remove_query_params:Boolean!
+    #保留特定参数
+    persist_params:[String!]!
+    #开启风平台配置共享缓存
+    enable_per_platform: Boolean!
+    #共享缓存配置
+    shares:[DomainPerPlatformShareCache!]!
+    #http头部(response header)
+    headers:[KeyValuePair!]!
+    #url改写
+    rewrites:[RewriteRule!]!
+}
+
+#域名缓存规则
+type DomainCacheRule {
+    #规则
+    rule: String!
+    #缓存时间, 单位（秒）
+    timeout: Int!
+    #缓存类型: default, suffix, directory, full_path
+    kind: String!
+}
+
+#域名根据状态码进行缓存的规则
+type DomainStatusCacheRule {
+    #规则
+    code: Int!
+    #缓存时间, 单位（秒）
+    timeout: Int!
+}
+
+#域名在某个平台上的共享缓存配置
+type DomainPerPlatformShareCache {
+    #平台
+    platform: Platform
+    #共享缓存的域名
+    domain: String!
+}
+
+#域名自定义配置
+type DomainOtherConfig {
+    items:[String!]!
+}
+#域名标签
+type AccelerDomainTag {
+    #标签名称
+    name: String!
+    #标签描述
+    desc: String!
+}
+
+#过滤域名标签响应结果
+type FilterAccelerDomainTagResp {
+    #域名列表
+    tags: [AccelerDomainTag!]!
+    #分页结果
+    pagination: PagingResult!
+}
+#基础线路
+type BaseLine {
+    #id
+    id: String!
+    #名称
+    name: String!
+}
+#证书
+type Certificate {
+    #id
+    id: String!
+    #名称
+    name: String!
+}
+schema {
+    query: Query
+    #mutation: Mutation
+}
+#源站，可以为基础源站或融合源站
+interface Origin {
+    #id
+    id: String!
+    #名称
+    name: String!
+}
+
+#基础源站
+type BaseOrigin implements Origin{
+    #id
+    id: String!
+    #名称
+    name: String!
+}
+#主域名配置
+type MainAccelerDomain {
+    id: String!
+    #域名名称
+    name: String!
+    #业务信息
+    core: DomainCoreConfig!
+    #分发平台信息
+    distribute: DomainDistributeConfig!
+    #cdn配置信息
+    cdn: DomainCdnConfig!
+    scheduler: MainDomainSchedulerConfig!
+}
+
+#主域名调度配置
+type MainDomainSchedulerConfig {
+    #调度方式: dns, multi_domain
+    schedule_type: String!,
+    #融合线路对应基础线路/子域名绑定关系
+    fusion_line_bindings: [FusionLineSubDomainBindingEntry!]!,
+    #区域: china, other
+    region: String!,
+}
+
+type FusionLineSubDomainBindingEntry {
+    #融合线路
+    fusion_line: FusionLine!
+    #融合线路下个基础线路与子域名绑定关系
+    base_line_bindings: [BaseLineSubDomainBindingEntry!]!
+}
+
+type BaseLineSubDomainBindingEntry {
+    #基础线路
+    base_line: BaseLine!
+    #基础线路绑定的子域名列表
+    sub_domains: [SubAccelerDomain!]!
+}
+#子域名配置
+type SubAccelerDomain {
+    id: String!
+    #域名名称
+    name: String!
+    #业务信息
+    core: DomainCoreConfig!
+    #分发平台
+    distribute: DomainDistributeConfig!
+    #域名cdn配置
+    cdn: DomainCdnConfig!
+    #域名调度器配置
+    scheduler: SubDomainSchedulerConfig!
+}
+
+#子域名调度配置
+type SubDomainSchedulerConfig {
+    #p2p供应商id
+    p2p_supplier_id: Int
+}
