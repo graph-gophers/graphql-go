@@ -92,7 +92,7 @@ type user struct {
 	Friends   *[]*user
 	CreatedAt graphql.Time
 	contact
-	Mymisc Misc
+	Misc Misc
 }
 
 type Misc struct {
@@ -148,7 +148,7 @@ var users = []*user{
 			Email: "Albus@hogwarts.com",
 			Phone: "000-000-0000",
 		},
-		Mymisc: Misc{
+		Misc: Misc{
 			ID:   "rick",
 			Name: "",
 		},

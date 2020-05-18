@@ -204,8 +204,11 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			fmt.Println(resolverTypeName)
 			if f.field.UseCustomResolver {
 				// @luoxiaomin use customer resolver provider instead
-				lastArg := f.resolver.FieldByName("My" + f.field.Field.Field.Name)
-				in = append(in, lastArg) // @luoxiaomin: use parent resolver's field with the same name as last argument
+				if res.Kind() == reflect.Ptr {
+					res = res.Elem()
+				}
+				fieldResult := res.FieldByIndex(f.field.FieldIndex)
+				in = append(in, fieldResult) // @luoxiaomin: use parent resolver's field with the same name as last argument
 				resolver := s.ResolverProvider.GetResolver(f.field.Field.Field.Type.String(), f.field.Field.Field.Name)
 				res = *resolver
 			}
