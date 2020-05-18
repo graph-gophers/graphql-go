@@ -44,7 +44,7 @@ type Field struct {
 }
 
 func (f *Field) UseMethodResolver() bool {
-	return len(f.FieldIndex) == 0
+	return f.MethodIndex >= 0
 }
 
 type TypeAssertion struct {
@@ -238,9 +238,9 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 			fieldIndex = findField(rt, f.Name, []int{})
 		}
 		realResolverType := resolverType
-		if methodIndex == -1 && len(fieldIndex) == 0 {
+		if methodIndex == -1 && len(fieldIndex) > 0 {
 			// @luoxiaomin: use customer registered type resolver
-			if b.schema.UseFieldResolvers && b.schema.ResolverProvider != nil && b.schema.ResolverProvider.GetResolver(f.Type.String(), f.Name) != nil{
+			if b.schema.ResolverProvider != nil && b.schema.ResolverProvider.GetResolver(f.Type.String(), f.Name) != nil{
 				customerResolver := b.schema.ResolverProvider.GetResolver(f.Type.String(), f.Name)
 				if customerResolver != nil {
 					fmt.Printf("found resolver provider for field: %+v\n", f)
