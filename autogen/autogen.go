@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func GenFile(inputFile string, outputDir string, packageName string) error  {
+func GenFile(inputFile string, outputDir string, packageName string) error {
 	file, err := os.Open(inputFile)
 	if err != nil {
 		return err
@@ -20,7 +20,7 @@ func GenFile(inputFile string, outputDir string, packageName string) error  {
 	if err != nil {
 		return err
 	}
-	inputStr :=string(data)
+	inputStr := string(data)
 	outputStr, err := GenString(inputStr)
 	if err != nil {
 		return err
@@ -43,31 +43,36 @@ func GenFile(inputFile string, outputDir string, packageName string) error  {
 	return err
 }
 
-func GenString(inputSchema string) (string, error)  {
+func GenString(inputSchema string) (string, error) {
 	s, err := ParseSchema(inputSchema)
 	if err != nil {
-		return "",err
+		return "", err
 	}
 	output := GenSchema(s)
 	return output, nil
 }
 
-func GenSchema(s *schema.Schema) string  {
-	var types[]string
+func GenSchema(s *schema.Schema) string {
+	var types []string
 	for _, t := range s.Types {
 		obj, ok := t.(*schema.Object)
 		if ok && isUserDefinedObject(obj) {
 			types = append(types, GenObject(obj))
 		}
 		interf, ok := t.(*schema.Interface)
-		if ok  {
+		if ok {
 			types = append(types, GenInterface(interf))
+		}
+
+		input, ok := t.(*schema.InputObject)
+		if ok {
+			types = append(types, GenInput(input))
 		}
 	}
 	return strings.Join(types, "\n")
 }
 
-func isUserDefinedObject(t *schema.Object) bool  {
+func isUserDefinedObject(t *schema.Object) bool {
 	if !strings.HasPrefix(t.TypeName(), "__") {
 		return true
 	}
@@ -88,6 +93,20 @@ func GenObject(t *schema.Object) string {
 	return output
 }
 
+func GenInput(i *schema.InputObject) string {
+	var output string
+	if len(i.Desc) != 0 {
+		output = "// " + i.Desc + "\n"
+	}
+	output += fmt.Sprintf("type %s struct {\n", i.TypeName())
+	ident := "    "
+	for _, v := range i.Values {
+		output += ident + GetInputDef(v) + "\n"
+	}
+	output += fmt.Sprintf("}\n")
+	return output
+}
+
 func GenInterface(t *schema.Interface) string {
 	var output string
 	output = fmt.Sprintf("type %s struct {\n", t.TypeName())
@@ -99,11 +118,34 @@ func GenInterface(t *schema.Interface) string {
 	return output
 }
 
+func GetInputDef(v *common.InputValue) string {
+	def := GetInputName(v) + " " + GetInputTypeName(v)
+	def += fmt.Sprintf("`json:\"%s\" form:\"%s\" desc:\"%s\"`", v.Name, v.Name, v.Desc) // tag
+	if len(v.Desc) > 0 {
+		def += " // " + v.Desc
+	}
+	return def
+}
+
+func GetInputName(v *common.InputValue) string {
+	words := strings.Split(v.Name.Name, "_")
+	newName := ""
+	for _, word := range words {
+		newName += UpperWord(word)
+	}
+	return newName
+}
+
+func GetInputTypeName(v *common.InputValue) string {
+	_, name, _ := GetRealGolangTypeName(v.Type, nil, "")
+	return name
+}
+
 func GetFieldDef(f *schema.Field) string {
 	def := GetFileName(f) + " " + GetFieldTypeName(f)
 	def += fmt.Sprintf("`json:\"%s\" form:\"%s\" desc:\"%s\"`", f.Name, f.Name, f.Desc) // tag
 	if len(f.Desc) > 0 {
-		def +=  " // " + f.Desc
+		def += " // " + f.Desc
 	}
 	return def
 }
@@ -117,7 +159,7 @@ func GetFileName(f *schema.Field) string {
 	return newName
 }
 
-func UpperWord(w string) string  {
+func UpperWord(w string) string {
 	special := map[string]string{
 		"id": "ID",
 		"ip": "IP",
@@ -152,7 +194,7 @@ func GetRealGolangTypeName(t common.Type, parentType common.Type, golangType str
 		return GetRealGolangTypeName(t.OfType, t, golangType)
 	case "LIST":
 		t, _ := t.(*common.List)
-		return GetRealGolangTypeName(t.OfType, t, golangType + "[]")
+		return GetRealGolangTypeName(t.OfType, t, golangType+"[]")
 	default:
 		pointer := ""
 		if parentType != nil {
@@ -182,8 +224,8 @@ func GetRealGolangTypeName(t common.Type, parentType common.Type, golangType str
 
 func GetGolangTypeName(graphqlType string) string {
 	m := map[string]string{
-		"String": "string",
-		"Int": "int32",
+		"String":  "string",
+		"Int":     "int32",
 		"Boolean": "bool",
 	}
 	if n, ok := m[graphqlType]; ok {
@@ -200,7 +242,7 @@ func GetListFieldType(f *common.List) string {
 	return f.OfType.String()
 }
 
-func ParseSchema(schemaString string) (*schema.Schema,error) {
+func ParseSchema(schemaString string) (*schema.Schema, error) {
 	s := schema.New()
 
 	if err := s.Parse(schemaString, false); err != nil {

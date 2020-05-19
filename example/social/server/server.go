@@ -13,7 +13,7 @@ import (
 )
 
 type MiscResolver struct {
-
+	social.Misc
 }
 
 func (m *MiscResolver) ID() string {
@@ -24,16 +24,16 @@ func (m *MiscResolver) Name() string {
 	return "xxxx"
 }
 
-type MiscResolverProvider struct {}
+type MiscResolverProvider struct{}
 
-func (m MiscResolverProvider) Misc(ctx context.Context, misc social.Misc) (*MiscResolver, error)  {
+func (m MiscResolverProvider) Misc(ctx context.Context, misc social.Misc) (*MiscResolver, error) {
 	fmt.Println(ctx)
 	fmt.Println("misc: ", misc)
-	return &MiscResolver{}, nil
+	return &MiscResolver{misc}, nil
 }
 
-func (m MiscResolverProvider) GetResolver(fieldSchemaType, fieldSchemaName string) *reflect.Value {
-	if fieldSchemaType == "Misc!" {
+func (m MiscResolverProvider) GetResolver(fieldSchemaType, resolverType string) *reflect.Value {
+	if fieldSchemaType == "Misc!" && resolverType == "User" {
 		ty := reflect.ValueOf(m)
 		return &ty
 	}

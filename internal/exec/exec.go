@@ -209,7 +209,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 				}
 				fieldResult := res.FieldByIndex(f.field.FieldIndex)
 				in = append(in, fieldResult) // @luoxiaomin: use parent resolver's field with the same name as last argument
-				resolver := s.ResolverProvider.GetResolver(f.field.Field.Field.Type.String(), f.field.Field.Field.Name)
+				resolver := s.ResolverProvider.GetResolver(f.field.Field.Field.Type.String(), f.field.Field.TypeName)
 				res = *resolver
 			}
 			callOut := res.Method(f.field.MethodIndex).Call(in)
