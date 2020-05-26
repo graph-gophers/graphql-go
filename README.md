@@ -151,6 +151,15 @@ Which could produce a GraphQL error such as:
 }
 ```
 
+### Generate schema.json
+The schema.json can be used for auto code-generation
+
+```go
+bytes, _ := schema.ToJSON()
+````
+
+bytes will include a byte struct which can be returned via a http handler or written to a schema.json file
+
 ### Community Examples
 
 [tonyghita/graphql-go-example](https://github.com/tonyghita/graphql-go-example) - A more "productionized" version of the Star Wars API example given in this repository.
