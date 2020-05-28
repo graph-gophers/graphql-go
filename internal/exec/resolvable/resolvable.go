@@ -405,7 +405,6 @@ func findMethod(t reflect.Type, name string) int {
 		if strings.EqualFold(stripUnderscore(name), stripUnderscore(t.Method(i).Name)) {
 			index = i
 		}
-
 	}
 	return index
 }
