@@ -32,14 +32,14 @@ type Object struct {
 
 type Field struct {
 	schema.Field
-	TypeName    string
-	MethodIndex int
-	FieldIndex  []int
-	HasContext  bool
-	HasError    bool
-	ArgsPacker  *packer.StructPacker
-	ValueExec   Resolvable
-	TraceLabel  string
+	TypeName          string
+	MethodIndex       int
+	FieldIndex        []int
+	HasContext        bool
+	HasError          bool
+	ArgsPacker        *packer.StructPacker
+	ValueExec         Resolvable
+	TraceLabel        string
 	UseCustomResolver bool
 }
 
@@ -240,8 +240,8 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 		realResolverType := resolverType
 		if methodIndex == -1 && len(fieldIndex) > 0 {
 			// @luoxiaomin: use customer registered type resolver
-			if b.schema.ResolverProvider != nil && b.schema.ResolverProvider.GetResolver(f.Type.String(), f.Name) != nil{
-				customerResolver := b.schema.ResolverProvider.GetResolver(f.Type.String(), f.Name)
+			if b.schema.ResolverProvider != nil && b.schema.ResolverProvider.GetResolver(f.Type.String(), typeName) != nil {
+				customerResolver := b.schema.ResolverProvider.GetResolver(f.Type.String(), typeName)
 				if customerResolver != nil {
 					fmt.Printf("found resolver provider for field: %+v\n", f)
 					methodIndex = findMethod(customerResolver.Type(), f.Name)
@@ -405,11 +405,6 @@ func findMethod(t reflect.Type, name string) int {
 		if strings.EqualFold(stripUnderscore(name), stripUnderscore(t.Method(i).Name)) {
 			index = i
 		}
-
-		//if strings.EqualFold(stripUnderscore("get"+name), stripUnderscore(t.Method(i).Name)) {
-		//	index = i
-		//	return index
-		//}
 	}
 	return index
 }

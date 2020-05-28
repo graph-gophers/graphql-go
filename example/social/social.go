@@ -19,6 +19,7 @@ const Schema = `
 		admin(id: ID!, role: Role = ADMIN): Admin!
 		user(id: ID!): User!
 		search(text: String!): [SearchResult]!
+		manager(id: String!): Manager!
 	}
 	
 	interface Admin {
@@ -38,6 +39,12 @@ const Schema = `
 		address: [String!]
 		friends(page: Pagination): [User]
 		createdAt: Time!
+		misc: Misc!
+	}
+
+	type Manager {
+		id: String!
+		name: String!
 		misc: Misc!
 	}
 
@@ -95,8 +102,14 @@ type user struct {
 	Misc Misc
 }
 
+type Manager struct {
+	ID   string
+	Name string
+	Misc Misc
+}
+
 type Misc struct {
-	ID string
+	ID   string
 	Name string
 }
 
@@ -188,6 +201,19 @@ var users = []*user{
 	},
 }
 
+var managers = []*Manager{
+	{
+		ID:   "11",
+		Name: "11",
+		Misc: Misc{
+			ID:   "11",
+			Name: "11",
+		},
+	},
+}
+
+var managersMap = make(map[string]*Manager)
+
 var usersMap = make(map[string]*user)
 
 func init() {
@@ -197,6 +223,10 @@ func init() {
 	users[3].Friends = &[]*user{users[1], users[2]}
 	for _, usr := range users {
 		usersMap[usr.IDField] = usr
+	}
+
+	for _, manager := range managers {
+		managersMap[manager.ID] = manager
 	}
 }
 
@@ -231,4 +261,11 @@ func (r *Resolver) Search(ctx context.Context, args struct{ Text string }) ([]*s
 		}
 	}
 	return result, nil
+}
+
+func (r *Resolver) Manager(ctx context.Context, args struct{ ID string }) (Manager, error) {
+	if manager, ok := managersMap[args.ID]; ok {
+		return *manager, nil
+	}
+	return Manager{}, nil
 }
