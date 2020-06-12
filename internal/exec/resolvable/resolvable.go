@@ -6,9 +6,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/graph-gophers/graphql-go/internal/common"
-	"github.com/graph-gophers/graphql-go/internal/exec/packer"
-	"github.com/graph-gophers/graphql-go/internal/schema"
+	"github.com/tribunadigital/graphql-go/internal/common"
+	"github.com/tribunadigital/graphql-go/internal/exec/packer"
+	"github.com/tribunadigital/graphql-go/internal/schema"
 )
 
 type Schema struct {
@@ -55,10 +55,16 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
+//func ApplyDirective(s *schema.Schema, directive interface{}) (*Schema, error) {
+//
+//}
+
 func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 	b := newBuilder(s)
 
 	var query, mutation, subscription Resolvable
+
+	//fmt.Println(s.Directives)
 
 	if t, ok := s.EntryPoints["query"]; ok {
 		if err := b.assignExec(&query, t, reflect.TypeOf(resolver)); err != nil {
