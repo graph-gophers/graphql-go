@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"testing"
 
@@ -46,6 +48,14 @@ func RunTest(t *testing.T, test *Test) {
 
 	checkErrors(t, test.ExpectedErrors, result.Errors)
 
+	if test.ExpectedResult == "" {
+		if result.Data != nil {
+			t.Fatalf("got: %s", result.Data)
+			t.Fatalf("want: null")
+		}
+		return
+	}
+
 	// Verify JSON to avoid red herring errors.
 	got, err := formatJSON(result.Data)
 	if err != nil {
@@ -76,7 +86,19 @@ func formatJSON(data []byte) ([]byte, error) {
 }
 
 func checkErrors(t *testing.T, want, got []*errors.QueryError) {
+	sortErrors(want)
+	sortErrors(got)
+
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected error: got %+v, want %+v", got, want)
 	}
+}
+
+func sortErrors(errors []*errors.QueryError) {
+	if len(errors) <= 1 {
+		return
+	}
+	sort.Slice(errors, func(i, j int) bool {
+		return fmt.Sprintf("%s", errors[i].Path) < fmt.Sprintf("%s", errors[j].Path)
+	})
 }

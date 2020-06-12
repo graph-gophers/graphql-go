@@ -45,9 +45,6 @@ func (_ *query) Hello() string { return "Hello, world!" }
 
 func main() {
         s := `
-                schema {
-                        query: Query
-                }
                 type Query {
                         hello: String!
                 }
@@ -65,7 +62,17 @@ $ curl -XPOST -d '{"query": "{ hello }"}' localhost:8080/query
 
 ### Resolvers
 
-A resolver must have one method for each field of the GraphQL type it resolves. The method name has to be [exported](https://golang.org/ref/spec#Exported_identifiers) and match the field's name in a non-case-sensitive way.
+A resolver must have one method or field for each field of the GraphQL type it resolves. The method or field name has to be [exported](https://golang.org/ref/spec#Exported_identifiers) and match the schema's field's name in a non-case-sensitive way.
+You can use struct fields as resolvers by using `SchemaOpt: UseFieldResolvers()`. For example,
+```
+opts := []graphql.SchemaOpt{graphql.UseFieldResolvers()}
+schema := graphql.MustParseSchema(s, &query{}, opts...)
+```   
+
+When using `UseFieldResolvers` schema option, a struct field will be used *only* when:
+- there is no method for a struct field
+- a struct field does not implement an interface method
+- a struct field does not have arguments
 
 The method has up to two arguments:
 
@@ -93,10 +100,63 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 }
 ```
 
+### Custom Errors
+
+Errors returned by resolvers can include custom extensions by implementing the `ResolverError` interface:
+
+```go
+type ResolverError interface {
+	error
+	Extensions() map[string]interface{}
+}
+```
+
+Example of a simple custom error:
+
+```go
+type droidNotFoundError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (e droidNotFoundError) Error() string {
+	return fmt.Sprintf("error [%s]: %s", e.Code, e.Message)
+}
+
+func (e droidNotFoundError) Extensions() map[string]interface{} {
+	return map[string]interface{}{
+		"code":    e.Code,
+		"message": e.Message,
+	}
+}
+```
+
+Which could produce a GraphQL error such as:
+
+```go
+{
+  "errors": [
+    {
+      "message": "error [NotFound]: This is not the droid you are looking for",
+      "path": [
+        "droid"
+      ],
+      "extensions": {
+        "code": "NotFound",
+        "message": "This is not the droid you are looking for"
+      }
+    }
+  ],
+  "data": null
+}
+```
+
 ### Community Examples
 
 [tonyghita/graphql-go-example](https://github.com/tonyghita/graphql-go-example) - A more "productionized" version of the Star Wars API example given in this repository.
 
-[deltaskelta/graphql-go-pets-example](https://github.com/deltaskelta/graphql-go-pets-example) - graphql-go resolving against a sqlite database
+[deltaskelta/graphql-go-pets-example](https://github.com/deltaskelta/graphql-go-pets-example) - graphql-go resolving against a sqlite database.
 
-[OscarYuen/go-graphql-starter](https://github.com/OscarYuen/go-graphql-starter) - a starter application integrated with dataloader, psql and basic authentication
+[OscarYuen/go-graphql-starter](https://github.com/OscarYuen/go-graphql-starter) - A starter application integrated with dataloader, psql and basic authentication.
+
+[zaydek/graphql-go-walkthrough](https://github.com/ZAYDEK/graphql-go-walkthrough) - A beginner friendly walkthrough for prospective developers.

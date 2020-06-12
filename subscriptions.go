@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 	"errors"
+	"reflect"
 
 	qerrors "github.com/tribunadigital/graphql-go/errors"
 	"github.com/tribunadigital/graphql-go/internal/common"
@@ -20,8 +21,11 @@ import (
 // further resolvers will be called. The context error will be returned as soon
 // as possible (not immediately).
 func (s *Schema) Subscribe(ctx context.Context, queryString string, operationName string, variables map[string]interface{}) (<-chan interface{}, error) {
-	if s.res == nil {
+	if s.res.Resolver == (reflect.Value{}) {
 		return nil, errors.New("schema created without resolver, can not subscribe")
+	}
+	if _, ok := s.schema.EntryPoints["subscription"]; !ok {
+		return nil, errors.New("no subscriptions are offered by the schema")
 	}
 	return s.subscribe(ctx, queryString, operationName, variables, s.res), nil
 }
@@ -33,7 +37,7 @@ func (s *Schema) subscribe(ctx context.Context, queryString string, operationNam
 	}
 
 	validationFinish := s.validationTracer.TraceValidation()
-	errs := validation.Validate(s.schema, doc, s.maxDepth)
+	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
 	validationFinish(errs)
 	if len(errs) != 0 {
 		return sendAndReturnClosed(&Response{Errors: errs})
