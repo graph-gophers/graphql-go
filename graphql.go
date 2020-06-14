@@ -41,7 +41,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		return nil, err
 	}
 
-	r, err := resolvable.ApplyResolver(s.schema, resolver)
+	r, err := resolvable.ApplyResolver(s.schema, resolver, s.extendRes)
 	if err != nil {
 		return nil, err
 	}
@@ -71,10 +71,18 @@ type Schema struct {
 	logger                log.Logger
 	useStringDescriptions bool
 	disableIntrospection  bool
+
+	extendRes interface{}
 }
 
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
 type SchemaOpt func(*Schema)
+
+func UseExtendResolver(ext interface{}) SchemaOpt {
+	return func(s *Schema) {
+		s.extendRes = ext
+	}
+}
 
 // UseStringDescriptions enables the usage of double quoted and triple quoted
 // strings as descriptions as per the June 2018 spec

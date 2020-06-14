@@ -125,13 +125,6 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 			default:
 				fe := e.Fields[field.Name.Name]
 
-				directive := fe.Directives.Get("example")
-				role, ok := directive.Args.Get("role")
-
-				if ok {
-					fmt.Println("role", role)
-				}
-
 				var args map[string]interface{}
 				var packedArgs reflect.Value
 				if fe.ArgsPacker != nil {

@@ -18,6 +18,7 @@ type Schema struct {
 	Mutation     Resolvable
 	Subscription Resolvable
 	Resolver     reflect.Value
+	ExtResolver  reflect.Value
 }
 
 type Resolvable interface {
@@ -61,11 +62,7 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-//func ApplyDirective(s *schema.Schema, directive interface{}) (*Schema, error) {
-//
-//}
-
-func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
+func ApplyResolver(s *schema.Schema, resolver interface{}, ext interface{}) (*Schema, error) {
 	if resolver == nil {
 		return &Schema{Meta: newMeta(s), Schema: *s}, nil
 	}
@@ -74,22 +71,20 @@ func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 
 	var query, mutation, subscription Resolvable
 
-	//fmt.Println(s.Directives)
-
 	if t, ok := s.EntryPoints["query"]; ok {
-		if err := b.assignExec(&query, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&query, t, reflect.TypeOf(resolver), reflect.TypeOf(ext)); err != nil {
 			return nil, err
 		}
 	}
 
 	if t, ok := s.EntryPoints["mutation"]; ok {
-		if err := b.assignExec(&mutation, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&mutation, t, reflect.TypeOf(resolver), reflect.TypeOf(ext)); err != nil {
 			return nil, err
 		}
 	}
 
 	if t, ok := s.EntryPoints["subscription"]; ok {
-		if err := b.assignExec(&subscription, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&subscription, t, reflect.TypeOf(resolver), reflect.TypeOf(ext)); err != nil {
 			return nil, err
 		}
 	}
@@ -102,6 +97,7 @@ func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 		Meta:         newMeta(s),
 		Schema:       *s,
 		Resolver:     reflect.ValueOf(resolver),
+		ExtResolver:  reflect.ValueOf(ext),
 		Query:        query,
 		Mutation:     mutation,
 		Subscription: subscription,
@@ -142,14 +138,15 @@ func (b *execBuilder) finish() error {
 	return b.packerBuilder.Finish()
 }
 
-func (b *execBuilder) assignExec(target *Resolvable, t common.Type, resolverType reflect.Type) error {
+func (b *execBuilder) assignExec(target *Resolvable, t common.Type, resolverType reflect.Type, ext reflect.Type) error {
 	k := typePair{t, resolverType}
 	ref, ok := b.resMap[k]
 	if !ok {
 		ref = &resMapEntry{}
 		b.resMap[k] = ref
 		var err error
-		ref.exec, err = b.makeExec(t, resolverType)
+
+		ref.exec, err = b.makeExec(t, resolverType, ext)
 		if err != nil {
 			return err
 		}
@@ -158,19 +155,23 @@ func (b *execBuilder) assignExec(target *Resolvable, t common.Type, resolverType
 	return nil
 }
 
-func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type) (Resolvable, error) {
+func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type, ext reflect.Type) (Resolvable, error) {
 	var nonNull bool
 	t, nonNull = unwrapNonNull(t)
 
 	switch t := t.(type) {
 	case *schema.Object:
-		return b.makeObjectExec(t.Name, t.Fields, nil, nonNull, resolverType)
+		if t.Name == "statTeam" && ext != nil {
+			resolverType = ext
+		}
+
+		return b.makeObjectExec(t.Name, t.Fields, nil, nonNull, resolverType, ext)
 
 	case *schema.Interface:
-		return b.makeObjectExec(t.Name, t.Fields, t.PossibleTypes, nonNull, resolverType)
+		return b.makeObjectExec(t.Name, t.Fields, t.PossibleTypes, nonNull, resolverType, ext)
 
 	case *schema.Union:
-		return b.makeObjectExec(t.Name, nil, t.PossibleTypes, nonNull, resolverType)
+		return b.makeObjectExec(t.Name, nil, t.PossibleTypes, nonNull, resolverType, ext)
 	}
 
 	if !nonNull {
@@ -192,7 +193,7 @@ func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type) (Resolv
 			return nil, fmt.Errorf("%s is not a slice", resolverType)
 		}
 		e := &List{}
-		if err := b.assignExec(&e.Elem, t.OfType, resolverType.Elem()); err != nil {
+		if err := b.assignExec(&e.Elem, t.OfType, resolverType.Elem(), ext); err != nil {
 			return nil, err
 		}
 		return e, nil
@@ -223,7 +224,7 @@ func makeScalarExec(t *schema.Scalar, resolverType reflect.Type) (Resolvable, er
 }
 
 func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, possibleTypes []*schema.Object,
-	nonNull bool, resolverType reflect.Type) (*Object, error) {
+	nonNull bool, resolverType reflect.Type, ext reflect.Type) (*Object, error) {
 	if !nonNull {
 		if resolverType.Kind() != reflect.Ptr && resolverType.Kind() != reflect.Interface {
 			return nil, fmt.Errorf("%s is not a pointer or interface", resolverType)
@@ -259,7 +260,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 		} else {
 			sf = rt.FieldByIndex(fieldIndex)
 		}
-		fe, err := b.makeFieldExec(typeName, f, m, sf, methodIndex, fieldIndex, methodHasReceiver)
+		fe, err := b.makeFieldExec(typeName, f, m, sf, methodIndex, fieldIndex, methodHasReceiver, ext)
 		if err != nil {
 			return nil, fmt.Errorf("%s\n\tused by (%s).%s", err, resolverType, m.Name)
 		}
@@ -282,7 +283,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 			a := &TypeAssertion{
 				MethodIndex: methodIndex,
 			}
-			if err := b.assignExec(&a.TypeExec, impl, resolverType.Method(methodIndex).Type.Out(0)); err != nil {
+			if err := b.assignExec(&a.TypeExec, impl, resolverType.Method(methodIndex).Type.Out(0), ext); err != nil {
 				return nil, err
 			}
 			typeAssertions[impl.Name] = a
@@ -300,7 +301,7 @@ var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
 
 func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.Method, sf reflect.StructField,
-	methodIndex int, fieldIndex []int, methodHasReceiver bool) (*Field, error) {
+	methodIndex int, fieldIndex []int, methodHasReceiver bool, ext reflect.Type) (*Field, error) {
 
 	var argsPacker *packer.StructPacker
 	var hasError bool
@@ -375,7 +376,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 	} else {
 		out = sf.Type
 	}
-	if err := b.assignExec(&fe.ValueExec, f.Type, out); err != nil {
+	if err := b.assignExec(&fe.ValueExec, f.Type, out, ext); err != nil {
 		return nil, err
 	}
 

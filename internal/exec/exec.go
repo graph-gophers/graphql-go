@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"unsafe"
 
 	"github.com/tribunadigital/graphql-go/errors"
 	"github.com/tribunadigital/graphql-go/internal/common"
@@ -200,8 +201,18 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			if f.field.ArgsPacker != nil {
 				in = append(in, f.field.PackedArgs)
 			}
-			callOut := res.Method(f.field.MethodIndex).Call(in)
-			result = callOut[0]
+
+			var callOut []reflect.Value
+
+			if f.field.TypeName == "statTeam" {
+				res := reflect.NewAt(s.ExtResolver.Elem().Type(), unsafe.Pointer(res.Elem().UnsafeAddr()))
+				callOut = res.Method(f.field.MethodIndex).Call(in)
+				result = callOut[0]
+			} else {
+				callOut = res.Method(f.field.MethodIndex).Call(in)
+				result = callOut[0]
+			}
+
 			if f.field.HasError && !callOut[1].IsNil() {
 				resolverErr := callOut[1].Interface().(error)
 				err := errors.Errorf("%s", resolverErr)
