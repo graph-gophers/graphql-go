@@ -1465,6 +1465,13 @@
       "errors": []
     },
     {
+      "name": "Validate: fragments are used even when they are nested",
+      "rule": "NoUnusedFragments",
+      "schema": 1,
+      "query": "\n        query Foo() {\n ...StringFragment\n stringBox {\n ...StringFragment\n ...StringFragmentPrime\n}\n}\n\n\n fragment StringFragment on StringBox {\n scalar\n}\n\n fragment StringFragmentPrime on StringBox {\n unrelatedField\n}\n",
+      "errors": []
+    },
+    {
       "name": "Validate: No unused variables/uses all variables in fragments",
       "rule": "NoUnusedVariables",
       "schema": 0,
