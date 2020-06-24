@@ -418,8 +418,9 @@ func markUsedFragments(c *context, sels []query.Selection, fragUsed map[*query.F
 			}
 
 			if _, ok := fragUsed[frag]; ok {
-				return
+				continue
 			}
+
 			fragUsed[frag] = struct{}{}
 			markUsedFragments(c, frag.Selections, fragUsed)
 

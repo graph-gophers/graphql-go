@@ -56,6 +56,10 @@ func (r *helloSaidResolver) HelloSaid(ctx context.Context) (chan *helloSaidEvent
 	return c, nil
 }
 
+func (r *rootResolver) OtherField(ctx context.Context) <-chan int32 {
+	return make(chan int32)
+}
+
 func (r *helloSaidEventResolver) Msg() (string, error) {
 	return r.msg, r.err
 }
@@ -412,6 +416,36 @@ func TestRootOperations_validSubscriptionSchema(t *testing.T) {
 			`, &rootResolver{helloSaidResolver: &helloSaidResolver{upstream: closedUpstream(&helloSaidEventResolver{msg: "Hello world!"})}}),
 			Query:       `subscription { helloSaid { msg } }`,
 			ExpectedErr: errors.New("no subscriptions are offered by the schema"),
+		},
+	})
+}
+
+func TestError_multiple_subscription_fields(t *testing.T) {
+	gqltesting.RunSubscribes(t, []*gqltesting.TestSubscription{
+		{
+			Name: "Explicit schema without subscription field",
+			Schema: graphql.MustParseSchema(`
+					schema {
+						query: Query
+						subscription: Subscription
+					}
+					type Query {
+						hello: String!
+					}
+					type Subscription {
+						helloSaid: HelloSaidEvent!
+						otherField: Int!
+					}
+					type HelloSaidEvent {
+						msg: String!
+					}
+			`, &rootResolver{helloSaidResolver: &helloSaidResolver{upstream: closedUpstream(&helloSaidEventResolver{msg: "Hello world!"})}}),
+			Query: `subscription { helloSaid { msg } otherField }`,
+			ExpectedResults: []gqltesting.TestResponse{
+				{
+					Errors: []*qerrors.QueryError{qerrors.Errorf("can subscribe to at most one subscription at a time")},
+				},
+			},
 		},
 	})
 }
