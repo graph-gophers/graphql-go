@@ -205,13 +205,11 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			var callOut []reflect.Value
 
 			if f.field.TypeName == "statTeam" {
-				res := reflect.NewAt(s.ExtResolver.Elem().Type(), unsafe.Pointer(res.Elem().UnsafeAddr()))
-				callOut = res.Method(f.field.MethodIndex).Call(in)
-				result = callOut[0]
-			} else {
-				callOut = res.Method(f.field.MethodIndex).Call(in)
-				result = callOut[0]
+				res = reflect.NewAt(s.ExtResolver.Elem().Type(), unsafe.Pointer(res.Elem().UnsafeAddr()))
 			}
+
+			callOut = res.Method(f.field.MethodIndex).Call(in)
+			result = callOut[0]
 
 			if f.field.HasError && !callOut[1].IsNil() {
 				resolverErr := callOut[1].Interface().(error)
