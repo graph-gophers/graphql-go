@@ -65,6 +65,7 @@ type Schema struct {
 	res    *resolvable.Schema
 
 	maxDepth              int
+	complexityEstimators  []validation.ComplexityEstimator
 	maxParallelism        int
 	tracer                trace.Tracer
 	validationTracer      trace.ValidationTracer
@@ -97,6 +98,23 @@ func UseFieldResolvers() SchemaOpt {
 func MaxDepth(n int) SchemaOpt {
 	return func(s *Schema) {
 		s.maxDepth = n
+	}
+}
+
+// MaxQueryComplexity specifies the complexity a query.
+func MaxQueryComplexity(n int) SchemaOpt {
+	return ComplexityEstimator(validation.SimpleEstimator{n})
+}
+
+// MaxQueryRecursion specifies the recursion a query.
+func MaxQueryRecursion(n int) SchemaOpt {
+	return ComplexityEstimator(validation.RecursionEstimator{n})
+}
+
+// ComplexityEstimator Add estimator to make estimate max complexity queries.
+func ComplexityEstimator(estimator validation.ComplexityEstimator) SchemaOpt {
+	return func(s *Schema) {
+		s.complexityEstimators = append(s.complexityEstimators, estimator)
 	}
 }
 
@@ -151,7 +169,7 @@ func (s *Schema) Validate(queryString string) []*errors.QueryError {
 		return []*errors.QueryError{qErr}
 	}
 
-	return validation.Validate(s.schema, doc, nil, s.maxDepth)
+	return validation.Validate(s.schema, doc, nil, s.maxDepth, s.complexityEstimators)
 }
 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
@@ -171,7 +189,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	}
 
 	validationFinish := s.validationTracer.TraceValidation()
-	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
+	errs := validation.Validate(s.schema, doc, variables, s.maxDepth, s.complexityEstimators)
 	validationFinish(errs)
 	if len(errs) != 0 {
 		return &Response{Errors: errs}

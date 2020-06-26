@@ -32,6 +32,7 @@ type context struct {
 	fieldMap         map[*query.Field]fieldInfo
 	overlapValidated map[selectionPair]struct{}
 	maxDepth         int
+	estimators       []ComplexityEstimator
 }
 
 func (c *context) addErr(loc errors.Location, rule string, format string, a ...interface{}) {
@@ -51,7 +52,7 @@ type opContext struct {
 	ops []*query.Operation
 }
 
-func newContext(s *schema.Schema, doc *query.Document, maxDepth int) *context {
+func newContext(s *schema.Schema, doc *query.Document, maxDepth int, estimators []ComplexityEstimator) *context {
 	return &context{
 		schema:           s,
 		doc:              doc,
@@ -60,11 +61,12 @@ func newContext(s *schema.Schema, doc *query.Document, maxDepth int) *context {
 		fieldMap:         make(map[*query.Field]fieldInfo),
 		overlapValidated: make(map[selectionPair]struct{}),
 		maxDepth:         maxDepth,
+		estimators:       estimators,
 	}
 }
 
-func Validate(s *schema.Schema, doc *query.Document, variables map[string]interface{}, maxDepth int) []*errors.QueryError {
-	c := newContext(s, doc, maxDepth)
+func Validate(s *schema.Schema, doc *query.Document, variables map[string]interface{}, maxDepth int, estimators []ComplexityEstimator) []*errors.QueryError {
+	c := newContext(s, doc, maxDepth, estimators)
 
 	opNames := make(nameSet)
 	fragUsedBy := make(map[*query.FragmentDecl][]*query.Operation)
@@ -72,9 +74,12 @@ func Validate(s *schema.Schema, doc *query.Document, variables map[string]interf
 		c.usedVars[op] = make(varSet)
 		opc := &opContext{c, []*query.Operation{op}}
 
-		// Check if max depth is exceeded, if it's set. If max depth is exceeded,
+		var entryPoint = getEntryPoint(s, op)
+
+		// Check if max depth or complexity is exceeded, if it's set. If exceeded,
 		// don't continue to validate the document and exit early.
-		if validateMaxDepth(opc, op.Selections, 1) {
+		if validateMaxDepth(opc, op.Selections, 1) ||
+			validateMaxComplexity(opc, op.Selections) {
 			return c.errs
 		}
 
@@ -110,18 +115,6 @@ func Validate(s *schema.Schema, doc *query.Document, variables map[string]interf
 					}
 				}
 			}
-		}
-
-		var entryPoint schema.NamedType
-		switch op.Type {
-		case query.Query:
-			entryPoint = s.EntryPoints["query"]
-		case query.Mutation:
-			entryPoint = s.EntryPoints["mutation"]
-		case query.Subscription:
-			entryPoint = s.EntryPoints["subscription"]
-		default:
-			panic("unreachable")
 		}
 
 		validateSelectionSet(opc, op.Selections, entryPoint)
@@ -229,6 +222,16 @@ func validateValue(c *opContext, v *common.InputValue, val interface{}, t common
 			validateValue(c, f, fieldVal, f.Type)
 		}
 	}
+}
+
+func validateMaxComplexity(c *opContext, sels []query.Selection) bool {
+	for _, estimator := range c.estimators {
+		if complexityExceeded := estimator.DoEstimate(c, sels); complexityExceeded {
+			return complexityExceeded
+		}
+	}
+
+	return false
 }
 
 // validates the query doesn't go deeper than maxDepth (if set). Returns whether
@@ -597,6 +600,22 @@ func argumentsConflict(a, b common.ArgumentList) bool {
 	return false
 }
 
+func getEntryPoint(s *schema.Schema, op *query.Operation) schema.NamedType {
+	var entryPoint schema.NamedType
+	switch op.Type {
+	case query.Query:
+		entryPoint = s.EntryPoints["query"]
+	case query.Mutation:
+		entryPoint = s.EntryPoints["mutation"]
+	case query.Subscription:
+		entryPoint = s.EntryPoints["subscription"]
+	default:
+		panic("unreachable")
+	}
+
+	return entryPoint
+}
+
 func fields(t common.Type) schema.FieldList {
 	switch t := t.(type) {
 	case *schema.Object:
@@ -849,7 +868,7 @@ func validateBasicLit(v *common.BasicLit, t common.Type) bool {
 		case "ID":
 			return v.Type == scanner.Int || v.Type == scanner.String
 		default:
-			//TODO: Type-check against expected type by Unmarshalling
+			// TODO: Type-check against expected type by Unmarshalling
 			return true
 		}
 
