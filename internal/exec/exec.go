@@ -313,16 +313,19 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 	entryouts := make([]bytes.Buffer, l)
 
 	if selected.HasAsyncSel(sels) {
-		var wg sync.WaitGroup
-		wg.Add(l)
+		concurrency := cap(r.Limiter)
+		sem := make(chan struct{}, concurrency)
 		for i := 0; i < l; i++ {
+			sem <- struct{}{}
 			go func(i int) {
-				defer wg.Done()
+				defer func() { <-sem }()
 				defer r.handlePanic(ctx)
 				r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), &entryouts[i])
 			}(i)
 		}
-		wg.Wait()
+		for i := 0; i < concurrency;i++ {
+			sem <- struct{}{}
+		}
 	} else {
 		for i := 0; i < l; i++ {
 			r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), &entryouts[i])
