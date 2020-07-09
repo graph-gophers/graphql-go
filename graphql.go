@@ -252,3 +252,21 @@ func getOperation(document *query.Document, operationName string) (*query.Operat
 	}
 	return op, nil
 }
+
+// GetQueryNames is tokopedia specific method to get all query names from query string
+func GetQueryNames(queryString string) []string {
+	var queries []string
+	doc, qErr := query.Parse(queryString)
+	if qErr != nil {
+		return queries
+	}
+	for _, op := range doc.Operations{
+		for _, sel := range op.Selections{
+			query, ok := sel.(*query.Field)
+			if ok {
+				queries = append(queries, query.Name.Name)
+			}
+		}
+	}
+	return queries
+}
