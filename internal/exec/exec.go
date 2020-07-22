@@ -66,11 +66,25 @@ func resolvedToNull(b *bytes.Buffer) bool {
 	return bytes.Equal(b.Bytes(), []byte("null"))
 }
 
+var bufferPool = sync.Pool{
+	New: func() interface{}{
+		return new(bytes.Buffer)
+	},
+}
+
 func (r *Request) execSelections(ctx context.Context, sels []selected.Selection, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *bytes.Buffer, serially bool) {
 	async := !serially && selected.HasAsyncSel(sels)
 
 	var fields []*fieldToExec
 	collectFieldsToResolve(sels, s, resolver, &fields, make(map[string]*fieldToExec))
+
+	defer func() {
+		for _, f := range fields {
+			if f.out != nil {
+				bufferPool.Put(f.out)
+			}
+		}
+	}()
 
 	if async {
 		var wg sync.WaitGroup
@@ -79,14 +93,16 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 			go func(f *fieldToExec) {
 				defer wg.Done()
 				defer r.handlePanic(ctx)
-				f.out = new(bytes.Buffer)
+				f.out = bufferPool.Get().(*bytes.Buffer)
+				f.out.Reset()
 				execFieldSelection(ctx, r, s, f, &pathSegment{path, f.field.Alias}, true)
 			}(f)
 		}
 		wg.Wait()
 	} else {
 		for _, f := range fields {
-			f.out = new(bytes.Buffer)
+			f.out = bufferPool.Get().(*bytes.Buffer)
+			f.out.Reset()
 			execFieldSelection(ctx, r, s, f, &pathSegment{path, f.field.Alias}, true)
 		}
 	}
