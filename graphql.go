@@ -142,12 +142,21 @@ type Response struct {
 }
 
 // Validate validates the given query with the schema.
-func (s *Schema) Validate(queryString string, variables map[string]interface{}) (bool, []*errors.QueryError) {
+func (s *Schema) Validate(queryString string, variables map[string]interface{}) ([]string, bool, []*errors.QueryError) {
+	var queries []string	
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
-		return true, []*errors.QueryError{qErr}
+		return queries, true, []*errors.QueryError{qErr}
 	}
-	return false, validation.Validate(s.schema, doc, variables, s.maxDepth)
+	for _, op := range doc.Operations{
+		for _, sel := range op.Selections{
+			query, ok := sel.(*query.Field)
+			if ok {
+				queries = append(queries, query.Name.Name)
+			}
+		}
+	}
+	return queries, false, validation.Validate(s.schema, doc, variables, s.maxDepth)
 }
 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
@@ -251,22 +260,4 @@ func getOperation(document *query.Document, operationName string) (*query.Operat
 		return nil, fmt.Errorf("no operation with name %q", operationName)
 	}
 	return op, nil
-}
-
-// GetQueryNames is tokopedia specific method to get all query names from query string
-func GetQueryNames(queryString string) []string {
-	var queries []string
-	doc, qErr := query.Parse(queryString)
-	if qErr != nil {
-		return queries
-	}
-	for _, op := range doc.Operations{
-		for _, sel := range op.Selections{
-			query, ok := sel.(*query.Field)
-			if ok {
-				queries = append(queries, query.Name.Name)
-			}
-		}
-	}
-	return queries
 }
