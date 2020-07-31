@@ -18,7 +18,7 @@ type Schema struct {
 	Mutation     Resolvable
 	Subscription Resolvable
 	Resolver     reflect.Value
-	ExtResolver  reflect.Value
+	ExtResolver  map[string]reflect.Value
 }
 
 type Resolvable interface {
@@ -62,7 +62,7 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *schema.Schema, resolver interface{}, ext interface{}) (*Schema, error) {
+func ApplyResolver(s *schema.Schema, resolver interface{}, ext map[string]interface{}) (*Schema, error) {
 	if resolver == nil {
 		return &Schema{Meta: newMeta(s), Schema: *s}, nil
 	}
@@ -72,19 +72,19 @@ func ApplyResolver(s *schema.Schema, resolver interface{}, ext interface{}) (*Sc
 	var query, mutation, subscription Resolvable
 
 	if t, ok := s.EntryPoints["query"]; ok {
-		if err := b.assignExec(&query, t, reflect.TypeOf(resolver), reflect.TypeOf(ext)); err != nil {
+		if err := b.assignExec(&query, t, reflect.TypeOf(resolver), ext); err != nil {
 			return nil, err
 		}
 	}
 
 	if t, ok := s.EntryPoints["mutation"]; ok {
-		if err := b.assignExec(&mutation, t, reflect.TypeOf(resolver), reflect.TypeOf(ext)); err != nil {
+		if err := b.assignExec(&mutation, t, reflect.TypeOf(resolver), ext); err != nil {
 			return nil, err
 		}
 	}
 
 	if t, ok := s.EntryPoints["subscription"]; ok {
-		if err := b.assignExec(&subscription, t, reflect.TypeOf(resolver), reflect.TypeOf(ext)); err != nil {
+		if err := b.assignExec(&subscription, t, reflect.TypeOf(resolver), ext); err != nil {
 			return nil, err
 		}
 	}
@@ -93,11 +93,16 @@ func ApplyResolver(s *schema.Schema, resolver interface{}, ext interface{}) (*Sc
 		return nil, err
 	}
 
+	extResolvers := make(map[string]reflect.Value)
+	for i := range ext {
+		extResolvers[i] = reflect.ValueOf(ext[i])
+	}
+
 	return &Schema{
 		Meta:         newMeta(s),
 		Schema:       *s,
 		Resolver:     reflect.ValueOf(resolver),
-		ExtResolver:  reflect.ValueOf(ext),
+		ExtResolver:  extResolvers,
 		Query:        query,
 		Mutation:     mutation,
 		Subscription: subscription,
@@ -138,7 +143,7 @@ func (b *execBuilder) finish() error {
 	return b.packerBuilder.Finish()
 }
 
-func (b *execBuilder) assignExec(target *Resolvable, t common.Type, resolverType reflect.Type, ext reflect.Type) error {
+func (b *execBuilder) assignExec(target *Resolvable, t common.Type, resolverType reflect.Type, ext map[string]interface{}) error {
 	k := typePair{t, resolverType}
 	ref, ok := b.resMap[k]
 	if !ok {
@@ -155,14 +160,16 @@ func (b *execBuilder) assignExec(target *Resolvable, t common.Type, resolverType
 	return nil
 }
 
-func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type, ext reflect.Type) (Resolvable, error) {
+func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type, ext map[string]interface{}) (Resolvable, error) {
 	var nonNull bool
 	t, nonNull = unwrapNonNull(t)
 
 	switch t := t.(type) {
 	case *schema.Object:
-		if t.Name == "statTeam" && ext != nil {
-			resolverType = ext
+		if ext != nil {
+			if v, ok := ext[t.Name]; ok {
+				resolverType = reflect.TypeOf(v)
+			}
 		}
 
 		return b.makeObjectExec(t.Name, t.Fields, nil, nonNull, resolverType, ext)
@@ -224,7 +231,7 @@ func makeScalarExec(t *schema.Scalar, resolverType reflect.Type) (Resolvable, er
 }
 
 func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, possibleTypes []*schema.Object,
-	nonNull bool, resolverType reflect.Type, ext reflect.Type) (*Object, error) {
+	nonNull bool, resolverType reflect.Type, ext map[string]interface{}) (*Object, error) {
 	if !nonNull {
 		if resolverType.Kind() != reflect.Ptr && resolverType.Kind() != reflect.Interface {
 			return nil, fmt.Errorf("%s is not a pointer or interface", resolverType)
@@ -301,7 +308,7 @@ var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
 
 func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.Method, sf reflect.StructField,
-	methodIndex int, fieldIndex []int, methodHasReceiver bool, ext reflect.Type) (*Field, error) {
+	methodIndex int, fieldIndex []int, methodHasReceiver bool, ext map[string]interface{}) (*Field, error) {
 
 	var argsPacker *packer.StructPacker
 	var hasError bool

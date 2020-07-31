@@ -163,6 +163,48 @@ func (r *discussPlanResolver) DismissVader(ctx context.Context) (string, error) 
 	return "", errors.New("I find your lack of faith disturbing")
 }
 
+type ByeWorldResolver1 struct {
+	helloWorldResolver1
+}
+
+func (b *ByeWorldResolver1) Bye() string {
+	return "Bye world!"
+}
+
+func TestExtendResolver(t *testing.T) {
+	t.Parallel()
+
+	extResolvers := make(map[string]interface{})
+	extResolvers["Query"] = &ByeWorldResolver1{}
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String!
+					bye: String!
+				}`, &helloWorldResolver1{}, graphql.UseExtendResolver(extResolvers)),
+			Query: `
+				{
+					hello
+					bye
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!",
+					"bye": "Bye world!"
+				}
+			`,
+		},
+	})
+}
+
 func TestHelloWorld(t *testing.T) {
 	t.Parallel()
 
@@ -2742,7 +2784,9 @@ func (r *inputResolver) Nullable(args struct{ Value *int32 }) *int32 {
 	return args.Value
 }
 
-func (r *inputResolver) List(args struct{ Value []*struct{ V int32 } }) []int32 {
+func (r *inputResolver) List(args struct {
+	Value []*struct{ V int32 }
+}) []int32 {
 	l := make([]int32, len(args.Value))
 	for i, entry := range args.Value {
 		l[i] = entry.V
@@ -2750,7 +2794,9 @@ func (r *inputResolver) List(args struct{ Value []*struct{ V int32 } }) []int32 
 	return l
 }
 
-func (r *inputResolver) NullableList(args struct{ Value *[]*struct{ V int32 } }) *[]*int32 {
+func (r *inputResolver) NullableList(args struct {
+	Value *[]*struct{ V int32 }
+}) *[]*int32 {
 	if args.Value == nil {
 		return nil
 	}
@@ -2926,7 +2972,7 @@ func TestInput(t *testing.T) {
 	})
 }
 
-type inputArgumentsHello struct {}
+type inputArgumentsHello struct{}
 
 type inputArgumentsScalarMismatch1 struct{}
 
@@ -2946,7 +2992,7 @@ type helloInputMismatch struct {
 	World string
 }
 
-func (r *inputArgumentsHello) Hello(args struct { Input *helloInput }) string {
+func (r *inputArgumentsHello) Hello(args struct{ Input *helloInput }) string {
 	return "Hello " + args.Input.Name + "!"
 }
 
@@ -2954,7 +3000,7 @@ func (r *inputArgumentsScalarMismatch1) Hello(name string) string {
 	return "Hello " + name + "!"
 }
 
-func (r *inputArgumentsScalarMismatch2) Hello(args struct { World string }) string {
+func (r *inputArgumentsScalarMismatch2) Hello(args struct{ World string }) string {
 	return "Hello " + args.World + "!"
 }
 
@@ -2962,11 +3008,11 @@ func (r *inputArgumentsObjectMismatch1) Hello(in helloInput) string {
 	return "Hello " + in.Name + "!"
 }
 
-func (r *inputArgumentsObjectMismatch2) Hello(args struct { Input *helloInputMismatch }) string {
+func (r *inputArgumentsObjectMismatch2) Hello(args struct{ Input *helloInputMismatch }) string {
 	return "Hello " + args.Input.World + "!"
 }
 
-func (r *inputArgumentsObjectMismatch3) Hello(args struct { Input *struct { Thing string } }) string {
+func (r *inputArgumentsObjectMismatch3) Hello(args struct{ Input *struct{ Thing string } }) string {
 	return "Hello " + args.Input.Thing + "!"
 }
 

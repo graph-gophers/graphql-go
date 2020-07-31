@@ -72,13 +72,13 @@ type Schema struct {
 	useStringDescriptions bool
 	disableIntrospection  bool
 
-	extendRes interface{}
+	extendRes map[string]interface{}
 }
 
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
 type SchemaOpt func(*Schema)
 
-func UseExtendResolver(ext interface{}) SchemaOpt {
+func UseExtendResolver(ext map[string]interface{}) SchemaOpt {
 	return func(s *Schema) {
 		s.extendRes = ext
 	}
