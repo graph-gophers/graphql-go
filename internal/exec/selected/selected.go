@@ -173,7 +173,9 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 }
 
 func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag *query.Fragment) []Selection {
-	if frag.On.Name != "" && frag.On.Name != e.Name {
+	t := r.Schema.Resolve(frag.On.Name)
+	face, ok := t.(*schema.Interface)
+	if !ok && frag.On.Name != "" && frag.On.Name != e.Name {
 		a, ok := e.TypeAssertions[frag.On.Name]
 		if !ok {
 			panic(fmt.Errorf("%q does not implement %q", frag.On, e.Name)) // TODO proper error handling
@@ -183,6 +185,19 @@ func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag 
 			TypeAssertion: *a,
 			Sels:          applySelectionSet(r, s, a.TypeExec.(*resolvable.Object), frag.Selections),
 		}}
+	}
+	if ok && len(face.PossibleTypes) > 0 {
+		for _, t := range face.PossibleTypes {
+			if t.Name == e.Name {
+				return applySelectionSet(r, s, e, frag.Selections)
+			}
+			for assertedName, assertedObject := range e.TypeAssertions {
+				if t.Name == assertedName {
+					return applySelectionSet(r, s, assertedObject.TypeExec.(*resolvable.Object), frag.Selections)
+				}
+			}
+		}
+		panic(fmt.Errorf("%q does not implement %q", e.Name, frag.On)) // TODO proper error handling
 	}
 	return applySelectionSet(r, s, e, frag.Selections)
 }
