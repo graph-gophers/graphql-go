@@ -101,12 +101,12 @@ func MaxDepth(n int) SchemaOpt {
 	}
 }
 
-// MaxQueryComplexity specifies the complexity a query.
+// MaxQueryComplexity specifies the complexity of a query.
 func MaxQueryComplexity(n int) SchemaOpt {
 	return ComplexityEstimator(validation.SimpleEstimator{n})
 }
 
-// MaxQueryRecursion specifies the recursion a query.
+// MaxQueryRecursion specifies the recursion of a query.
 func MaxQueryRecursion(n int) SchemaOpt {
 	return ComplexityEstimator(validation.RecursionEstimator{n})
 }
