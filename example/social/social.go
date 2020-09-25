@@ -27,9 +27,13 @@ const Schema = `
 		role: Role!
 	}
 
+	interface Person {
+		name: String!
+	}
+
 	scalar Time	
 
-	type User implements Admin {
+	type User implements Admin & Person {
 		id: ID!
 		name: String!
 		email: String!
@@ -62,6 +66,15 @@ type admin interface {
 	ID() graphql.ID
 	Name() string
 	Role() string
+}
+
+type adminResolver struct {
+	admin
+}
+
+func (r *adminResolver) ToUser() (*user, bool) {
+	n, ok := r.admin.(user)
+	return &n, ok
 }
 
 type searchResult struct {
@@ -189,14 +202,14 @@ type Resolver struct{}
 func (r *Resolver) Admin(ctx context.Context, args struct {
 	ID   string
 	Role string
-}) (admin, error) {
+}) (*adminResolver, error) {
 	if usr, ok := usersMap[args.ID]; ok {
 		if usr.RoleField == args.Role {
-			return *usr, nil
+			return &adminResolver{*usr}, nil
 		}
 	}
 	err := fmt.Errorf("user with id=%s and role=%s does not exist", args.ID, args.Role)
-	return user{}, err
+	return nil, err
 }
 
 func (r *Resolver) User(ctx context.Context, args struct{ Id string }) (user, error) {

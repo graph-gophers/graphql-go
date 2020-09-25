@@ -1703,6 +1703,52 @@ func TestInlineFragments(t *testing.T) {
 				}
 			`,
 		},
+
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query CharacterSearch {
+					search(text: "C-3PO") {
+						... on Character {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"search": [
+						{
+							"name": "C-3PO"
+						}
+					]
+				}
+			`,
+		},
+
+		{
+			Schema: socialSchema,
+			Query: `
+				query {
+					admin(id: "0x01") {
+						... on User {
+							email
+						}
+						... on Person {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"admin": {
+						"email": "Albus@hogwarts.com",
+						"name": "Albus Dumbledore"
+					}
+				}
+			`,
+		},
 	})
 }
 
