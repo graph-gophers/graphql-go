@@ -67,6 +67,22 @@ func (OpenTracingTracer) TraceField(ctx context.Context, label, typeName, fieldN
 	}
 }
 
+func (OpenTracingTracer) TraceValidation(ctx context.Context) TraceValidationFinishFunc {
+	span, _ := opentracing.StartSpanFromContext(ctx, "Validate Query")
+
+	return func(errs []*errors.QueryError) {
+		if len(errs) > 0 {
+			msg := errs[0].Error()
+			if len(errs) > 1 {
+				msg += fmt.Sprintf(" (and %d more errors)", len(errs)-1)
+			}
+			ext.Error.Set(span, true)
+			span.SetTag("graphql.error", msg)
+		}
+		span.Finish()
+	}
+}
+
 func noop(*errors.QueryError) {}
 
 type NoopTracer struct{}
