@@ -93,3 +93,43 @@ func TestConsume(t *testing.T) {
 		})
 	}
 }
+
+var multilineStringTests = []consumeTestCase {
+	{
+		description: "Oneline strings are okay",
+		definition: `"Hello World"`,
+		expected: "",
+		failureExpected: false,
+		useStringDescriptions: true,		
+	},
+	{
+		description: "Multiline strings are not allowed",
+		definition: `"Hello
+				 World"`,
+		expected: `graphql: syntax error: literal not terminated. See near "Hello (line 1, column 1)`,
+		failureExpected: true,
+		useStringDescriptions: true,		
+	},
+}
+
+func TestMultilineString(t *testing.T) {
+	for _, test := range multilineStringTests {
+		t.Run(test.description, func(t *testing.T) {
+			lex := common.NewLexer(test.definition, test.useStringDescriptions)
+
+			err := lex.CatchSyntaxError(func() { lex.ConsumeWhitespace() })
+
+			if test.failureExpected && err == nil {
+				t.Fatalf("Test '%s' should fail", test.description)
+			} else if test.failureExpected && err != nil {
+				if test.expected != err.Error() {
+					t.Fatalf("Test '%s' failed with wrong error: '%s'. Error should be: '%s'", test.description, err.Error(), test.expected)
+				}
+			}
+
+			if !test.failureExpected && err != nil {
+				t.Fatalf("Test '%s' failed with error: '%s'", test.description, err.Error())
+			}
+		})
+	}	
+}
