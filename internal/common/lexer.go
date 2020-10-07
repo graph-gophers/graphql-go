@@ -225,5 +225,5 @@ func (l *Lexer) consumeComment() {
 }
 
 func (l *Lexer) CatchScannerError(s *scanner.Scanner, msg string) {
-	l.SyntaxError(fmt.Sprintf("%s. See near %s", msg, s.TokenText()))
+	l.SyntaxError(msg)
 }

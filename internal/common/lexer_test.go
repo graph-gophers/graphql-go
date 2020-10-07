@@ -106,7 +106,7 @@ var multilineStringTests = []consumeTestCase {
 		description: "Multiline strings are not allowed",
 		definition: `"Hello
 				 World"`,
-		expected: `graphql: syntax error: literal not terminated. See near "Hello (line 1, column 1)`,
+		expected: `graphql: syntax error: literal not terminated (line 1, column 1)`,
 		failureExpected: true,
 		useStringDescriptions: true,		
 	},
