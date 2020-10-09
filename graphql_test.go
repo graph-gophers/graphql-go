@@ -3635,3 +3635,52 @@ func TestSubscriptions_In_Exec(t *testing.T) {
 		},
 	})
 }
+
+type nilPointerReturnValue struct{}
+
+func (r *nilPointerReturnValue) Value() *string {
+	return nil
+}
+
+type nilPointerReturnResolver struct{}
+
+func (r *nilPointerReturnResolver) PointerReturn() *nilPointerReturnValue {
+	return &nilPointerReturnValue{}
+}
+
+func TestPointerReturnForNonNull(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+			type Query {
+				pointerReturn: PointerReturnValue
+			}
+
+			type PointerReturnValue {
+				value: Hello!
+			}
+			enum Hello {
+				WORLD
+			}
+		`, &nilPointerReturnResolver{}),
+			Query: `
+				query {
+					pointerReturn {
+						value
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"pointerReturn": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: `graphql: got nil for non-null "Hello"`,
+					Path:    []interface{}{"pointerReturn", "value"},
+				},
+			},
+		},
+	})
+}
