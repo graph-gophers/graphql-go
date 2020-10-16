@@ -146,12 +146,17 @@ type Response struct {
 
 // Validate validates the given query with the schema.
 func (s *Schema) Validate(queryString string) []*errors.QueryError {
+	return s.ValidateWithVariables(queryString, nil)
+}
+
+// ValidateWithVariables validates the given query with the schema and the input variables.
+func (s *Schema) ValidateWithVariables(queryString string, variables map[string]interface{}) []*errors.QueryError {
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
 		return []*errors.QueryError{qErr}
 	}
 
-	return validation.Validate(s.schema, doc, nil, s.maxDepth)
+	return validation.Validate(s.schema, doc, variables, s.maxDepth)
 }
 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
