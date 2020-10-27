@@ -239,31 +239,30 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 
 func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selection, typ common.Type, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *bytes.Buffer) {
 	t, nonNull := unwrapNonNull(typ)
-	switch t := t.(type) {
-	case *schema.Object, *schema.Interface, *schema.Union:
-		// a reflect.Value of a nil interface will show up as an Invalid value
-		if resolver.Kind() == reflect.Invalid || ((resolver.Kind() == reflect.Ptr || resolver.Kind() == reflect.Interface) && resolver.IsNil()) {
-			// If a field of a non-null type resolves to null (either because the
-			// function to resolve the field returned null or because an error occurred),
-			// add an error to the "errors" list in the response.
-			if nonNull {
-				err := errors.Errorf("graphql: got nil for non-null %q", t)
-				err.Path = path.toSlice()
-				r.AddError(err)
-			}
-			out.WriteString("null")
-			return
-		}
 
+	// a reflect.Value of a nil interface will show up as an Invalid value
+	if resolver.Kind() == reflect.Invalid || ((resolver.Kind() == reflect.Ptr || resolver.Kind() == reflect.Interface) && resolver.IsNil()) {
+		// If a field of a non-null type resolves to null (either because the
+		// function to resolve the field returned null or because an error occurred),
+		// add an error to the "errors" list in the response.
+		if nonNull {
+			err := errors.Errorf("graphql: got nil for non-null %q", t)
+			err.Path = path.toSlice()
+			r.AddError(err)
+		}
+		out.WriteString("null")
+		return
+	}
+
+	switch t.(type) {
+	case *schema.Object, *schema.Interface, *schema.Union:
 		r.execSelections(ctx, sels, path, s, resolver, out, false)
 		return
 	}
 
-	if !nonNull {
-		if resolver.IsNil() {
-			out.WriteString("null")
-			return
-		}
+	// Any pointers or interfaces at this point should be non-nil, so we can get the actual value of them
+	// for serialization
+	if resolver.Kind() == reflect.Ptr || resolver.Kind() == reflect.Interface {
 		resolver = resolver.Elem()
 	}
 
