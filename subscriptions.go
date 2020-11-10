@@ -24,6 +24,9 @@ func (s *Schema) Subscribe(ctx context.Context, queryString string, operationNam
 	if s.res.Resolver == (reflect.Value{}) {
 		return nil, errors.New("schema created without resolver, can not subscribe")
 	}
+	if _, ok := s.schema.EntryPoints["subscription"]; !ok {
+		return nil, errors.New("no subscriptions are offered by the schema")
+	}
 	return s.subscribe(ctx, queryString, operationName, variables, s.res), nil
 }
 
