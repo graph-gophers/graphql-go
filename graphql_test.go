@@ -623,7 +623,7 @@ func TestEmbeddedStruct(t *testing.T) {
 				type Query {
 					course: Course!
 				}
-				
+
 				type Course {
 					name: String!
 					createdAt: String!
@@ -712,7 +712,7 @@ func TestNilInterface(t *testing.T) {
 				}
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
+				{
 					Message:       "x",
 					Path:          []interface{}{"b"},
 					ResolverError: errors.New("x"),
@@ -750,7 +750,7 @@ func TestErrorPropagationInLists(t *testing.T) {
 				null
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
+				{
 					Message:       droidNotFoundError.Error(),
 					Path:          []interface{}{"findDroids", 1, "name"},
 					ResolverError: droidNotFoundError,
@@ -792,7 +792,7 @@ func TestErrorPropagationInLists(t *testing.T) {
 				}
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
+				{
 					Message:       droidNotFoundError.Error(),
 					Path:          []interface{}{"findDroids", 1, "name"},
 					ResolverError: droidNotFoundError,
@@ -826,7 +826,7 @@ func TestErrorPropagationInLists(t *testing.T) {
 				}
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
+				{
 					Message: `graphql: got nil for non-null "Droid"`,
 					Path:    []interface{}{"findNilDroids", 1},
 				},
@@ -903,7 +903,7 @@ func TestErrorPropagationInLists(t *testing.T) {
 				}
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
+				{
 					Message:       quoteError.Error(),
 					ResolverError: quoteError,
 					Path:          []interface{}{"findDroids", 0, "quotes"},
@@ -938,12 +938,12 @@ func TestErrorPropagationInLists(t *testing.T) {
 				}
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
+				{
 					Message:       quoteError.Error(),
 					ResolverError: quoteError,
 					Path:          []interface{}{"findNilDroids", 0, "quotes"},
 				},
-				&gqlerrors.QueryError{
+				{
 					Message: `graphql: got nil for non-null "Droid"`,
 					Path:    []interface{}{"findNilDroids", 1},
 				},
@@ -982,7 +982,7 @@ func TestErrorWithExtensions(t *testing.T) {
 				null
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
+				{
 					Message:       droidNotFoundError.Error(),
 					Path:          []interface{}{"FindDroid"},
 					ResolverError: droidNotFoundError,
@@ -1018,7 +1018,7 @@ func TestErrorWithNoExtensions(t *testing.T) {
 				null
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
+				{
 					Message:       err.Error(),
 					Path:          []interface{}{"DismissVader"},
 					ResolverError: err,
@@ -2926,7 +2926,7 @@ func TestInput(t *testing.T) {
 	})
 }
 
-type inputArgumentsHello struct {}
+type inputArgumentsHello struct{}
 
 type inputArgumentsScalarMismatch1 struct{}
 
@@ -2946,7 +2946,7 @@ type helloInputMismatch struct {
 	World string
 }
 
-func (r *inputArgumentsHello) Hello(args struct { Input *helloInput }) string {
+func (r *inputArgumentsHello) Hello(args struct{ Input *helloInput }) string {
 	return "Hello " + args.Input.Name + "!"
 }
 
@@ -2954,7 +2954,7 @@ func (r *inputArgumentsScalarMismatch1) Hello(name string) string {
 	return "Hello " + name + "!"
 }
 
-func (r *inputArgumentsScalarMismatch2) Hello(args struct { World string }) string {
+func (r *inputArgumentsScalarMismatch2) Hello(args struct{ World string }) string {
 	return "Hello " + args.World + "!"
 }
 
@@ -2962,11 +2962,11 @@ func (r *inputArgumentsObjectMismatch1) Hello(in helloInput) string {
 	return "Hello " + in.Name + "!"
 }
 
-func (r *inputArgumentsObjectMismatch2) Hello(args struct { Input *helloInputMismatch }) string {
+func (r *inputArgumentsObjectMismatch2) Hello(args struct{ Input *helloInputMismatch }) string {
 	return "Hello " + args.Input.World + "!"
 }
 
-func (r *inputArgumentsObjectMismatch3) Hello(args struct { Input *struct { Thing string } }) string {
+func (r *inputArgumentsObjectMismatch3) Hello(args struct{ Input *struct{ Thing string } }) string {
 	return "Hello " + args.Input.Thing + "!"
 }
 
@@ -3537,7 +3537,7 @@ func TestPanicAmbiguity(t *testing.T) {
 			name: String!
 			university: University!
 		}
-		
+
 		type University {
 			name: String!
 		}
@@ -3681,6 +3681,52 @@ func TestPointerReturnForNonNull(t *testing.T) {
 					Path:    []interface{}{"pointerReturn", "value"},
 				},
 			},
+		},
+	})
+}
+
+type separateSchemaResolver struct{}
+
+func (r *separateSchemaResolver) QueryHello() string {
+	return "Hello query!"
+}
+
+func (r *separateSchemaResolver) MutationHello() string {
+	return "Hello mutation!"
+}
+
+func (sr *separateSchemaResolver) SubscriptionHello(ctx context.Context) (chan string, error) {
+	c := make(chan string)
+	go func() {
+		c <- "Hello subscription!"
+		close(c)
+	}()
+
+	return c, nil
+}
+
+var separateSchema = graphql.MustParseSchema(`
+	schema {
+		query: Query
+		mutation: Mutation
+		subscription: Subscription
+	}
+	type Subscription { hello: String! }
+	type Query { hello: String! }
+	type Mutation { hello: String! }
+`, &separateSchemaResolver{}, graphql.PrefixRootFunctions())
+
+func TestSeparateQuery(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema:         separateSchema,
+			Query:          `{hello}`,
+			ExpectedResult: `{"hello": "Hello query!"}`,
+		},
+		{
+			Schema:         separateSchema,
+			Query:          `mutation { hello }`,
+			ExpectedResult: `{"hello": "Hello mutation!"}`,
 		},
 	})
 }

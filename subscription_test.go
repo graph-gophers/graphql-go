@@ -277,6 +277,16 @@ func TestSchemaSubscribe(t *testing.T) {
 			`,
 			ExpectedErr: errors.New("schema created without resolver, can not subscribe"),
 		},
+		{
+			Name:   "separated_schema",
+			Schema: separateSchema,
+			Query: `
+				subscription { hello }
+			`,
+			ExpectedResults: []gqltesting.TestResponse{
+				{Data: json.RawMessage(`{"hello": "Hello subscription!"}`)},
+			},
+		},
 	})
 }
 
