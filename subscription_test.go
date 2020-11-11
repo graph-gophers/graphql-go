@@ -473,3 +473,33 @@ const schema = `
 		hello: String!
 	}
 `
+
+type subscriptionsPanicInResolver struct{}
+
+func (r *subscriptionsPanicInResolver) OnPanic() <-chan string {
+	panic("subscriptionsPanicInResolver")
+}
+
+func TestSchemaSubscribe_PanicInResolver(t *testing.T) {
+	r := &struct {
+		*subscriptionsPanicInResolver
+	}{
+		subscriptionsPanicInResolver: &subscriptionsPanicInResolver{},
+	}
+	gqltesting.RunSubscribe(t, &gqltesting.TestSubscription{
+		Schema: graphql.MustParseSchema(`
+			type Query {}
+			type Subscription {
+				onPanic : String!
+			}
+		`, r),
+		Query: `
+			subscription {
+				onPanic
+			}
+		`,
+		ExpectedResults: []gqltesting.TestResponse{
+			{Errors: []*qerrors.QueryError{{Message: "panic occurred: subscriptionsPanicInResolver"}}},
+		},
+	})
+}

@@ -37,7 +37,7 @@ type extensionser interface {
 }
 
 func makePanicError(value interface{}) *errors.QueryError {
-	return errors.Errorf("graphql: panic occurred: %v", value)
+	return errors.Errorf("panic occurred: %v", value)
 }
 
 func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *query.Operation) ([]byte, []*errors.QueryError) {
@@ -324,7 +324,7 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 				r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), &entryouts[i])
 			}(i)
 		}
-		for i := 0; i < concurrency;i++ {
+		for i := 0; i < concurrency; i++ {
 			sem <- struct{}{}
 		}
 	} else {

@@ -55,6 +55,11 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 		}
 	}()
 
+	// Handles the case where the locally executed func above panicked
+	if len(r.Request.Errs) > 0 {
+		return sendAndReturnClosed(&Response{Errors: r.Request.Errs})
+	}
+
 	if f == nil {
 		return sendAndReturnClosed(&Response{Errors: []*errors.QueryError{err}})
 	}
