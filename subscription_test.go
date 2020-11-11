@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	graphql "github.com/graph-gophers/graphql-go"
 	qerrors "github.com/graph-gophers/graphql-go/errors"
@@ -473,3 +474,50 @@ const schema = `
 		hello: String!
 	}
 `
+
+type subscriptionsCustomTimeout struct{}
+
+type messageResolver struct{}
+
+func (r messageResolver) Msg() string {
+	time.Sleep(5 * time.Millisecond)
+	return "failed!"
+}
+
+func (r *subscriptionsCustomTimeout) OnTimeout() <-chan *messageResolver {
+	c := make(chan *messageResolver)
+	go func() {
+		c <- &messageResolver{}
+		close(c)
+	}()
+
+	return c
+}
+
+func TestSchemaSubscribe_CustomResolverTimeout(t *testing.T) {
+	r := &struct {
+		*subscriptionsCustomTimeout
+	}{
+		subscriptionsCustomTimeout: &subscriptionsCustomTimeout{},
+	}
+	gqltesting.RunSubscribe(t, &gqltesting.TestSubscription{
+		Schema: graphql.MustParseSchema(`
+			type Query {}
+			type Subscription {
+				onTimeout : Message!
+			}
+
+			type Message {
+				msg: String!
+			}
+		`, r, graphql.SubscribeResolverTimeout(1*time.Millisecond)),
+		Query: `
+			subscription {
+				onTimeout { msg }
+			}
+		`,
+		ExpectedResults: []gqltesting.TestResponse{
+			{Errors: []*qerrors.QueryError{{Message: "context deadline exceeded"}}},
+		},
+	})
+}

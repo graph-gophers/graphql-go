@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
@@ -64,13 +65,14 @@ type Schema struct {
 	schema *schema.Schema
 	res    *resolvable.Schema
 
-	maxDepth              int
-	maxParallelism        int
-	tracer                trace.Tracer
-	validationTracer      trace.ValidationTracer
-	logger                log.Logger
-	useStringDescriptions bool
-	disableIntrospection  bool
+	maxDepth                 int
+	maxParallelism           int
+	tracer                   trace.Tracer
+	validationTracer         trace.ValidationTracer
+	logger                   log.Logger
+	useStringDescriptions    bool
+	disableIntrospection     bool
+	subscribeResolverTimeout time.Duration
 }
 
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
@@ -135,6 +137,15 @@ func DisableIntrospection() SchemaOpt {
 	}
 }
 
+// SubscribeResolverTimeout is an option to control the amount of time
+// we allow for a single subscribe message resolver to complete it's job
+// before it times out and returns an error to the subscriber.
+func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
+	return func(s *Schema) {
+		s.subscribeResolverTimeout = timeout
+	}
+}
+
 // Response represents a typical response of a GraphQL server. It may be encoded to JSON directly or
 // it may be further processed to a custom response type, for example to include custom error data.
 // Errors are intentionally serialized first based on the advice in https://github.com/facebook/graphql/commit/7b40390d48680b15cb93e02d46ac5eb249689876#diff-757cea6edf0288677a9eea4cfc801d87R107
@@ -190,7 +201,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 
 	// Subscriptions are not valid in Exec. Use schema.Subscribe() instead.
 	if op.Type == query.Subscription {
-		return &Response{Errors: []*errors.QueryError{&errors.QueryError{Message: "graphql-ws protocol header is missing"}}}
+		return &Response{Errors: []*errors.QueryError{{Message: "graphql-ws protocol header is missing"}}}
 	}
 	if op.Type == query.Mutation {
 		if _, ok := s.schema.EntryPoints["mutation"]; !ok {
