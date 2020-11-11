@@ -24,6 +24,7 @@ func (r *helloResolver) Hello() string {
 }
 
 var resolverErr = errors.New("resolver error")
+var resolverQueryErr = &qerrors.QueryError{Message: "query", ResolverError: resolverErr}
 
 type helloSaidResolver struct {
 	err      error
@@ -262,6 +263,27 @@ func TestSchemaSubscribe(t *testing.T) {
 						}
 					`),
 					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", resolverErr)},
+				},
+			},
+		},
+		{
+			Name: "subscription_resolver_can_query_error",
+			Schema: graphql.MustParseSchema(schema, &rootResolver{
+				helloSaidResolver: &helloSaidResolver{err: resolverQueryErr},
+			}),
+			Query: `
+				subscription onHelloSaid {
+					helloSaid {
+						msg
+					}
+				}
+			`,
+			ExpectedResults: []gqltesting.TestResponse{
+				{
+					Data: json.RawMessage(`
+						null
+					`),
+					Errors: []*qerrors.QueryError{resolverQueryErr},
 				},
 			},
 		},
