@@ -473,3 +473,53 @@ const schema = `
 		hello: String!
 	}
 `
+
+type subscriptionsErrorPropagation struct{}
+
+type subscriptionsErrorPropagationResolver struct {
+	msg string
+	err error
+}
+
+func (r subscriptionsErrorPropagationResolver) Msg() string              { return r.msg }
+func (r subscriptionsErrorPropagationResolver) SubscriptionError() error { return r.err }
+
+func (r *subscriptionsErrorPropagation) OnMessage() <-chan *subscriptionsErrorPropagationResolver {
+	c := make(chan *subscriptionsErrorPropagationResolver)
+	go func() {
+		c <- &subscriptionsErrorPropagationResolver{msg: "first"}
+		c <- &subscriptionsErrorPropagationResolver{err: errors.New("error")}
+		close(c)
+	}()
+
+	return c
+}
+
+func TestSchemaSubscribe_ErrorPropagation(t *testing.T) {
+	r := &struct {
+		*subscriptionsErrorPropagation
+	}{
+		subscriptionsErrorPropagation: &subscriptionsErrorPropagation{},
+	}
+	gqltesting.RunSubscribe(t, &gqltesting.TestSubscription{
+		Schema: graphql.MustParseSchema(`
+			type Query {}
+			type Subscription {
+				onMessage : Message!
+			}
+
+			type Message {
+				msg: String!
+			}
+		`, r),
+		Query: `
+			subscription {
+				onMessage { msg }
+			}
+		`,
+		ExpectedResults: []gqltesting.TestResponse{
+			{Data: json.RawMessage(`{"onMessage":{"msg":"first"}}`)},
+			{Errors: []*qerrors.QueryError{{Message: "error"}}},
+		},
+	})
+}

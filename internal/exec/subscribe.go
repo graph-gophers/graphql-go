@@ -103,6 +103,18 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 					return
 				}
 
+				if subErr, ok := resp.Interface().(errors.SubscriptionError); ok {
+					if err := subErr.SubscriptionError(); err != nil {
+						if gqlError, ok := err.(*errors.QueryError); ok {
+							c <- &Response{Errors: []*errors.QueryError{gqlError}}
+						} else {
+							c <- &Response{Errors: []*errors.QueryError{errors.Errorf("%s", err)}}
+						}
+						close(c)
+						return
+					}
+				}
+
 				subR := &Request{
 					Request: selected.Request{
 						Doc:    r.Request.Doc,

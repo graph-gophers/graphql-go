@@ -61,6 +61,10 @@ func RunSubscribe(t *testing.T, test *TestSubscription) {
 	}
 
 	for i, expected := range test.ExpectedResults {
+		if i+1 > len(results) {
+			t.Fatalf("missing result: wanted %d results, got only %d, next expected result is %+v", len(test.ExpectedResults), len(results), expected)
+		}
+
 		res := results[i]
 
 		checkErrorStrings(t, expected.Errors, res.Errors)
@@ -88,6 +92,10 @@ func RunSubscribe(t *testing.T, test *TestSubscription) {
 			t.Logf("want: %s", want)
 			t.Fail()
 		}
+	}
+
+	if len(results) > len(test.ExpectedResults) {
+		t.Fatalf("unexpected result: wanted %d results, got %d, first extra result was %+v", len(test.ExpectedResults), len(results), results[len(test.ExpectedResults)])
 	}
 }
 
