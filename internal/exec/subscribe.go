@@ -115,8 +115,12 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 				}
 				var out bytes.Buffer
 				func() {
-					// TODO: configurable timeout
-					subCtx, cancel := context.WithTimeout(ctx, time.Second)
+					timeout := r.SubscribeResolverTimeout
+					if timeout == 0 {
+						timeout = time.Second
+					}
+
+					subCtx, cancel := context.WithTimeout(ctx, timeout)
 					defer cancel()
 
 					// resolve response
