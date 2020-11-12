@@ -11,6 +11,7 @@ import (
 	gqlerrors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/example/starwars"
 	"github.com/graph-gophers/graphql-go/gqltesting"
+	"github.com/graph-gophers/graphql-go/internal/query"
 )
 
 type helloWorldResolver1 struct{}
@@ -3754,4 +3755,330 @@ func TestPointerReturnForNonNull(t *testing.T) {
 			},
 		},
 	})
+}
+
+const testPersonLocationSchema = `
+	type Person {
+		id: ID!
+		firstName: String!,
+		middleName: String,
+		lastName: String!
+		location: Location!
+	}
+
+	type Location {
+		id: ID!
+		name: String!,
+		description: String
+	}
+
+	input PersonInput {
+		firstName: String!,
+		middleName: String,
+		lastName: String!
+		location: LocationInput
+	}
+
+	input LocationInput {
+		name: String!,
+		description: String
+	}
+
+	type Query {
+		PersonByID(id: ID!): Person
+	}
+
+	type Mutation {
+		addPerson(person: PersonInput!): Person
+	}`
+
+type Person struct {
+	ID         graphql.ID
+	FirstName  string
+	MiddleName *string
+	LastName   string
+	Location   *Location
+}
+
+type PersonInput struct {
+	FirstName  string
+	MiddleName *string
+	LastName   string
+	Location   *Location
+}
+
+type Location struct {
+	ID          graphql.ID
+	Name        string
+	Description *string
+}
+
+type LocationInput struct {
+	Name        string
+	Description *string
+}
+
+type TestModifyingResolver struct {
+}
+
+func (ts *TestModifyingResolver) PersonByID(args struct{ ID graphql.ID }) *Person {
+	middleName := "Some Middle Name"
+	description := "Some Description"
+
+	return &Person{
+		ID:         args.ID,
+		FirstName:  "Some First Name",
+		MiddleName: &middleName,
+		LastName:   "Some Last Name",
+		Location: &Location{
+			ID:          "1",
+			Name:        "Some Location",
+			Description: &description,
+		},
+	}
+}
+
+func basePerson(input PersonInput) *Person {
+	person := &Person{
+		ID:         "1",
+		FirstName:  input.FirstName,
+		MiddleName: input.MiddleName,
+		LastName:   input.LastName,
+	}
+
+	if input.Location != nil {
+		person.Location = &Location{
+			ID:          "1",
+			Name:        input.Location.Name,
+			Description: input.Location.Description,
+		}
+	}
+
+	return person
+}
+
+func (ts *TestModifyingResolver) AddPerson(args struct{ Person PersonInput }) *Person {
+	return basePerson(args.Person)
+}
+
+func TestSchema_ModifyingFields(t *testing.T) {
+	t.Parallel()
+
+	ts := &TestModifyingResolver{}
+	testSchema, err := graphql.ParseSchema(testPersonLocationSchema, ts, graphql.UseFieldResolvers())
+	if err != nil {
+		t.Log("error parsing test schema for modifying fields")
+		t.Logf("got %v", err)
+		t.Logf("want nil")
+		t.Fail()
+	}
+
+	cases := []struct {
+		queryString    string
+		operationName  string
+		variables      map[string]interface{}
+		expectedOp     string
+		expectedErrors []*gqlerrors.QueryError
+		expectedFields []string
+	}{
+		{
+			"malformed-query",
+			"",
+			nil,
+			"",
+			[]*gqlerrors.QueryError{
+				{
+					Message: `syntax error: unexpected "malformed", expecting "fragment"`,
+					Locations: []gqlerrors.Location{
+						{
+							Line:   1,
+							Column: 10,
+						},
+					},
+				},
+			},
+			nil,
+		},
+		{
+			`query queryingPersonByID {
+				PersonByID(id: "1") {
+					id
+				}
+			}`,
+			"queryingPersonByID",
+			nil,
+			string(query.Query),
+			nil,
+			nil,
+		},
+		{
+			`mutation failNoVariables($name: String!) {
+				addPerson(person: {
+					firstName: $name,
+					lastName: "Fixed Last Name"
+				}) { id }
+			}`,
+			"failNoVariables",
+			nil,
+			"",
+			[]*gqlerrors.QueryError{
+				{
+					Message: "Variable \"name\" has invalid value null.\nExpected type \"String!\", found null.",
+					Locations: []gqlerrors.Location{
+						{Line: 1, Column: 26},
+					},
+				},
+			},
+			nil,
+		},
+		{
+			`mutation addPersonSimpleFields($name: String!) {
+				addPerson(person: {
+					firstName: $name,
+					lastName: "Fixed Last Name"
+				}) { id }
+			}`,
+			"addPersonSimpleFields",
+			map[string]interface{}{
+				"name": "Variable First Name",
+			},
+			string(query.Mutation),
+			nil,
+			[]string{"person.firstName", "person.lastName"},
+		},
+		{
+			`fragment fields on Person {
+					id
+					firstName
+					middleName
+					lastName
+				}
+
+				mutation addPersonWithFragments {
+					addPerson(person: {
+						firstName: "Fixed First Name",
+						lastName: "Fixed Last Name"
+				}) { ...fields }
+			}`,
+			"addPersonWithFragments",
+			nil,
+			string(query.Mutation),
+			nil,
+			[]string{"person.firstName", "person.lastName"},
+		},
+		{
+			`mutation addPersonNullField($name: String!) {
+				addPerson(person: {
+					firstName: $name,
+					middleName: null,
+					lastName: "Fixed Last Name"
+				}) { id }
+			}`,
+			"addPersonNullField",
+			map[string]interface{}{
+				"name": "Variable First Name",
+			},
+			string(query.Mutation),
+			nil,
+			[]string{"person.firstName", "person.middleName", "person.lastName"},
+		},
+		{
+			`mutation addPersonEmbedded($name: String!) {
+				addPerson(person: {
+					firstName: $name,
+					middleName: null,
+					lastName: "Fixed Last Name",
+					location: {
+						name: "Fixed Location Name"
+					}
+				}) { id }
+			}`,
+			"addPersonEmbedded",
+			map[string]interface{}{
+				"name": "Variable First Name",
+			},
+			string(query.Mutation),
+			nil,
+			[]string{
+				"person.firstName",
+				"person.middleName",
+				"person.lastName",
+				"person.location.name",
+			},
+		},
+		{
+			`mutation addPersonEmbeddedNullField($name: String!) {
+				addPerson(person: {
+					firstName: $name,
+					middleName: null,
+					lastName: "Fixed Last Name",
+					location: {
+						name: "Fixed Location Name"
+						description: null
+					}
+				}) { id }
+			}`,
+			"addPersonEmbeddedNullField",
+			map[string]interface{}{
+				"name": "Variable First Name",
+			},
+			string(query.Mutation),
+			nil,
+			[]string{
+				"person.firstName",
+				"person.middleName",
+				"person.lastName",
+				"person.location.name",
+				"person.location.description",
+			},
+		},
+	}
+
+	for i, c := range cases {
+		op, fields, errs := testSchema.ModifyingFields(c.queryString, c.operationName, c.variables)
+
+		if op != c.expectedOp {
+			t.Logf("[test # %d]", i)
+			t.Log("error validating operation")
+			t.Logf("got %s", op)
+			t.Logf("want %s", c.expectedOp)
+			t.Fail()
+		}
+
+		if len(errs) != len(c.expectedErrors) {
+			t.Logf("[test # %d]", i)
+			t.Log("error validating errors length")
+			t.Logf("got %d", len(errs))
+			t.Logf("want %d", len(c.expectedErrors))
+			t.Fail()
+		} else {
+			for j, err := range c.expectedErrors {
+				if errs[j].Error() != err.Error() {
+					t.Logf("[test # %d]", i)
+					t.Log("error validating errors")
+					t.Logf("got %v", errs[j])
+					t.Logf("want %v", err)
+					t.Fail()
+				}
+			}
+		}
+
+		if len(fields) != len(c.expectedFields) {
+			t.Logf("[test # %d]", i)
+			t.Logf("error validating fields length")
+			t.Logf("got %d", len(fields))
+			t.Logf("want %d", len(c.expectedFields))
+			t.Fail()
+		} else {
+			for j, field := range c.expectedFields {
+				if fields[j] != field {
+					t.Logf("[test # %d]", i)
+					t.Log("error validating field")
+					t.Logf("got %v", fields[j])
+					t.Logf("want %v", field)
+					t.Fail()
+				}
+			}
+		}
+	}
 }
