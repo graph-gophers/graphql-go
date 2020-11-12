@@ -49,9 +49,15 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 		result = callOut[0]
 
 		if f.field.HasError && !callOut[1].IsNil() {
-			resolverErr := callOut[1].Interface().(error)
-			err = errors.Errorf("%s", resolverErr)
-			err.ResolverError = resolverErr
+			switch resolverErr := callOut[1].Interface().(type) {
+			case *errors.QueryError:
+				err = resolverErr
+			case error:
+				err = errors.Errorf("%s", resolverErr)
+				err.ResolverError = resolverErr
+			default:
+				panic(fmt.Errorf("can only deal with *QueryError and error types, got %T", resolverErr))
+			}
 		}
 	}()
 
@@ -120,8 +126,12 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 				}
 				var out bytes.Buffer
 				func() {
-					// TODO: configurable timeout
-					subCtx, cancel := context.WithTimeout(ctx, time.Second)
+					timeout := r.SubscribeResolverTimeout
+					if timeout == 0 {
+						timeout = time.Second
+					}
+
+					subCtx, cancel := context.WithTimeout(ctx, timeout)
 					defer cancel()
 
 					// resolve response

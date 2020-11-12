@@ -54,9 +54,10 @@ func (s *Schema) subscribe(ctx context.Context, queryString string, operationNam
 			Vars:   variables,
 			Schema: s.schema,
 		},
-		Limiter: make(chan struct{}, s.maxParallelism),
-		Tracer:  s.tracer,
-		Logger:  s.logger,
+		Limiter:                  make(chan struct{}, s.maxParallelism),
+		Tracer:                   s.tracer,
+		Logger:                   s.logger,
+		SubscribeResolverTimeout: s.subscribeResolverTimeout,
 	}
 	varTypes := make(map[string]*introspection.Type)
 	for _, v := range op.Vars {

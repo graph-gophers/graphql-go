@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	graphql "github.com/graph-gophers/graphql-go"
 	qerrors "github.com/graph-gophers/graphql-go/errors"
@@ -24,6 +25,7 @@ func (r *helloResolver) Hello() string {
 }
 
 var resolverErr = errors.New("resolver error")
+var resolverQueryErr = &qerrors.QueryError{Message: "query", ResolverError: resolverErr}
 
 type helloSaidResolver struct {
 	err      error
@@ -266,6 +268,27 @@ func TestSchemaSubscribe(t *testing.T) {
 			},
 		},
 		{
+			Name: "subscription_resolver_can_query_error",
+			Schema: graphql.MustParseSchema(schema, &rootResolver{
+				helloSaidResolver: &helloSaidResolver{err: resolverQueryErr},
+			}),
+			Query: `
+				subscription onHelloSaid {
+					helloSaid {
+						msg
+					}
+				}
+			`,
+			ExpectedResults: []gqltesting.TestResponse{
+				{
+					Data: json.RawMessage(`
+						null
+					`),
+					Errors: []*qerrors.QueryError{resolverQueryErr},
+				},
+			},
+		},
+		{
 			Name:   "schema_without_resolver_errors",
 			Schema: graphql.MustParseSchema(schema, nil),
 			Query: `
@@ -473,6 +496,53 @@ const schema = `
 		hello: String!
 	}
 `
+
+type subscriptionsCustomTimeout struct{}
+
+type messageResolver struct{}
+
+func (r messageResolver) Msg() string {
+	time.Sleep(5 * time.Millisecond)
+	return "failed!"
+}
+
+func (r *subscriptionsCustomTimeout) OnTimeout() <-chan *messageResolver {
+	c := make(chan *messageResolver)
+	go func() {
+		c <- &messageResolver{}
+		close(c)
+	}()
+
+	return c
+}
+
+func TestSchemaSubscribe_CustomResolverTimeout(t *testing.T) {
+	r := &struct {
+		*subscriptionsCustomTimeout
+	}{
+		subscriptionsCustomTimeout: &subscriptionsCustomTimeout{},
+	}
+	gqltesting.RunSubscribe(t, &gqltesting.TestSubscription{
+		Schema: graphql.MustParseSchema(`
+			type Query {}
+			type Subscription {
+				onTimeout : Message!
+			}
+
+			type Message {
+				msg: String!
+			}
+		`, r, graphql.SubscribeResolverTimeout(1*time.Millisecond)),
+		Query: `
+			subscription {
+				onTimeout { msg }
+			}
+		`,
+		ExpectedResults: []gqltesting.TestResponse{
+			{Errors: []*qerrors.QueryError{{Message: "context deadline exceeded"}}},
+		},
+	})
+}
 
 type subscriptionsPanicInResolver struct{}
 

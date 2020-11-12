@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
@@ -20,9 +21,10 @@ import (
 
 type Request struct {
 	selected.Request
-	Limiter chan struct{}
-	Tracer  trace.Tracer
-	Logger  log.Logger
+	Limiter                  chan struct{}
+	Tracer                   trace.Tracer
+	Logger                   log.Logger
+	SubscribeResolverTimeout time.Duration
 }
 
 func (r *Request) handlePanic(ctx context.Context) {
