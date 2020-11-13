@@ -12,6 +12,7 @@ import (
 	"github.com/graph-gophers/graphql-go/internal/query"
 	"github.com/graph-gophers/graphql-go/internal/schema"
 	"github.com/graph-gophers/graphql-go/introspection"
+	"github.com/graph-gophers/graphql-go/selected"
 )
 
 type Request struct {
@@ -44,6 +45,19 @@ func ApplyOperation(r *Request, s *resolvable.Schema, op *query.Operation) []Sel
 
 type Selection interface {
 	isSelection()
+	ToSelection() selected.Selection
+}
+
+func toSelections(sels []Selection) (out []selected.Selection) {
+	if len(sels) == 0 {
+		return
+	}
+
+	out = make([]selected.Selection, len(sels))
+	for i, sel := range sels {
+		out[i] = sel.ToSelection()
+	}
+	return
 }
 
 type SchemaField struct {
@@ -56,14 +70,84 @@ type SchemaField struct {
 	FixedResult reflect.Value
 }
 
+func (f *SchemaField) Kind() selected.Kind {
+	return selected.FieldKind
+}
+
+func (f *SchemaField) Identifier() string {
+	return f.Name
+}
+
+func (f *SchemaField) Aliased() string {
+	return f.Alias
+}
+
+func (f *SchemaField) Children() (out []selected.Selection) {
+	return toSelections(f.Sels)
+}
+
+func (f *SchemaField) ToSelection() selected.Selection {
+	return selected.Selection(f)
+}
+
 type TypeAssertion struct {
 	resolvable.TypeAssertion
 	Sels []Selection
 }
 
+func (f *TypeAssertion) Kind() selected.Kind {
+	return selected.TypeAssertionKind
+}
+
+func (f *TypeAssertion) Type() string {
+	var toType func(resolvable.Resolvable) string
+	toType = func(r resolvable.Resolvable) string {
+		if f.TypeExec == nil {
+			return ""
+		}
+
+		switch v := f.TypeExec.(type) {
+		case *resolvable.Scalar:
+			return "scalar"
+		case *resolvable.List:
+			return toType(v.Elem)
+		case *resolvable.Object:
+			return v.Name
+		default:
+			return "<unknown>"
+		}
+	}
+
+	return toType(f.TypeExec)
+}
+
+func (f *TypeAssertion) Children() (out []selected.Selection) {
+	return toSelections(f.Sels)
+}
+
+func (f *TypeAssertion) ToSelection() selected.Selection {
+	return selected.Selection(f)
+}
+
 type TypenameField struct {
 	resolvable.Object
 	Alias string
+}
+
+func (f *TypenameField) Kind() selected.Kind {
+	return selected.TypenameFieldKind
+}
+
+func (f *TypenameField) Aliased() string {
+	return f.Alias
+}
+
+func (f *TypenameField) Type() string {
+	return f.Name
+}
+
+func (f *TypenameField) ToSelection() selected.Selection {
+	return selected.Selection(f)
 }
 
 func (*SchemaField) isSelection()   {}

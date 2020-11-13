@@ -4,12 +4,14 @@
 package starwars
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"strconv"
 	"strings"
 
 	graphql "github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/selected"
 )
 
 var Schema = `
@@ -93,6 +95,8 @@ var Schema = `
 		appearsIn: [Episode!]!
 		# This droid's primary function
 		primaryFunction: String
+
+
 	}
 	# A connection object for a character's friends
 	type FriendsConnection {
@@ -301,7 +305,10 @@ func (r *Resolver) Reviews(args struct{ Episode string }) []*reviewResolver {
 	return l
 }
 
-func (r *Resolver) Search(args struct{ Text string }) []*searchResultResolver {
+func (r *Resolver) Search(ctx context.Context, args struct{ Text string }) []*searchResultResolver {
+	graphqlContext := graphql.GraphQLContext(ctx)
+	selected.Dump(graphqlContext.Field)
+
 	var l []*searchResultResolver
 	for _, h := range humans {
 		if strings.Contains(h.Name, args.Text) {
@@ -338,7 +345,10 @@ func (r *Resolver) Human(args struct{ ID graphql.ID }) *humanResolver {
 	return nil
 }
 
-func (r *Resolver) Droid(args struct{ ID graphql.ID }) *droidResolver {
+func (r *Resolver) Droid(ctx context.Context, args struct{ ID graphql.ID }) *droidResolver {
+	graphqlContext := graphql.GraphQLContext(ctx)
+	selected.Dump(graphqlContext.Field)
+
 	if d := droidData[args.ID]; d != nil {
 		return &droidResolver{d}
 	}

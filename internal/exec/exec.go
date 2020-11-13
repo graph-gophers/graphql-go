@@ -11,6 +11,7 @@ import (
 
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
+	gcontext "github.com/graph-gophers/graphql-go/internal/context"
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"github.com/graph-gophers/graphql-go/internal/exec/selected"
 	"github.com/graph-gophers/graphql-go/internal/query"
@@ -197,7 +198,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 		if f.field.UseMethodResolver() {
 			var in []reflect.Value
 			if f.field.HasContext {
-				in = append(in, reflect.ValueOf(traceCtx))
+				in = append(in, reflect.ValueOf(gcontext.WithGraphQLContext(traceCtx, f.field)))
 			}
 			if f.field.ArgsPacker != nil {
 				in = append(in, f.field.PackedArgs)
