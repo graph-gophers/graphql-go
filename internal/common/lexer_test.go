@@ -118,7 +118,6 @@ func TestMultilineString(t *testing.T) {
 			lex := common.NewLexer(test.definition, test.useStringDescriptions)
 
 			err := lex.CatchSyntaxError(func() { lex.ConsumeWhitespace() })
-
 			if test.failureExpected && err == nil {
 				t.Fatalf("Test '%s' should fail", test.description)
 			} else if test.failureExpected && err != nil {
