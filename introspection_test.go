@@ -11,6 +11,8 @@ import (
 	"github.com/graph-gophers/graphql-go/example/starwars"
 )
 
+var socialSchema = graphql.MustParseSchema(social.Schema, &social.Resolver{}, graphql.UseFieldResolvers())
+
 func TestSchema_ToJSON(t *testing.T) {
 	t.Parallel()
 
@@ -27,7 +29,7 @@ func TestSchema_ToJSON(t *testing.T) {
 	}{
 		{
 			Name: "Social Schema",
-			Args: args{Schema: graphql.MustParseSchema(social.Schema, &social.Resolver{}, graphql.UseFieldResolvers())},
+			Args: args{Schema: socialSchema},
 			Want: want{JSON: mustReadFile("example/social/introspect.json")},
 		},
 		{
