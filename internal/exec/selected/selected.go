@@ -81,12 +81,12 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 
 			switch field.Name.Name {
 			case "__typename":
-				if !r.DisableIntrospection {
-					flattenedSels = append(flattenedSels, &TypenameField{
-						Object: *e,
-						Alias:  field.Alias.Name,
-					})
-				}
+				// __typename is available even though r.DisableIntrospection == true
+				// because it is necessary when using union types and interfaces: https://graphql.org/learn/schema/#union-types
+				flattenedSels = append(flattenedSels, &TypenameField{
+					Object: *e,
+					Alias:  field.Alias.Name,
+				})
 
 			case "__schema":
 				if !r.DisableIntrospection {
