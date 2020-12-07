@@ -183,9 +183,17 @@ func (s *Schema) ModifyingFields(queryString string, operationName string, varia
 	}
 
 	var fields []string
-	mainField := op.Selections[0].(*query.Field)
-	for _, arg := range mainField.Arguments {
-		fields = append(fields, fieldsFromLiteral(arg.Name.Name, arg.Value)...)
+	for _, selection := range op.Selections {
+		mainField, ok := selection.(*query.Field)
+
+		// not something we could process
+		if !ok {
+			continue
+		}
+
+		for _, arg := range mainField.Arguments {
+			fields = append(fields, fieldsFromLiteral(arg.Name.Name, arg.Value)...)
+		}
 	}
 
 	return opStr, fields, nil

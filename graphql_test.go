@@ -3932,6 +3932,22 @@ func TestSchema_ModifyingFields(t *testing.T) {
 			nil,
 		},
 		{
+			`mutation typenameSelectionPrior($name: String!) {
+				__typename
+				addPerson(person: {
+					firstName: $name,
+					lastName: "Fixed Last Name"
+				}) { id }
+			}`,
+			"typenameSelectionPrior",
+			map[string]interface{}{
+				"name": "Variable First Name",
+			},
+			string(query.Mutation),
+			nil,
+			[]string{"person.firstName", "person.lastName"},
+		},
+		{
 			`mutation addPersonSimpleFields($name: String!) {
 				addPerson(person: {
 					firstName: $name,
