@@ -112,19 +112,19 @@ func Validate(s *schema.Schema, doc *query.Document, variables map[string]interf
 			}
 		}
 
-		var entryPoint schema.NamedType
+		var rootOperationType schema.NamedType
 		switch op.Type {
 		case query.Query:
-			entryPoint = s.EntryPoints["query"]
+			rootOperationType = s.RootOperationTypes["query"]
 		case query.Mutation:
-			entryPoint = s.EntryPoints["mutation"]
+			rootOperationType = s.RootOperationTypes["mutation"]
 		case query.Subscription:
-			entryPoint = s.EntryPoints["subscription"]
+			rootOperationType = s.RootOperationTypes["subscription"]
 		default:
 			panic("unreachable")
 		}
 
-		validateSelectionSet(opc, op.Selections, entryPoint)
+		validateSelectionSet(opc, op.Selections, rootOperationType)
 
 		fragUsed := make(map[*query.FragmentDecl]struct{})
 		markUsedFragments(c, op.Selections, fragUsed)

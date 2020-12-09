@@ -209,7 +209,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		return &Response{Errors: []*errors.QueryError{{Message: "graphql-ws protocol header is missing"}}}
 	}
 	if op.Type == query.Mutation {
-		if _, ok := s.schema.EntryPoints["mutation"]; !ok {
+		if _, ok := s.schema.RootOperationTypes["mutation"]; !ok {
 			return &Response{Errors: []*errors.QueryError{{Message: "no mutations are offered by the schema"}}}
 		}
 	}
@@ -273,7 +273,7 @@ func (s *Schema) validateSchema() error {
 }
 
 func validateRootOp(s *schema.Schema, name string, mandatory bool) error {
-	t, ok := s.EntryPoints[name]
+	t, ok := s.RootOperationTypes[name]
 	if !ok {
 		if mandatory {
 			return fmt.Errorf("root operation %q must be defined", name)

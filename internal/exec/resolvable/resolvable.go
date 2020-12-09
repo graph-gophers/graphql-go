@@ -70,19 +70,19 @@ func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 
 	var query, mutation, subscription Resolvable
 
-	if t, ok := s.EntryPoints["query"]; ok {
+	if t, ok := s.RootOperationTypes["query"]; ok {
 		if err := b.assignExec(&query, t, reflect.TypeOf(resolver)); err != nil {
 			return nil, err
 		}
 	}
 
-	if t, ok := s.EntryPoints["mutation"]; ok {
+	if t, ok := s.RootOperationTypes["mutation"]; ok {
 		if err := b.assignExec(&mutation, t, reflect.TypeOf(resolver)); err != nil {
 			return nil, err
 		}
 	}
 
-	if t, ok := s.EntryPoints["subscription"]; ok {
+	if t, ok := s.RootOperationTypes["subscription"]; ok {
 		if err := b.assignExec(&subscription, t, reflect.TypeOf(resolver)); err != nil {
 			return nil, err
 		}
@@ -362,7 +362,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 	var out reflect.Type
 	if methodIndex != -1 {
 		out = m.Type.Out(0)
-		sub, ok := b.schema.EntryPoints["subscription"]
+		sub, ok := b.schema.RootOperationTypes["subscription"]
 		if ok && typeName == sub.TypeName() && out.Kind() == reflect.Chan {
 			out = m.Type.Out(0).Elem()
 		}

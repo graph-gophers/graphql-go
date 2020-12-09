@@ -16,14 +16,11 @@ import (
 //
 // http://facebook.github.io/graphql/draft/#sec-Schema
 type Schema struct {
-	// EntryPoints determines the place in the type system where `query`, `mutation`, and
+	// RootOperationTypes determines the place in the type system where `query`, `mutation`, and
 	// `subscription` operations begin.
 	//
 	// http://facebook.github.io/graphql/draft/#sec-Root-Operation-Types
-	//
-	// NOTE: The specification refers to this concept as "Root Operation Types".
-	// TODO: Rename the `EntryPoints` field to `RootOperationTypes` to align with spec terminology.
-	EntryPoints map[string]NamedType
+	RootOperationTypes map[string]NamedType
 
 	// Types are the fundamental unit of any GraphQL schema.
 	// There are six kinds of named types, and two wrapping types.
@@ -43,11 +40,11 @@ type Schema struct {
 
 	UseFieldResolvers bool
 
-	entryPointNames map[string]string
-	objects         []*Object
-	unions          []*Union
-	enums           []*Enum
-	extensions      []*Extension
+	rootOperationTypeNames map[string]string
+	objects                []*Object
+	unions                 []*Union
+	enums                  []*Enum
+	extensions             []*Extension
 }
 
 // Resolve a named type in the schema by its name.
@@ -243,9 +240,9 @@ type Field struct {
 // New initializes an instance of Schema.
 func New() *Schema {
 	s := &Schema{
-		entryPointNames: make(map[string]string),
-		Types:           make(map[string]NamedType),
-		Directives:      make(map[string]*DirectiveDecl),
+		rootOperationTypeNames: make(map[string]string),
+		Types:                  make(map[string]NamedType),
+		Directives:             make(map[string]*DirectiveDecl),
 	}
 	m := newMeta()
 	for n, t := range m.Types {
@@ -289,26 +286,26 @@ func (s *Schema) Parse(schemaString string, useStringDescriptions bool) error {
 	// > While any type can be the root operation type for a GraphQL operation, the type system definition language can
 	// > omit the schema definition when the query, mutation, and subscription root types are named Query, Mutation,
 	// > and Subscription respectively.
-	if len(s.entryPointNames) == 0 {
+	if len(s.rootOperationTypeNames) == 0 {
 		if _, ok := s.Types["Query"]; ok {
-			s.entryPointNames["query"] = "Query"
+			s.rootOperationTypeNames["query"] = "Query"
 		}
 		if _, ok := s.Types["Mutation"]; ok {
-			s.entryPointNames["mutation"] = "Mutation"
+			s.rootOperationTypeNames["mutation"] = "Mutation"
 		}
 		if _, ok := s.Types["Subscription"]; ok {
-			s.entryPointNames["subscription"] = "Subscription"
+			s.rootOperationTypeNames["subscription"] = "Subscription"
 		}
 	}
-	s.EntryPoints = make(map[string]NamedType)
-	for key, name := range s.entryPointNames {
+	s.RootOperationTypes = make(map[string]NamedType)
+	for key, name := range s.rootOperationTypeNames {
 		t, ok := s.Types[name]
 		if !ok {
 			if !ok {
 				return errors.Errorf("type %q not found", name)
 			}
 		}
-		s.EntryPoints[key] = t
+		s.RootOperationTypes[key] = t
 	}
 
 	for _, obj := range s.objects {
@@ -543,7 +540,7 @@ func parseSchema(s *Schema, l *common.Lexer) {
 				name := l.ConsumeIdent()
 				l.ConsumeToken(':')
 				typ := l.ConsumeIdent()
-				s.entryPointNames[name] = typ
+				s.rootOperationTypeNames[name] = typ
 			}
 			l.ConsumeToken('}')
 
@@ -720,7 +717,7 @@ func parseExtension(s *Schema, l *common.Lexer) {
 			name := l.ConsumeIdent()
 			l.ConsumeToken(':')
 			typ := l.ConsumeIdent()
-			s.entryPointNames[name] = typ
+			s.rootOperationTypeNames[name] = typ
 		}
 		l.ConsumeToken('}')
 

@@ -7,9 +7,9 @@ func init() {
 // newMeta initializes an instance of the meta Schema.
 func newMeta() *Schema {
 	s := &Schema{
-		entryPointNames: make(map[string]string),
-		Types:           make(map[string]NamedType),
-		Directives:      make(map[string]*DirectiveDecl),
+		rootOperationTypeNames: make(map[string]string),
+		Types:                  make(map[string]NamedType),
+		Directives:             make(map[string]*DirectiveDecl),
 	}
 	if err := s.Parse(metaSrc, false); err != nil {
 		panic(err)
