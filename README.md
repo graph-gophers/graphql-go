@@ -100,6 +100,17 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 }
 ```
 
+### Schema Options
+
+- `UseStringDescriptions()` enables the usage of double quoted and triple quoted. When this is not enabled, comments are parsed as descriptions instead.
+- `UseFieldResolvers()` specifies whether to use struct field resolvers.
+- `MaxDepth(n int)` specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
+- `MaxParallelism(n int)` specifies the maximum number of resolvers per request allowed to run in parallel. The default is 10.
+- `Tracer(tracer trace.Tracer)` is used to trace queries and fields. It defaults to `trace.OpenTracingTracer`.
+- `ValidationTracer(tracer trace.ValidationTracer)` is used to trace validation errors. It defaults to `trace.NoopValidationTracer`.
+- `Logger(logger log.Logger)` is used to log panics during query execution. It defaults to `exec.DefaultLogger`.
+- `DisableIntrospection()` disables introspection queries.
+
 ### Custom Errors
 
 Errors returned by resolvers can include custom extensions by implementing the `ResolverError` interface:
@@ -151,12 +162,6 @@ Which could produce a GraphQL error such as:
 }
 ```
 
-### Community Examples
+### [Examples](https://github.com/graph-gophers/graphql-go/wiki/Examples)
 
-[tonyghita/graphql-go-example](https://github.com/tonyghita/graphql-go-example) - A more "productionized" version of the Star Wars API example given in this repository.
-
-[deltaskelta/graphql-go-pets-example](https://github.com/deltaskelta/graphql-go-pets-example) - graphql-go resolving against a sqlite database.
-
-[OscarYuen/go-graphql-starter](https://github.com/OscarYuen/go-graphql-starter) - A starter application integrated with dataloader, psql and basic authentication.
-
-[zaydek/graphql-go-walkthrough](https://github.com/ZAYDEK/graphql-go-walkthrough) - A beginner friendly walkthrough for prospective developers.
+### [Companies that use this library](https://github.com/graph-gophers/graphql-go/wiki/Users)

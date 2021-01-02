@@ -1,7 +1,7 @@
 package graphql
 
 import (
-	"errors"
+	"fmt"
 	"strconv"
 )
 
@@ -20,7 +20,7 @@ func (id *ID) UnmarshalGraphQL(input interface{}) error {
 	case int32:
 		*id = ID(strconv.Itoa(int(input)))
 	default:
-		err = errors.New("wrong type")
+		err = fmt.Errorf("wrong type for ID: %T", input)
 	}
 	return err
 }
