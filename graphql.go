@@ -16,6 +16,7 @@ import (
 	"github.com/graph-gophers/graphql-go/internal/validation"
 	"github.com/graph-gophers/graphql-go/introspection"
 	"github.com/graph-gophers/graphql-go/log"
+	"github.com/graph-gophers/graphql-go/selection"
 	"github.com/graph-gophers/graphql-go/trace"
 )
 
@@ -144,6 +145,12 @@ type Response struct {
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
+// SelectedFieldsFromContext retrieves the selected fields passed via the context during the request
+// execution
+func SelectedFieldsFromContext(ctx context.Context) []*selection.SelectedField {
+	return exec.SelectedFieldsFromContext(ctx)
+}
+
 // Validate validates the given query with the schema.
 func (s *Schema) Validate(queryString string) []*errors.QueryError {
 	doc, qErr := query.Parse(queryString)
@@ -184,11 +191,11 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 
 	// Subscriptions are not valid in Exec. Use schema.Subscribe() instead.
 	if op.Type == query.Subscription {
-		return &Response{Errors: []*errors.QueryError{&errors.QueryError{ Message: "graphql-ws protocol header is missing" }}}
+		return &Response{Errors: []*errors.QueryError{&errors.QueryError{Message: "graphql-ws protocol header is missing"}}}
 	}
 	if op.Type == query.Mutation {
 		if _, ok := s.schema.EntryPoints["mutation"]; !ok {
-			return &Response{Errors: []*errors.QueryError{{ Message: "no mutations are offered by the schema" }}}
+			return &Response{Errors: []*errors.QueryError{{Message: "no mutations are offered by the schema"}}}
 		}
 	}
 

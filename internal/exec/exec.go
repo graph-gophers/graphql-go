@@ -15,7 +15,14 @@ import (
 	"github.com/graph-gophers/graphql-go/internal/query"
 	"github.com/graph-gophers/graphql-go/internal/schema"
 	"github.com/graph-gophers/graphql-go/log"
+	"github.com/graph-gophers/graphql-go/selection"
 	"github.com/graph-gophers/graphql-go/trace"
+)
+
+type ctxKey string
+
+const (
+	selectedFieldsKey ctxKey = "selectedFields"
 )
 
 type Request struct {
@@ -160,6 +167,32 @@ func typeOf(tf *selected.TypenameField, resolver reflect.Value) string {
 	return ""
 }
 
+func selectionToSelectedFields(internalSelection []selected.Selection) []*selection.SelectedField {
+	fieldSelection := []*selection.SelectedField{}
+	for _, element := range internalSelection {
+		if field, ok := element.(*selected.SchemaField); ok {
+			nestedSelections := selectionToSelectedFields(field.Sels)
+			fieldSelection = append(fieldSelection, &selection.SelectedField{
+				Name:           field.Name,
+				SelectedFields: nestedSelections,
+			})
+		}
+	}
+	return fieldSelection
+}
+
+// SelectedFieldsFromContext exposes the fields selected in the GraphQL request
+// using the public-facing selection.SelectedField struct
+func SelectedFieldsFromContext(ctx context.Context) []*selection.SelectedField {
+	selection := ctx.Value(selectedFieldsKey).([]selected.Selection)
+	selectedFields := selectionToSelectedFields(selection)
+	return selectedFields
+}
+
+func contextWithSelectedFields(parentContext context.Context, selection []selected.Selection) context.Context {
+	return context.WithValue(parentContext, selectedFieldsKey, selection)
+}
+
 func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f *fieldToExec, path *pathSegment, applyLimiter bool) {
 	if applyLimiter {
 		r.Limiter <- struct{}{}
@@ -195,6 +228,9 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 		if f.field.UseMethodResolver() {
 			var in []reflect.Value
 			if f.field.HasContext {
+				if len(f.sels) != 0 {
+					traceCtx = contextWithSelectedFields(traceCtx, f.sels)
+				}
 				in = append(in, reflect.ValueOf(traceCtx))
 			}
 			if f.field.ArgsPacker != nil {
