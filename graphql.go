@@ -162,6 +162,11 @@ func SelectedFieldsFromContext(ctx context.Context) []*selection.SelectedField {
 	return exec.SelectedFieldsFromContext(ctx)
 }
 
+// ArgumentsFromContext returns the arguments for the field.
+func ArgumentsFromContext(ctx context.Context) map[string]interface{} {
+	return exec.ArgsFromContext(ctx)
+}
+
 // Validate validates the given query with the schema.
 func (s *Schema) Validate(queryString string) []*errors.QueryError {
 	return s.ValidateWithVariables(queryString, nil)

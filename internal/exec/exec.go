@@ -24,6 +24,7 @@ type ctxKey string
 
 const (
 	selectedFieldsKey ctxKey = "selectedFields"
+	argumentsKey      ctxKey = "arguments"
 )
 
 type Request struct {
@@ -191,8 +192,18 @@ func SelectedFieldsFromContext(ctx context.Context) []*selection.SelectedField {
 	return selectedFields
 }
 
+// ArgsFromContext exposes the arguments in the GraphQL mutation
+// using the public-facing selection.Argument struct
+func ArgsFromContext(ctx context.Context) map[string]interface{} {
+	return ctx.Value(argumentsKey).(map[string]interface{})
+}
+
 func contextWithSelectedFields(parentContext context.Context, selection []selected.Selection) context.Context {
 	return context.WithValue(parentContext, selectedFieldsKey, selection)
+}
+
+func contextWithArguments(ctx context.Context, args map[string]interface{}) context.Context {
+	return context.WithValue(ctx, argumentsKey, args)
 }
 
 func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f *fieldToExec, path *pathSegment, applyLimiter bool) {
@@ -232,6 +243,9 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			if f.field.HasContext {
 				if len(f.sels) != 0 {
 					traceCtx = contextWithSelectedFields(traceCtx, f.sels)
+				}
+				if len(f.field.Args) != 0 {
+					traceCtx = contextWithArguments(traceCtx, f.field.Args)
 				}
 				in = append(in, reflect.ValueOf(traceCtx))
 			}
