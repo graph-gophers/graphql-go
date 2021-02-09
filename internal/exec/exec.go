@@ -264,6 +264,12 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 			return
 		}
 
+		if s.ExtResolver != nil {
+			if v, ok := s.ExtResolver[t.String()]; ok {
+				resolver = reflect.NewAt(v.Elem().Type(), unsafe.Pointer(resolver.Elem().UnsafeAddr()))
+			}
+		}
+
 		r.execSelections(ctx, sels, path, s, resolver, out, false)
 		return
 	}

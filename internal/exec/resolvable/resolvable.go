@@ -178,6 +178,9 @@ func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type, ext map
 		return b.makeObjectExec(t.Name, t.Fields, t.PossibleTypes, nonNull, resolverType, ext)
 
 	case *schema.Union:
+		if v, ok := ext[t.Name]; ok {
+			resolverType = reflect.TypeOf(v)
+		}
 		return b.makeObjectExec(t.Name, nil, t.PossibleTypes, nonNull, resolverType, ext)
 	}
 
