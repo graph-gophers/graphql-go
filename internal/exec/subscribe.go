@@ -154,7 +154,7 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 					}()
 
 					if err := subCtx.Err(); err != nil {
-						c <- &Response{Errors: []*errors.QueryError{errors.Errorf("%s", err)}}
+						c <- &Response{Data: out.Bytes(), Errors: []*errors.QueryError{errors.Errorf("%s", err)}}
 						return
 					}
 

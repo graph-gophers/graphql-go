@@ -51,7 +51,9 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *query.O
 	}()
 
 	if err := ctx.Err(); err != nil {
-		return nil, []*errors.QueryError{errors.Errorf("%s", err)}
+		//If context has either been cancelled or timed out we still may want to return the features that have finished
+		// TODO properly attribute mark which features have timedout in the error field
+		return out.Bytes(), []*errors.QueryError{errors.Errorf("%s", err)}
 	}
 
 	return out.Bytes(), r.Errs
@@ -62,6 +64,7 @@ type fieldToExec struct {
 	sels     []selected.Selection
 	resolver reflect.Value
 	out      *bytes.Buffer
+	finished bool
 }
 
 func resolvedToNull(b *bytes.Buffer) bool {
@@ -85,7 +88,17 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 				execFieldSelection(ctx, r, s, f, &pathSegment{path, f.field.Alias}, true)
 			}(f)
 		}
-		wg.Wait()
+		// close a signal channel once the wait group is complete
+		c := make(chan struct{})
+		go func() {
+			defer close(c)
+			wg.Wait()
+		}()
+		// We want to block until either the context is done or the wait group is complete
+		select {
+		case <-c:
+		case <-ctx.Done():
+		}
 	} else {
 		for _, f := range fields {
 			f.out = new(bytes.Buffer)
@@ -111,6 +124,11 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 		out.WriteString(f.field.Alias)
 		out.WriteByte('"')
 		out.WriteByte(':')
+		// if this field hasn't finished yet, then it's timed out. Record it as null
+		if !f.finished {
+			out.WriteString("null")
+			continue
+		}
 		out.Write(f.out.Bytes())
 	}
 	out.WriteByte('}')
@@ -182,6 +200,9 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 				err = makePanicError(panicValue)
 				err.Path = path.toSlice()
 			}
+		}()
+		defer func() {
+			f.finished = true
 		}()
 
 		if f.field.FixedResult.IsValid() {
