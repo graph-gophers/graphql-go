@@ -64,6 +64,7 @@ type fieldToExec struct {
 	sels     []selected.Selection
 	resolver reflect.Value
 	out      *bytes.Buffer
+	lock     sync.Mutex
 	finished bool
 }
 
@@ -108,12 +109,14 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 
 	out.WriteByte('{')
 	for i, f := range fields {
+		f.lock.Lock()
 		// If a non-nullable child resolved to null, an error was added to the
 		// "errors" list in the response, so this field resolves to null.
 		// If this field is non-nullable, the error is propagated to its parent.
 		if _, ok := f.field.Type.(*common.NonNull); ok && resolvedToNull(f.out) {
 			out.Reset()
 			out.Write([]byte("null"))
+			f.lock.Unlock()
 			return
 		}
 
@@ -130,6 +133,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 			continue
 		}
 		out.Write(f.out.Bytes())
+		f.lock.Unlock()
 	}
 	out.WriteByte('}')
 }
@@ -195,14 +199,14 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 
 	err = func() (err *errors.QueryError) {
 		defer func() {
+			f.lock.Lock()
+			f.finished = true
 			if panicValue := recover(); panicValue != nil {
 				r.Logger.LogPanic(ctx, panicValue)
 				err = makePanicError(panicValue)
 				err.Path = path.toSlice()
 			}
-		}()
-		defer func() {
-			f.finished = true
+			f.lock.Unlock()
 		}()
 
 		if f.field.FixedResult.IsValid() {
@@ -253,11 +257,15 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 		// If an error occurred while resolving a field, it should be treated as though the field
 		// returned null, and an error must be added to the "errors" list in the response.
 		r.AddError(err)
+		f.lock.Lock()
 		f.out.WriteString("null")
+		f.lock.Unlock()
 		return
 	}
 
+	f.lock.Lock()
 	r.execSelectionSet(traceCtx, f.sels, f.field.Type, path, s, result, f.out)
+	f.lock.Unlock()
 }
 
 func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selection, typ common.Type, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *bytes.Buffer) {
