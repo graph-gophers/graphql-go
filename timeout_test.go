@@ -33,16 +33,10 @@ func (m MetaMessage) Msg(args struct{ Timeout int32 }) string {
 	return s
 }
 
-func TestSchemaSubscribe_CustomResolverTimeout_(t *testing.T) {
-	cxt, _ := context.WithDeadline(context.Background(), time.Now().Add(10*time.Millisecond)) // This test now depends on the simplest resolver returning within 10 milliseconds
-	cxt2, cancelFunc := context.WithDeadline(context.Background(), time.Now().Add(50*time.Millisecond))
-	cxt3, _ := context.WithDeadline(context.Background(), time.Now().Add(500*time.Millisecond)) // This test now depends on the simplest resolver returning within 10 milliseconds
-	go func() {
-		time.Sleep(20 * time.Millisecond)
-		cancelFunc()
-	}()
-	gqltesting.RunTests(t, []*gqltesting.Test{
-		{ // test that one feature will sucessfully return
+func TestPartialSuccessTimeout(t *testing.T) {
+	cxt, _ := context.WithDeadline(context.Background(), time.Now().Add(20*time.Millisecond)) // This test now depends on the simplest resolver returning within 10 milliseconds
+	gqltesting.RunTest(t,
+		&gqltesting.Test{ // test that one feature will sucessfully return
 			Schema: graphql.MustParseSchema(`
 					schema {
 						query: Query
@@ -61,8 +55,18 @@ func TestSchemaSubscribe_CustomResolverTimeout_(t *testing.T) {
 			ExpectedResult: ` { "m1": "Success!", "m2": null }`,
 			ExpectedErrors: []*qerrors.QueryError{qerrors.Errorf("context deadline exceeded")},
 			Context:        cxt,
-		},
-		{ // test that canceling works properly
+		})
+}
+
+func TestPartialSuccessCancel(t *testing.T) {
+
+	cxt2, cancelFunc := context.WithDeadline(context.Background(), time.Now().Add(50*time.Millisecond))
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancelFunc()
+	}()
+	gqltesting.RunTest(t,
+		&gqltesting.Test{
 			Schema: graphql.MustParseSchema(`
 					schema {
 						query: Query
@@ -81,8 +85,13 @@ func TestSchemaSubscribe_CustomResolverTimeout_(t *testing.T) {
 			ExpectedResult: ` { "m1": "Success!", "m2": null }`,
 			ExpectedErrors: []*qerrors.QueryError{qerrors.Errorf("context canceled")},
 			Context:        cxt2,
-		},
-		{ // test that when we timeout on non-nullable fields we return valid JSON
+		})
+}
+
+func TestTotalFailureOnNonNull(t *testing.T) {
+	cxt3, _ := context.WithDeadline(context.Background(), time.Now().Add(500*time.Millisecond)) // This test now depends on the simplest resolver returning within 10 milliseconds
+	gqltesting.RunTest(t,
+		&gqltesting.Test{ // test that when we timeout on non-nullable fields we return valid JSON
 			Schema: graphql.MustParseSchema(`
 			schema {
 				query: Query
@@ -107,6 +116,5 @@ func TestSchemaSubscribe_CustomResolverTimeout_(t *testing.T) {
 			ExpectedResult: ` { "MetaMessage": {"m1":null, "m2": null }}`,
 			ExpectedErrors: []*qerrors.QueryError{qerrors.Errorf("context deadline exceeded")},
 			Context:        cxt3,
-		},
-	})
+		})
 }
