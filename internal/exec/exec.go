@@ -53,7 +53,7 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *query.O
 	if err := ctx.Err(); err != nil {
 		//If context has either been cancelled or timed out we still may want to return the features that have finished
 		// TODO properly attribute mark which features have timedout in the error field
-		return out.Bytes(), []*errors.QueryError{errors.Errorf("%s", err)}
+		return out.Bytes(), r.Errs
 	}
 
 	return out.Bytes(), r.Errs
@@ -90,14 +90,14 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 			}(f)
 		}
 		// close a signal channel once the wait group is complete
-		c := make(chan struct{})
+		done := make(chan struct{})
 		go func() {
-			defer close(c)
+			defer close(done)
 			wg.Wait()
 		}()
 		// We want to block until either the context is done or the wait group is complete
 		select {
-		case <-c:
+		case <-done:
 		case <-ctx.Done():
 		}
 	} else {
@@ -113,9 +113,14 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 		// If a non-nullable child resolved to null, an error was added to the
 		// "errors" list in the response, so this field resolves to null.
 		// If this field is non-nullable, the error is propagated to its parent.
-		if _, ok := f.field.Type.(*common.NonNull); ok && resolvedToNull(f.out) {
+		if _, ok := f.field.Type.(*common.NonNull); ok && (resolvedToNull(f.out) || !f.finished) {
 			out.Reset()
 			out.Write([]byte("null"))
+			if !f.finished { // if we haven't finished yet that means we haven't recorded this failure yet
+				err := errors.Errorf(ctx.Err().Error())
+				err.Path = append(path.toSlice(), f.field.Alias)
+				r.AddError(err)
+			}
 			f.lock.Unlock()
 			return
 		}
@@ -129,6 +134,9 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 		out.WriteByte(':')
 		// if this field hasn't finished yet, then it's timed out. Record it as null
 		if !f.finished {
+			err := errors.Errorf(ctx.Err().Error())
+			err.Path = append(path.toSlice(), f.field.Alias)
+			r.AddError(err)
 			out.WriteString("null")
 			continue
 		}
