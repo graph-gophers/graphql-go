@@ -48,6 +48,7 @@ type Schema struct {
 	unions          []*Union
 	enums           []*Enum
 	extensions      []*Extension
+	interfaces      []*Interface
 }
 
 // Resolve a named type in the schema by its name.
@@ -101,11 +102,13 @@ type Object struct {
 //
 // http://facebook.github.io/graphql/draft/#sec-Interfaces
 type Interface struct {
-	Name          string
-	PossibleTypes []*Object
-	Fields        FieldList // NOTE: the spec refers to this as `FieldsDefinition`.
-	Desc          string
-	Directives    common.DirectiveList
+	Name           string
+	PossibleTypes  []*Object
+	Fields         FieldList // NOTE: the spec refers to this as `FieldsDefinition`.
+	Desc           string
+	Directives     common.DirectiveList
+	Interfaces     []*Interface // NOTE: http://spec.graphql.org/draft/#sec-Interfaces.Interfaces-Implementing-Interfaces
+	interfaceNames []string
 }
 
 // Union types represent objects that could be one of a list of GraphQL object types, but provides no
@@ -340,6 +343,52 @@ func (s *Schema) Parse(schemaString string, useStringDescriptions bool) error {
 		}
 	}
 
+	for _, iface := range s.interfaces {
+		iface.Interfaces = make([]*Interface, len(iface.interfaceNames))
+
+		for i, intfName := range iface.interfaceNames {
+			t, ok := s.Types[intfName]
+			if !ok {
+				return errors.Errorf("interface %q not found", intfName)
+			}
+			intf, ok := t.(*Interface)
+			if !ok {
+				return errors.Errorf("type %q is not an interface", intfName)
+			}
+			for _, f := range intf.Fields.Names() {
+				if iface.Fields.Get(f) == nil {
+					return errors.Errorf("interface %q expects field %q but %q does not provide it", intfName, f, iface.Name)
+				}
+			}
+
+			iface.Interfaces[i] = intf
+		}
+	}
+
+	for _, iface := range s.interfaces {
+		if iface == nil {
+			continue
+		}
+		expectedNames := interfaceDependancies(*iface)
+		actualNames := iface.interfaceNames
+
+		expMap := make(map[string]int)
+		actMap := make(map[string]int)
+
+		for _, name := range expectedNames {
+			expMap[name]++
+		}
+		for _, name := range actualNames {
+			actMap[name]++
+		}
+
+		for name, id := range expMap {
+			if actMap[name] != id {
+				return errors.Errorf("interface %q must explicitly implement transitive interface %q", iface.Name, name)
+			}
+		}
+	}
+
 	for _, union := range s.unions {
 		if err := resolveDirectives(s, union.Directives, "UNION"); err != nil {
 			return err
@@ -557,6 +606,7 @@ func parseSchema(s *Schema, l *common.Lexer) {
 			iface := parseInterfaceDef(l)
 			iface.Desc = desc
 			s.Types[iface.Name] = iface
+			s.interfaces = append(s.interfaces, iface)
 
 		case "union":
 			union := parseUnionDef(l)
@@ -633,6 +683,18 @@ func parseObjectDef(l *common.Lexer) *Object {
 
 func parseInterfaceDef(l *common.Lexer) *Interface {
 	i := &Interface{Name: l.ConsumeIdent()}
+
+	if l.Peek() == scanner.Ident {
+		l.ConsumeKeyword("implements")
+
+		for l.Peek() != '{' && l.Peek() != '@' {
+			if l.Peek() == '&' {
+				l.ConsumeToken('&')
+			}
+
+			i.interfaceNames = append(i.interfaceNames, l.ConsumeIdent())
+		}
+	}
 
 	i.Directives = common.ParseDirectives(l)
 	l.ConsumeToken('{')
@@ -769,4 +831,31 @@ func parseFieldsDef(l *common.Lexer) FieldList {
 		fields = append(fields, f)
 	}
 	return fields
+}
+
+// interfaceDependancies searches through the tree of interface relations
+// to build a slice of all the names that should be implemented on the
+// given interface
+//
+// TODO: Would be more efficient not to search every interface multiple
+// times.
+//
+// NOTE: https://spec.graphql.org/draft/#sel-FAHbhBHCAACGB35P
+func interfaceDependancies(iface Interface) []string {
+	var search func(requiredNames []string, iface Interface) []string
+
+	search = func(requiredNames []string, iface Interface) []string {
+		for _, f := range iface.Interfaces {
+			if f == nil {
+				continue
+			}
+			if len(f.Interfaces) > 0 {
+				requiredNames = append(requiredNames, search(requiredNames, *f)...)
+			}
+			requiredNames = append(requiredNames, f.interfaceNames...)
+		}
+		return requiredNames
+	}
+
+	return search([]string{}, iface)
 }

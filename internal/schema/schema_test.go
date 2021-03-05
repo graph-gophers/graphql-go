@@ -53,6 +53,79 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			name: "Parses interface implementing other interface",
+			sdl: `
+			interface Interaction {
+				message: String!
+			}
+			interface Greeting implements Interaction { 
+				message: String! 
+			}
+			`,
+			validateSchema: func(s *schema.Schema) error {
+				const implementedIfaceName = "Greeting"
+				typ, ok := s.Types[implementedIfaceName].(*schema.Interface)
+				if !ok {
+					return fmt.Errorf("interface %q not found", implementedIfaceName)
+				}
+				if want, have := 1, len(typ.Fields); want != have {
+					return fmt.Errorf("invalid number of fields: want %d, have %d", want, have)
+				}
+				const fieldName = "message"
+				if typ.Fields[0].Name != fieldName {
+					return fmt.Errorf("field %q not found", fieldName)
+				}
+
+				const implementingIfaceName = "Interaction"
+				if typ.Interfaces[0].Name != implementingIfaceName {
+					return fmt.Errorf("interface %q not found", implementingIfaceName)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Transitively implemented interfaces must also be defined on an implementing type or interface",
+			sdl: `
+			interface Interaction {
+				message: String!
+			}
+			interface Greeting implements Interaction { 
+				message: String!
+				name: String!
+			}
+			interface Welcome implements Greeting {
+				message: String!
+				name: String!
+				hug: Boolean!
+			}
+			`,
+			validateError: func(err error) error {
+				msg := `graphql: interface "Welcome" must explicitly implement transitive interface "Interaction"`
+				if err == nil || err.Error() != msg {
+					return fmt.Errorf("expected error %q, but got %q", msg, err)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Parses interface implementing another without providing required fields",
+			sdl: `
+			interface Interaction {
+				message: String!
+			}
+			interface Greeting implements Interaction { 
+				name: String!
+			}
+			`,
+			validateError: func(err error) error {
+				msg := `graphql: interface "Interaction" expects field "message" but "Greeting" does not provide it`
+				if err == nil || err.Error() != msg {
+					return fmt.Errorf("expected error %q, but got %q", msg, err)
+				}
+				return nil
+			},
+		},
+		{
 			name: "Parses type with description string",
 			sdl: `
 			"Single line description."
@@ -863,6 +936,10 @@ Second line of the description.
 				if err := test.validateError(err); err != nil {
 					t.Fatal(err)
 				}
+				return
+			}
+			if test.validateError != nil {
+				t.Fatal("Error expected but no error returned")
 			}
 			if test.validateSchema != nil {
 				if err := test.validateSchema(s); err != nil {

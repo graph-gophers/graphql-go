@@ -121,13 +121,18 @@ func (r *Type) Fields(args *struct{ IncludeDeprecated bool }) *[]*Field {
 }
 
 func (r *Type) Interfaces() *[]*Type {
-	t, ok := r.typ.(*schema.Object)
-	if !ok {
+	var ifaces []*schema.Interface
+	switch t := r.typ.(type) {
+	case *schema.Object:
+		ifaces = t.Interfaces
+	case *schema.Interface:
+		ifaces = t.Interfaces
+	default:
 		return nil
 	}
 
-	l := make([]*Type, len(t.Interfaces))
-	for i, intf := range t.Interfaces {
+	l := make([]*Type, len(ifaces))
+	for i, intf := range ifaces {
 		l[i] = &Type{intf}
 	}
 	return &l
