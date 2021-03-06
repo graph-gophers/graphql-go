@@ -15,10 +15,7 @@
           }
         ],
         "description": "Marks an element of a GraphQL schema as no longer supported.",
-        "locations": [
-          "FIELD_DEFINITION",
-          "ENUM_VALUE"
-        ],
+        "locations": ["FIELD_DEFINITION", "ENUM_VALUE"],
         "name": "deprecated"
       },
       {
@@ -39,11 +36,7 @@
           }
         ],
         "description": "Directs the executor to include this field or fragment only when the `if` argument is true.",
-        "locations": [
-          "FIELD",
-          "FRAGMENT_SPREAD",
-          "INLINE_FRAGMENT"
-        ],
+        "locations": ["FIELD", "FRAGMENT_SPREAD", "INLINE_FRAGMENT"],
         "name": "include"
       },
       {
@@ -64,11 +57,7 @@
           }
         ],
         "description": "Directs the executor to skip this field or fragment when the `if` argument is true.",
-        "locations": [
-          "FIELD",
-          "FRAGMENT_SPREAD",
-          "INLINE_FRAGMENT"
-        ],
+        "locations": ["FIELD", "FRAGMENT_SPREAD", "INLINE_FRAGMENT"],
         "name": "skip"
       }
     ],
@@ -132,7 +121,7 @@
           }
         ],
         "inputFields": null,
-        "interfaces": null,
+        "interfaces": [],
         "kind": "INTERFACE",
         "name": "Admin",
         "possibleTypes": [
@@ -236,7 +225,7 @@
           }
         ],
         "inputFields": null,
-        "interfaces": null,
+        "interfaces": [],
         "kind": "INTERFACE",
         "name": "Person",
         "possibleTypes": [
