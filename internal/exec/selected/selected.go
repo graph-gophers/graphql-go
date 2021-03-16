@@ -6,17 +6,16 @@ import (
 	"sync"
 
 	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"github.com/graph-gophers/graphql-go/internal/query"
-	"github.com/graph-gophers/graphql-go/internal/schema"
 	"github.com/graph-gophers/graphql-go/introspection"
+	"github.com/graph-gophers/graphql-go/types"
 )
 
 type Request struct {
-	Schema               *schema.Schema
-	Doc                  *query.Document
+	Schema               *types.Schema
+	Doc                  *types.ExecutableDefinition
 	Vars                 map[string]interface{}
 	Mu                   sync.Mutex
 	Errs                 []*errors.QueryError
@@ -29,7 +28,7 @@ func (r *Request) AddError(err *errors.QueryError) {
 	r.Mu.Unlock()
 }
 
-func ApplyOperation(r *Request, s *resolvable.Schema, op *query.Operation) []Selection {
+func ApplyOperation(r *Request, s *resolvable.Schema, op *types.OperationDefinition) []Selection {
 	var obj *resolvable.Object
 	switch op.Type {
 	case query.Query:
@@ -70,10 +69,10 @@ func (*SchemaField) isSelection()   {}
 func (*TypeAssertion) isSelection() {}
 func (*TypenameField) isSelection() {}
 
-func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, sels []query.Selection) (flattenedSels []Selection) {
+func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, sels []types.Selection) (flattenedSels []Selection) {
 	for _, sel := range sels {
 		switch sel := sel.(type) {
-		case *query.Field:
+		case *types.Field:
 			field := sel
 			if skipByDirective(r, field.Directives) {
 				continue
@@ -93,7 +92,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 					flattenedSels = append(flattenedSels, &SchemaField{
 						Field:       s.Meta.FieldSchema,
 						Alias:       field.Alias.Name,
-						Sels:        applySelectionSet(r, s, s.Meta.Schema, field.Selections),
+						Sels:        applySelectionSet(r, s, s.Meta.Schema, field.SelectionSet),
 						Async:       true,
 						FixedResult: reflect.ValueOf(introspection.WrapSchema(r.Schema)),
 					})
@@ -102,7 +101,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 			case "__type":
 				if !r.DisableIntrospection {
 					p := packer.ValuePacker{ValueType: reflect.TypeOf("")}
-					v, err := p.Pack(field.Arguments.MustGet("name").Value(r.Vars))
+					v, err := p.Pack(field.Arguments.MustGet("name").Deserialize(r.Vars))
 					if err != nil {
 						r.AddError(errors.Errorf("%s", err))
 						return nil
@@ -116,7 +115,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 					flattenedSels = append(flattenedSels, &SchemaField{
 						Field:       s.Meta.FieldType,
 						Alias:       field.Alias.Name,
-						Sels:        applySelectionSet(r, s, s.Meta.Type, field.Selections),
+						Sels:        applySelectionSet(r, s, s.Meta.Type, field.SelectionSet),
 						Async:       true,
 						FixedResult: reflect.ValueOf(introspection.WrapType(t)),
 					})
@@ -130,7 +129,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 				if fe.ArgsPacker != nil {
 					args = make(map[string]interface{})
 					for _, arg := range field.Arguments {
-						args[arg.Name.Name] = arg.Value.Value(r.Vars)
+						args[arg.Name.Name] = arg.Value.Deserialize(r.Vars)
 					}
 					var err error
 					packedArgs, err = fe.ArgsPacker.Pack(args)
@@ -140,7 +139,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 					}
 				}
 
-				fieldSels := applyField(r, s, fe.ValueExec, field.Selections)
+				fieldSels := applyField(r, s, fe.ValueExec, field.SelectionSet)
 				flattenedSels = append(flattenedSels, &SchemaField{
 					Field:      *fe,
 					Alias:      field.Alias.Name,
@@ -151,14 +150,14 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 				})
 			}
 
-		case *query.InlineFragment:
+		case *types.InlineFragment:
 			frag := sel
 			if skipByDirective(r, frag.Directives) {
 				continue
 			}
 			flattenedSels = append(flattenedSels, applyFragment(r, s, e, &frag.Fragment)...)
 
-		case *query.FragmentSpread:
+		case *types.FragmentSpread:
 			spread := sel
 			if skipByDirective(r, spread.Directives) {
 				continue
@@ -172,10 +171,10 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 	return
 }
 
-func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag *query.Fragment) []Selection {
+func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag *types.Fragment) []Selection {
 	if frag.On.Name != e.Name {
 		t := r.Schema.Resolve(frag.On.Name)
-		face, ok := t.(*schema.Interface)
+		face, ok := t.(*types.InterfaceTypeDefinition)
 		if !ok && frag.On.Name != "" {
 			a, ok := e.TypeAssertions[frag.On.Name]
 			if !ok {
@@ -210,7 +209,7 @@ func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag 
 	return applySelectionSet(r, s, e, frag.Selections)
 }
 
-func applyField(r *Request, s *resolvable.Schema, e resolvable.Resolvable, sels []query.Selection) []Selection {
+func applyField(r *Request, s *resolvable.Schema, e resolvable.Resolvable, sels []types.Selection) []Selection {
 	switch e := e.(type) {
 	case *resolvable.Object:
 		return applySelectionSet(r, s, e, sels)
@@ -223,10 +222,10 @@ func applyField(r *Request, s *resolvable.Schema, e resolvable.Resolvable, sels 
 	}
 }
 
-func skipByDirective(r *Request, directives common.DirectiveList) bool {
+func skipByDirective(r *Request, directives types.DirectiveList) bool {
 	if d := directives.Get("skip"); d != nil {
 		p := packer.ValuePacker{ValueType: reflect.TypeOf(false)}
-		v, err := p.Pack(d.Args.MustGet("if").Value(r.Vars))
+		v, err := p.Pack(d.Arguments.MustGet("if").Deserialize(r.Vars))
 		if err != nil {
 			r.AddError(errors.Errorf("%s", err))
 		}
@@ -237,7 +236,7 @@ func skipByDirective(r *Request, directives common.DirectiveList) bool {
 
 	if d := directives.Get("include"); d != nil {
 		p := packer.ValuePacker{ValueType: reflect.TypeOf(false)}
-		v, err := p.Pack(d.Args.MustGet("if").Value(r.Vars))
+		v, err := p.Pack(d.Arguments.MustGet("if").Deserialize(r.Vars))
 		if err != nil {
 			r.AddError(errors.Errorf("%s", err))
 		}

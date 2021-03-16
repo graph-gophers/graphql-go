@@ -18,6 +18,7 @@ import (
 	"github.com/graph-gophers/graphql-go/introspection"
 	"github.com/graph-gophers/graphql-go/log"
 	"github.com/graph-gophers/graphql-go/trace"
+	"github.com/graph-gophers/graphql-go/types"
 )
 
 // ParseSchema parses a GraphQL schema and attaches the given root resolver. It returns an error if
@@ -42,7 +43,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		}
 	}
 
-	if err := s.schema.Parse(schemaString, s.useStringDescriptions); err != nil {
+	if err := schema.Parse(s.schema, schemaString, s.useStringDescriptions); err != nil {
 		return nil, err
 	}
 	if err := s.validateSchema(); err != nil {
@@ -69,7 +70,7 @@ func MustParseSchema(schemaString string, resolver interface{}, opts ...SchemaOp
 
 // Schema represents a GraphQL schema with an optional resolver.
 type Schema struct {
-	schema *schema.Schema
+	schema *types.Schema
 	res    *resolvable.Schema
 
 	maxDepth                 int
@@ -228,7 +229,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	}
 	for _, v := range op.Vars {
 		if _, ok := variables[v.Name.Name]; !ok && v.Default != nil {
-			variables[v.Name.Name] = v.Default.Value(nil)
+			variables[v.Name.Name] = v.Default.Deserialize(nil)
 		}
 	}
 
@@ -288,7 +289,7 @@ func (t *validationBridgingTracer) TraceValidation(context.Context) trace.TraceV
 	return t.tracer.TraceValidation()
 }
 
-func validateRootOp(s *schema.Schema, name string, mandatory bool) error {
+func validateRootOp(s *types.Schema, name string, mandatory bool) error {
 	t, ok := s.EntryPoints[name]
 	if !ok {
 		if mandatory {
@@ -302,7 +303,7 @@ func validateRootOp(s *schema.Schema, name string, mandatory bool) error {
 	return nil
 }
 
-func getOperation(document *query.Document, operationName string) (*query.Operation, error) {
+func getOperation(document *types.ExecutableDefinition, operationName string) (*types.OperationDefinition, error) {
 	if len(document.Operations) == 0 {
 		return nil, fmt.Errorf("no operations in query document")
 	}

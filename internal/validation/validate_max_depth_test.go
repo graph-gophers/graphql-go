@@ -5,6 +5,7 @@ import (
 
 	"github.com/graph-gophers/graphql-go/internal/query"
 	"github.com/graph-gophers/graphql-go/internal/schema"
+	"github.com/graph-gophers/graphql-go/types"
 )
 
 const (
@@ -70,7 +71,7 @@ type maxDepthTestCase struct {
 	expectedErrors []string
 }
 
-func (tc maxDepthTestCase) Run(t *testing.T, s *schema.Schema) {
+func (tc maxDepthTestCase) Run(t *testing.T, s *types.Schema) {
 	t.Run(tc.name, func(t *testing.T) {
 		doc, qErr := query.Parse(tc.query)
 		if qErr != nil {
@@ -103,9 +104,7 @@ func (tc maxDepthTestCase) Run(t *testing.T, s *schema.Schema) {
 }
 
 func TestMaxDepth(t *testing.T) {
-	s := schema.New()
-
-	err := s.Parse(simpleSchema, false)
+	s, err := schema.ParseSchema(simpleSchema, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,9 +178,7 @@ func TestMaxDepth(t *testing.T) {
 }
 
 func TestMaxDepthInlineFragments(t *testing.T) {
-	s := schema.New()
-
-	err := s.Parse(interfaceSimple, false)
+	s, err := schema.ParseSchema(interfaceSimple, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,9 +225,7 @@ func TestMaxDepthInlineFragments(t *testing.T) {
 }
 
 func TestMaxDepthFragmentSpreads(t *testing.T) {
-	s := schema.New()
-
-	err := s.Parse(interfaceSimple, false)
+	s, err := schema.ParseSchema(interfaceSimple, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,9 +310,7 @@ func TestMaxDepthFragmentSpreads(t *testing.T) {
 }
 
 func TestMaxDepthUnknownFragmentSpreads(t *testing.T) {
-	s := schema.New()
-
-	err := s.Parse(interfaceSimple, false)
+	s, err := schema.ParseSchema(interfaceSimple, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,9 +343,7 @@ func TestMaxDepthUnknownFragmentSpreads(t *testing.T) {
 }
 
 func TestMaxDepthValidation(t *testing.T) {
-	s := schema.New()
-
-	err := s.Parse(interfaceSimple, false)
+	s, err := schema.ParseSchema(interfaceSimple, false)
 	if err != nil {
 		t.Fatal(err)
 	}

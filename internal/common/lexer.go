@@ -8,6 +8,7 @@ import (
 	"text/scanner"
 
 	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/types"
 )
 
 type syntaxError string
@@ -29,7 +30,6 @@ func NewLexer(s string, useStringDescriptions bool) *Lexer {
 		Mode: scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats | scanner.ScanStrings,
 	}
 	sc.Init(strings.NewReader(s))
-
 
 	l := Lexer{sc: sc, useStringDescriptions: useStringDescriptions}
 	l.sc.Error = l.CatchScannerError
@@ -119,11 +119,11 @@ func (l *Lexer) ConsumeIdent() string {
 	return name
 }
 
-func (l *Lexer) ConsumeIdentWithLoc() Ident {
+func (l *Lexer) ConsumeIdentWithLoc() types.Ident {
 	loc := l.Location()
 	name := l.sc.TokenText()
 	l.ConsumeToken(scanner.Ident)
-	return Ident{name, loc}
+	return types.Ident{name, loc}
 }
 
 func (l *Lexer) ConsumeKeyword(keyword string) {
@@ -133,8 +133,8 @@ func (l *Lexer) ConsumeKeyword(keyword string) {
 	l.ConsumeWhitespace()
 }
 
-func (l *Lexer) ConsumeLiteral() *BasicLit {
-	lit := &BasicLit{Type: l.next, Text: l.sc.TokenText()}
+func (l *Lexer) ConsumeLiteral() *types.PrimitiveValue {
+	lit := &types.PrimitiveValue{Type: l.next, Text: l.sc.TokenText()}
 	l.ConsumeWhitespace()
 	return lit
 }
