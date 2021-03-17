@@ -83,6 +83,10 @@ type Schema struct {
 	subscribeResolverTimeout time.Duration
 }
 
+func (s *Schema) ASTSchema() *types.Schema {
+	return s.schema
+}
+
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
 type SchemaOpt func(*Schema)
 
