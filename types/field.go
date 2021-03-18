@@ -1,19 +1,15 @@
 package types
 
-import "github.com/graph-gophers/graphql-go/errors"
-
 // FieldDefinition is a representation of a GraphQL FieldDefinition.
 //
 // http://spec.graphql.org/draft/#FieldDefinition
 type FieldDefinition struct {
-	Alias           Ident
-	Name            Ident
-	Arguments       ArgumentsDefinition
-	Type            Type
-	Directives      DirectiveList
-	Desc            string
-	Selections      SelectionSet
-	SelectionSetLoc errors.Location
+	Alias      Ident
+	Name       Ident
+	Arguments  ArgumentsDefinition
+	Type       Type
+	Directives DirectiveList
+	Desc       string
 }
 
 // FieldsDefinition is a list of an ObjectTypeDefinition's Fields.
