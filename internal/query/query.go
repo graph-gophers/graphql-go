@@ -18,23 +18,23 @@ const (
 func Parse(queryString string) (*types.ExecutableDefinition, *errors.QueryError) {
 	l := common.NewLexer(queryString, false)
 
-	var doc *types.ExecutableDefinition
-	err := l.CatchSyntaxError(func() { doc = parseDocument(l) })
+	var execDef *types.ExecutableDefinition
+	err := l.CatchSyntaxError(func() { execDef = parseExecutableDefinition(l) })
 	if err != nil {
 		return nil, err
 	}
 
-	return doc, nil
+	return execDef, nil
 }
 
-func parseDocument(l *common.Lexer) *types.ExecutableDefinition {
-	d := &types.ExecutableDefinition{}
+func parseExecutableDefinition(l *common.Lexer) *types.ExecutableDefinition {
+	ed := &types.ExecutableDefinition{}
 	l.ConsumeWhitespace()
 	for l.Peek() != scanner.EOF {
 		if l.Peek() == '{' {
 			op := &types.OperationDefinition{Type: Query, Loc: l.Location()}
 			op.Selections = parseSelectionSet(l)
-			d.Operations = append(d.Operations, op)
+			ed.Operations = append(ed.Operations, op)
 			continue
 		}
 
@@ -43,24 +43,24 @@ func parseDocument(l *common.Lexer) *types.ExecutableDefinition {
 		case "query":
 			op := parseOperation(l, Query)
 			op.Loc = loc
-			d.Operations = append(d.Operations, op)
+			ed.Operations = append(ed.Operations, op)
 
 		case "mutation":
-			d.Operations = append(d.Operations, parseOperation(l, Mutation))
+			ed.Operations = append(ed.Operations, parseOperation(l, Mutation))
 
 		case "subscription":
-			d.Operations = append(d.Operations, parseOperation(l, Subscription))
+			ed.Operations = append(ed.Operations, parseOperation(l, Subscription))
 
 		case "fragment":
 			frag := parseFragment(l)
 			frag.Loc = loc
-			d.Fragments = append(d.Fragments, frag)
+			ed.Fragments = append(ed.Fragments, frag)
 
 		default:
 			l.SyntaxError(fmt.Sprintf(`unexpected %q, expecting "fragment"`, x))
 		}
 	}
-	return d
+	return ed
 }
 
 func parseOperation(l *common.Lexer, opType types.OperationType) *types.OperationDefinition {
