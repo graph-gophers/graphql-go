@@ -2614,6 +2614,44 @@ func TestIntrospectionDisableIntrospection(t *testing.T) {
 				}
 			`,
 		},
+
+		{
+			Schema: starwarsSchemaNoIntrospection,
+			Query: `
+				{
+					search(text: "an") {
+						__typename
+						... on Human {
+							name
+						}
+						... on Droid {
+							name
+						}
+						... on Starship {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"search": [
+						{
+							"__typename": "Human",
+							"name": "Han Solo"
+						},
+						{
+							"__typename": "Human",
+							"name": "Leia Organa"
+						},
+						{
+							"__typename": "Starship",
+							"name": "TIE Advanced x1"
+						}
+					]
+				}
+			`,
+		},
 	})
 }
 
