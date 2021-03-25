@@ -2,6 +2,9 @@ package graphql
 
 import (
 	"fmt"
+	"reflect"
+
+	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 )
 
 // NullString is a string that can be null. Use it in input structs to
@@ -10,6 +13,13 @@ import (
 type NullString struct {
 	Value *string
 	Set   bool
+}
+
+// IsNullable takes a type and returns whether it represents a Nullable value
+// as defined by NullUnmarshaller
+func IsNullable(t reflect.Type) bool {
+	_, ok := reflect.New(t).Interface().(packer.NullUnmarshaller)
+	return ok
 }
 
 func (NullString) ImplementsGraphQLType(name string) bool {
