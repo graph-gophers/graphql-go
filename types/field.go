@@ -4,7 +4,6 @@ package types
 //
 // http://spec.graphql.org/draft/#FieldDefinition
 type FieldDefinition struct {
-	Alias      Ident
 	Name       Ident
 	Arguments  ArgumentsDefinition
 	Type       Type
