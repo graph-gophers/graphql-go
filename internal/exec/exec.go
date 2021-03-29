@@ -129,12 +129,17 @@ func collectFieldsToResolve(sels []selected.Selection, s *resolvable.Schema, res
 			field.sels = append(field.sels, sel.Sels...)
 
 		case *selected.TypenameField:
-			sf := &selected.SchemaField{
-				Field:       s.Meta.FieldTypename,
-				Alias:       sel.Alias,
-				FixedResult: reflect.ValueOf(typeOf(sel, resolver)),
+			_, ok := fieldByAlias[sel.Alias]
+			if !ok {
+				sf := &selected.SchemaField{
+					Field:       s.Meta.FieldTypename,
+					Alias:       sel.Alias,
+					FixedResult: reflect.ValueOf(typeOf(sel, resolver)),
+				}
+				field := &fieldToExec{field: sf, resolver: resolver}
+				*fields = append(*fields, field)
+				fieldByAlias[sel.Alias] = field
 			}
-			*fields = append(*fields, &fieldToExec{field: sf, resolver: resolver})
 
 		case *selected.TypeAssertion:
 			out := resolver.Method(sel.MethodIndex).Call(nil)
