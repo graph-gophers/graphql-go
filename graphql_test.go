@@ -1836,6 +1836,30 @@ func TestTypeName(t *testing.T) {
 				}
 			`,
 		},
+
+		{
+			Schema: starwarsSchema,
+			Query: `
+				{
+					hero {
+						__typename
+						name
+						... on Character {
+							...Droid
+							name
+							__typename
+						}
+					}
+				}
+				
+				fragment Droid on Droid {
+					name
+					__typename
+				}			  
+			`,
+			RawResponse:    true,
+			ExpectedResult: `{"hero":{"__typename":"Droid","name":"R2-D2"}}`,
+		},
 	})
 }
 
