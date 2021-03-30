@@ -233,16 +233,16 @@ func (b *execBuilder) makeObjectExec(typeName string, fields types.FieldsDefinit
 	fieldsCount := fieldCount(rt, map[string]int{})
 	for _, f := range fields {
 		var fieldIndex []int
-		methodIndex := findMethod(resolverType, f.Name.Name)
+		methodIndex := findMethod(resolverType, f.Name)
 		if b.schema.UseFieldResolvers && methodIndex == -1 {
-			if fieldsCount[strings.ToLower(stripUnderscore(f.Name.Name))] > 1 {
-				return nil, fmt.Errorf("%s does not resolve %q: ambiguous field %q", resolverType, typeName, f.Name.Name)
+			if fieldsCount[strings.ToLower(stripUnderscore(f.Name))] > 1 {
+				return nil, fmt.Errorf("%s does not resolve %q: ambiguous field %q", resolverType, typeName, f.Name)
 			}
-			fieldIndex = findField(rt, f.Name.Name, []int{})
+			fieldIndex = findField(rt, f.Name, []int{})
 		}
 		if methodIndex == -1 && len(fieldIndex) == 0 {
 			hint := ""
-			if findMethod(reflect.PtrTo(resolverType), f.Name.Name) != -1 {
+			if findMethod(reflect.PtrTo(resolverType), f.Name) != -1 {
 				hint = " (hint: the method exists on the pointer type)"
 			}
 			return nil, fmt.Errorf("%s does not resolve %q: missing method for field %q%s", resolverType, typeName, f.Name, hint)
@@ -259,7 +259,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields types.FieldsDefinit
 		if err != nil {
 			return nil, fmt.Errorf("%s\n\tused by (%s).%s", err, resolverType, m.Name)
 		}
-		Fields[f.Name.Name] = fe
+		Fields[f.Name] = fe
 	}
 
 	// Check type assertions when
@@ -358,7 +358,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *types.FieldDefinition, m
 		HasContext:      hasContext,
 		ArgsPacker:      argsPacker,
 		HasError:        hasError,
-		TraceLabel:      fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name.Name),
+		TraceLabel:      fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name),
 	}
 
 	var out reflect.Type

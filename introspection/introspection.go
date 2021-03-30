@@ -194,7 +194,7 @@ type Field struct {
 }
 
 func (r *Field) Name() string {
-	return r.field.Name.Name
+	return r.field.Name
 }
 
 func (r *Field) Description() *string {

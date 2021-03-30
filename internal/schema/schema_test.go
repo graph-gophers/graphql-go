@@ -29,7 +29,7 @@ func TestParse(t *testing.T) {
 					return fmt.Errorf("invalid number of fields: want %d, have %d", want, have)
 				}
 				const fieldName = "message"
-				if typ.Fields[0].Name.Name != fieldName {
+				if typ.Fields[0].Name != fieldName {
 					return fmt.Errorf("field %q not found", fieldName)
 				}
 				return nil
@@ -746,7 +746,7 @@ Second line of the description.
 					"category": struct{}{},
 				}
 				for _, f := range typ.Fields {
-					if _, ok := fields[f.Name.Name]; !ok {
+					if _, ok := fields[f.Name]; !ok {
 						return fmt.Errorf("Unexpected field %q", f.Name)
 					}
 				}

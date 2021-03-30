@@ -39,9 +39,7 @@ func newMeta(s *types.Schema) *Meta {
 
 	fieldTypename := Field{
 		FieldDefinition: types.FieldDefinition{
-			Name: types.Ident{
-				Name: "__typename",
-			},
+			Name: "__typename",
 			Type: &types.NonNull{OfType: s.Types["String"]},
 		},
 		TraceLabel: fmt.Sprintf("GraphQL field: __typename"),
@@ -49,9 +47,7 @@ func newMeta(s *types.Schema) *Meta {
 
 	fieldSchema := Field{
 		FieldDefinition: types.FieldDefinition{
-			Name: types.Ident{
-				Name: "__schema",
-			},
+			Name: "__schema",
 			Type: s.Types["__Schema"],
 		},
 		TraceLabel: fmt.Sprintf("GraphQL field: __schema"),
@@ -59,9 +55,7 @@ func newMeta(s *types.Schema) *Meta {
 
 	fieldType := Field{
 		FieldDefinition: types.FieldDefinition{
-			Name: types.Ident{
-				Name: "__type",
-			},
+			Name: "__type",
 			Type: s.Types["__Type"],
 		},
 		TraceLabel: fmt.Sprintf("GraphQL field: __type"),

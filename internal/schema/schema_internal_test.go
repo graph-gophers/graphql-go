@@ -19,7 +19,7 @@ func TestParseInterfaceDef(t *testing.T) {
 	tests := []testCase{{
 		description: "Parses simple interface",
 		definition:  "Greeting { field: String }",
-		expected:    &types.InterfaceTypeDefinition{Name: "Greeting", Fields: types.FieldsDefinition{&types.FieldDefinition{Name: types.Ident{Name: "field"}}}},
+		expected:    &types.InterfaceTypeDefinition{Name: "Greeting", Fields: types.FieldsDefinition{&types.FieldDefinition{Name: "field"}}},
 	}}
 
 	for _, test := range tests {
@@ -118,7 +118,7 @@ func compareInterfaces(t *testing.T, expected, actual *types.InterfaceTypeDefini
 	}
 
 	for i, f := range expected.Fields {
-		if f.Name.Name != actual.Fields[i].Name.Name {
+		if f.Name != actual.Fields[i].Name {
 			t.Errorf("fields[%d]: wrong field name: want %q, got %q", i, f.Name, actual.Fields[i].Name)
 		}
 	}

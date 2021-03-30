@@ -159,8 +159,8 @@ func mergeExtensions(s *types.Schema) error {
 			e := ext.Type.(*types.ObjectTypeDefinition)
 
 			for _, field := range e.Fields {
-				if og.Fields.Get(field.Name.Name) != nil {
-					return fmt.Errorf("extended field %q already exists", field.Name.Name)
+				if og.Fields.Get(field.Name) != nil {
+					return fmt.Errorf("extended field %q already exists", field.Name)
 				}
 			}
 			og.Fields = append(og.Fields, e.Fields...)
@@ -188,8 +188,8 @@ func mergeExtensions(s *types.Schema) error {
 			e := ext.Type.(*types.InterfaceTypeDefinition)
 
 			for _, field := range e.Fields {
-				if og.Fields.Get(field.Name.Name) != nil {
-					return fmt.Errorf("extended field %s already exists", field.Name.Name)
+				if og.Fields.Get(field.Name) != nil {
+					return fmt.Errorf("extended field %s already exists", field.Name)
 				}
 			}
 			og.Fields = append(og.Fields, e.Fields...)
@@ -526,7 +526,7 @@ func parseFieldsDef(l *common.Lexer) types.FieldsDefinition {
 	for l.Peek() != '}' {
 		f := &types.FieldDefinition{}
 		f.Desc = l.DescComment()
-		f.Name = l.ConsumeIdentWithLoc()
+		f.Name = l.ConsumeIdent()
 		if l.Peek() == '(' {
 			l.ConsumeToken('(')
 			for l.Peek() != ')' {

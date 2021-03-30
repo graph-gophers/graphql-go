@@ -294,17 +294,17 @@ func validateSelection(c *opContext, sel types.Selection, t types.NamedType) {
 		switch fieldName {
 		case "__typename":
 			f = &types.FieldDefinition{
-				Name: types.Ident{Name: "__typename"},
+				Name: "__typename",
 				Type: c.schema.Types["String"],
 			}
 		case "__schema":
 			f = &types.FieldDefinition{
-				Name: types.Ident{Name: "__schema"},
+				Name: "__schema",
 				Type: c.schema.Types["__Schema"],
 			}
 		case "__type":
 			f = &types.FieldDefinition{
-				Name: types.Ident{Name: "__type"},
+				Name: "__type",
 				Arguments: types.ArgumentsDefinition{
 					&types.InputValueDefinition{
 						Name: types.Ident{Name: "name"},
