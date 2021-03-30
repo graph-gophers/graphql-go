@@ -4,7 +4,7 @@ package types
 //
 // http://spec.graphql.org/draft/#FieldDefinition
 type FieldDefinition struct {
-	Name       Ident
+	Name       string
 	Arguments  ArgumentsDefinition
 	Type       Type
 	Directives DirectiveList
@@ -19,7 +19,7 @@ type FieldsDefinition []*FieldDefinition
 // Get returns a FieldDefinition in a FieldsDefinition by name or nil if not found.
 func (l FieldsDefinition) Get(name string) *FieldDefinition {
 	for _, f := range l {
-		if f.Name.Name == name {
+		if f.Name == name {
 			return f
 		}
 	}
@@ -30,7 +30,7 @@ func (l FieldsDefinition) Get(name string) *FieldDefinition {
 func (l FieldsDefinition) Names() []string {
 	names := make([]string, len(l))
 	for i, f := range l {
-		names[i] = f.Name.Name
+		names[i] = f.Name
 	}
 	return names
 }
