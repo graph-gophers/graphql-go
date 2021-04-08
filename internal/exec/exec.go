@@ -25,6 +25,7 @@ type Request struct {
 	Logger                   log.Logger
 	PanicHandler             errors.PanicHandler
 	SubscribeResolverTimeout time.Duration
+	Visitors                 map[string]types.DirectiveVisitor
 }
 
 func (r *Request) handlePanic(ctx context.Context) {
@@ -208,8 +209,48 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			if f.field.ArgsPacker != nil {
 				in = append(in, f.field.PackedArgs)
 			}
+
+			// Before hook directive visitor
+			if len(f.field.Directives) > 0 {
+				for _, directive := range f.field.Directives {
+					if visitor, ok := r.Visitors[directive.Name.Name]; ok {
+						values := make([]interface{}, 0, len(in))
+						for _, inValue := range in {
+							values = append(values, inValue.Interface())
+						}
+
+						visitorErr := visitor.Before(ctx, directive, values)
+						if visitorErr != nil {
+							err := errors.Errorf("%s", visitorErr)
+							err.Path = path.toSlice()
+							err.ResolverError = visitorErr
+							return err
+						}
+					}
+				}
+			}
+
+			// Call method
 			callOut := res.Method(f.field.MethodIndex).Call(in)
 			result = callOut[0]
+
+			// After hook directive visitor (when no error is returned from resolver)
+			if !f.field.HasError && len(f.field.Directives) > 0 {
+				for _, directive := range f.field.Directives {
+					if visitor, ok := r.Visitors[directive.Name.Name]; ok {
+						returned, visitorErr := visitor.After(ctx, directive, result.Interface())
+						if visitorErr != nil {
+							err := errors.Errorf("%s", visitorErr)
+							err.Path = path.toSlice()
+							err.ResolverError = visitorErr
+							return err
+						} else {
+							result = reflect.ValueOf(returned)
+						}
+					}
+				}
+			}
+
 			if f.field.HasError && !callOut[1].IsNil() {
 				resolverErr := callOut[1].Interface().(error)
 				err := errors.Errorf("%s", resolverErr)
@@ -225,7 +266,38 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			if res.Kind() == reflect.Ptr {
 				res = res.Elem()
 			}
+			// Before hook directive visitor struct field
+			if len(f.field.Directives) > 0 {
+				for _, directive := range f.field.Directives {
+					if visitor, ok := r.Visitors[directive.Name.Name]; ok {
+						// TODO check that directive arity == 0-that should be an error at schema init time
+						visitorErr := visitor.Before(ctx, directive, nil)
+						if visitorErr != nil {
+							err := errors.Errorf("%s", visitorErr)
+							err.Path = path.toSlice()
+							err.ResolverError = visitorErr
+							return err
+						}
+					}
+				}
+			}
 			result = res.FieldByIndex(f.field.FieldIndex)
+			// After hook directive visitor (when no error is returned from resolver)
+			if !f.field.HasError && len(f.field.Directives) > 0 {
+				for _, directive := range f.field.Directives {
+					if visitor, ok := r.Visitors[directive.Name.Name]; ok {
+						returned, visitorErr := visitor.After(ctx, directive, result.Interface())
+						if visitorErr != nil {
+							err := errors.Errorf("%s", visitorErr)
+							err.Path = path.toSlice()
+							err.ResolverError = visitorErr
+							return err
+						} else {
+							result = reflect.ValueOf(returned)
+						}
+					}
+				}
+			}
 		}
 		return nil
 	}()
