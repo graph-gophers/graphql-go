@@ -25,6 +25,16 @@ func (lit *BasicLit) Value(vars map[string]interface{}) interface{} {
 	case scanner.Int:
 		value, err := strconv.ParseInt(lit.Text, 10, 32)
 		if err != nil {
+			// check if it is out of range error.
+			// which probably mean that the input use int64 data type
+			// as needed by scalar.Int64 data type of tokopedia/gqlserver
+			if strings.Contains(err.Error(), strconv.ErrRange.Error()) {
+				val64, err := strconv.ParseInt(lit.Text, 10, 64)
+				if err != nil {
+					panic(err)
+				}
+				return int64(val64)
+			}
 			panic(err)
 		}
 		return int32(value)
