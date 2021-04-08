@@ -82,6 +82,7 @@ type Schema struct {
 	useStringDescriptions    bool
 	disableIntrospection     bool
 	subscribeResolverTimeout time.Duration
+	visitors                 map[string]types.DirectiveVisitor
 }
 
 func (s *Schema) ASTSchema() *types.Schema {
@@ -165,6 +166,14 @@ func DisableIntrospection() SchemaOpt {
 func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
 	return func(s *Schema) {
 		s.subscribeResolverTimeout = timeout
+	}
+}
+
+// DirectiveVisitors allows to pass custom directive visitors that will be able to handle
+// your GraphQL schema directives.
+func DirectiveVisitors(visitors map[string]types.DirectiveVisitor) SchemaOpt {
+	return func(s *Schema) {
+		s.visitors = visitors
 	}
 }
 
@@ -257,6 +266,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		Tracer:       s.tracer,
 		Logger:       s.logger,
 		PanicHandler: s.panicHandler,
+		Visitors:     s.visitors,
 	}
 	varTypes := make(map[string]*introspection.Type)
 	for _, v := range op.Vars {
