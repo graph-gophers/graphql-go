@@ -1,24 +1,27 @@
 package graphql
 
 import (
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
+var refTime = time.Date(2020, 4, 9, 8, 19, 58, 651387237, time.UTC)
+
 var timeTestCases = []interface{}{
-	time.Now(),
-	int32(1),
-	time.Now().Unix(),
-	time.Now().UnixNano(),
-	float64(-1),
-	"2006-01-02T15:04:05Z",
+	refTime,
+	int32(refTime.Unix()),
+	refTime.Unix(),
+	refTime.UnixNano(),
+	float64(refTime.Unix()),
+	refTime.Format(time.RFC3339),
 }
 
 func TestImplementsGraphQLType(t *testing.T) {
 	time := Time{}
-	if !time.ImplementsGraphQLType("Time") {
-		t.Fail()
-	}
+	assert.Equal(t, time.ImplementsGraphQLType("Time"), true)
 }
 
 func TestUnmarshalGraphQL(t *testing.T) {
@@ -26,25 +29,18 @@ func TestUnmarshalGraphQL(t *testing.T) {
 	testTime := &Time{}
 
 	for _, timeType := range timeTestCases {
-		if err = testTime.UnmarshalGraphQL(timeType); err != nil {
-			t.Fatalf("Failed to unmarshal %#v to Time: %s", timeType, err.Error())
-		}
+		assert.NoError(t, testTime.UnmarshalGraphQL(timeType), "Time type: %T", timeType)
+		assert.Equal(t, refTime.Unix(), testTime.Unix(), "Time type: %T", timeType)
 	}
 
-	if err = testTime.UnmarshalGraphQL(false); err == nil {
-		t.Fatalf("Unmarshaling of %T to Time should be failed.", false)
-	}
+	err = testTime.UnmarshalGraphQL(false)
+	assert.EqualError(t, err, "wrong type for Time: bool")
 }
 
 func TestMarshalJSON(t *testing.T) {
-	exampleTime := "\"0001-01-01T00:00:00Z\""
-	testTime := &Time{}
+	testTime := &Time{refTime}
 
 	buf, err := testTime.MarshalJSON()
-	if err != nil {
-		t.Fatalf("Failed to marshal time to JSON: %s", err.Error())
-	}
-	if string(buf) != exampleTime {
-		t.Fatalf("Failed to marshal Time to JSON, expected %s, but instead got %s", exampleTime, buf)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, fmt.Sprintf("\"%s\"", refTime.Format(time.RFC3339Nano)), string(buf))
 }
