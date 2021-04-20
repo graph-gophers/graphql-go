@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/graph-gophers/graphql-go/decode"
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 	"github.com/graph-gophers/graphql-go/internal/schema"
@@ -207,7 +208,7 @@ func makeScalarExec(t *schema.Scalar, resolverType reflect.Type) (Resolvable, er
 		implementsType = t.Name == "String"
 	case *bool:
 		implementsType = t.Name == "Boolean"
-	case packer.Unmarshaler:
+	case decode.Unmarshaler:
 		implementsType = r.ImplementsGraphQLType(t.Name)
 	}
 	if !implementsType {

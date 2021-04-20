@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/graph-gophers/graphql-go/decode"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/schema"
@@ -115,7 +116,7 @@ func (b *Builder) makePacker(schemaType common.Type, reflectType reflect.Type) (
 }
 
 func (b *Builder) makeNonNullPacker(schemaType common.Type, reflectType reflect.Type) (packer, error) {
-	if u, ok := reflect.New(reflectType).Interface().(Unmarshaler); ok {
+	if u, ok := reflect.New(reflectType).Interface().(decode.Unmarshaler); ok {
 		if !u.ImplementsGraphQLType(schemaType.String()) {
 			return nil, fmt.Errorf("can not unmarshal %s into %s", schemaType, reflectType)
 		}
@@ -323,21 +324,10 @@ func (p *unmarshalerPacker) Pack(value interface{}) (reflect.Value, error) {
 	}
 
 	v := reflect.New(p.ValueType)
-	if err := v.Interface().(Unmarshaler).UnmarshalGraphQL(value); err != nil {
+	if err := v.Interface().(decode.Unmarshaler).UnmarshalGraphQL(value); err != nil {
 		return reflect.Value{}, err
 	}
 	return v.Elem(), nil
-}
-
-type Unmarshaler interface {
-	// ImplementsGraphQLType maps the implementing custom Go type
-	// to the GraphQL scalar type in the schema.
-	ImplementsGraphQLType(name string) bool
-	// UnmarshalGraphQL is the custom unmarshaler for the implementing type
-	//
-	// This function will be called whenever you use the
-	// custom GraphQL scalar type as an input
-	UnmarshalGraphQL(input interface{}) error
 }
 
 func unmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
@@ -391,7 +381,7 @@ func stripUnderscore(s string) string {
 
 // NullUnmarshaller is an unmarshaller that can handle a nil input
 type NullUnmarshaller interface {
-	Unmarshaler
+	decode.Unmarshaler
 	Nullable()
 }
 

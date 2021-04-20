@@ -7,6 +7,7 @@ import (
 	"time"
 
 	. "github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/decode"
 )
 
 func TestTime_ImplementsUnmarshaler(t *testing.T) {
@@ -16,8 +17,8 @@ func TestTime_ImplementsUnmarshaler(t *testing.T) {
 		}
 	}()
 
-	// assert *Time implements Unmarshaler interface
-	var _ Unmarshaler = (*Time)(nil)
+	// assert *Time implements decode.Unmarshaler interface
+	var _ decode.Unmarshaler = (*Time)(nil)
 }
 
 func TestTime_ImplementsGraphQLType(t *testing.T) {
