@@ -330,7 +330,13 @@ func (p *unmarshalerPacker) Pack(value interface{}) (reflect.Value, error) {
 }
 
 type Unmarshaler interface {
+	// ImplementsGraphQLType maps the implementing custom Go type
+	// to the GraphQL scalar type in the schema.
 	ImplementsGraphQLType(name string) bool
+	// UnmarshalGraphQL is the custom unmarshaler for the implementing type
+	//
+	// This function will be called whenever you use the
+	// custom GraphQL scalar type as an input
 	UnmarshalGraphQL(input interface{}) error
 }
 

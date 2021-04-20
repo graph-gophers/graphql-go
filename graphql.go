@@ -10,6 +10,7 @@ import (
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec"
+	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"github.com/graph-gophers/graphql-go/internal/exec/selected"
 	"github.com/graph-gophers/graphql-go/internal/query"
@@ -19,6 +20,9 @@ import (
 	"github.com/graph-gophers/graphql-go/log"
 	"github.com/graph-gophers/graphql-go/trace"
 )
+
+// Unmarshaler defines the public api of Go types mapped to custom GraphQL scalar types
+type Unmarshaler = packer.Unmarshaler
 
 // ParseSchema parses a GraphQL schema and attaches the given root resolver. It returns an error if
 // the Go type signature of the resolvers does not match the schema. If nil is passed as the
