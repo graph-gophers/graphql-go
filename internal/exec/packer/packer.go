@@ -115,7 +115,7 @@ func (b *Builder) makePacker(schemaType types.Type, reflectType reflect.Type) (p
 }
 
 func (b *Builder) makeNonNullPacker(schemaType types.Type, reflectType reflect.Type) (packer, error) {
-	if u, ok := reflect.New(reflectType).Interface().(Unmarshaler); ok {
+	if u, ok := reflect.New(reflectType).Interface().(decode.Unmarshaler); ok {
 		if !u.ImplementsGraphQLType(schemaType.String()) {
 			return nil, fmt.Errorf("can not unmarshal %s into %s", schemaType, reflectType)
 		}

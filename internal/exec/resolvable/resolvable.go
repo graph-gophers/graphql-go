@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/graph-gophers/graphql-go/decode"
-	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 	"github.com/graph-gophers/graphql-go/types"
 )
