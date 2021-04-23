@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/graph-gophers/graphql-go/internal/common"
-	"github.com/graph-gophers/graphql-go/internal/schema"
 	"github.com/graph-gophers/graphql-go/introspection"
+	"github.com/graph-gophers/graphql-go/types"
 )
 
 // Meta defines the details of the metadata schema for introspection.
@@ -18,17 +17,17 @@ type Meta struct {
 	Type          *Object
 }
 
-func newMeta(s *schema.Schema) *Meta {
+func newMeta(s *types.Schema) *Meta {
 	var err error
 	b := newBuilder(s)
 
-	metaSchema := s.Types["__Schema"].(*schema.Object)
+	metaSchema := s.Types["__Schema"].(*types.ObjectTypeDefinition)
 	so, err := b.makeObjectExec(metaSchema.Name, metaSchema.Fields, nil, false, reflect.TypeOf(&introspection.Schema{}))
 	if err != nil {
 		panic(err)
 	}
 
-	metaType := s.Types["__Type"].(*schema.Object)
+	metaType := s.Types["__Type"].(*types.ObjectTypeDefinition)
 	t, err := b.makeObjectExec(metaType.Name, metaType.Fields, nil, false, reflect.TypeOf(&introspection.Type{}))
 	if err != nil {
 		panic(err)
@@ -39,15 +38,15 @@ func newMeta(s *schema.Schema) *Meta {
 	}
 
 	fieldTypename := Field{
-		Field: schema.Field{
+		FieldDefinition: types.FieldDefinition{
 			Name: "__typename",
-			Type: &common.NonNull{OfType: s.Types["String"]},
+			Type: &types.NonNull{OfType: s.Types["String"]},
 		},
 		TraceLabel: fmt.Sprintf("GraphQL field: __typename"),
 	}
 
 	fieldSchema := Field{
-		Field: schema.Field{
+		FieldDefinition: types.FieldDefinition{
 			Name: "__schema",
 			Type: s.Types["__Schema"],
 		},
@@ -55,7 +54,7 @@ func newMeta(s *schema.Schema) *Meta {
 	}
 
 	fieldType := Field{
-		Field: schema.Field{
+		FieldDefinition: types.FieldDefinition{
 			Name: "__type",
 			Type: s.Types["__Type"],
 		},

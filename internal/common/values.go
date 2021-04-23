@@ -1,33 +1,11 @@
 package common
 
 import (
-	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/types"
 )
 
-// http://facebook.github.io/graphql/draft/#InputValueDefinition
-type InputValue struct {
-	Name       Ident
-	Type       Type
-	Default    Literal
-	Desc       string
-	Directives DirectiveList
-	Loc        errors.Location
-	TypeLoc    errors.Location
-}
-
-type InputValueList []*InputValue
-
-func (l InputValueList) Get(name string) *InputValue {
-	for _, v := range l {
-		if v.Name.Name == name {
-			return v
-		}
-	}
-	return nil
-}
-
-func ParseInputValue(l *Lexer) *InputValue {
-	p := &InputValue{}
+func ParseInputValue(l *Lexer) *types.InputValueDefinition {
+	p := &types.InputValueDefinition{}
 	p.Loc = l.Location()
 	p.Desc = l.DescComment()
 	p.Name = l.ConsumeIdentWithLoc()
@@ -42,38 +20,17 @@ func ParseInputValue(l *Lexer) *InputValue {
 	return p
 }
 
-type Argument struct {
-	Name  Ident
-	Value Literal
-}
-
-type ArgumentList []Argument
-
-func (l ArgumentList) Get(name string) (Literal, bool) {
-	for _, arg := range l {
-		if arg.Name.Name == name {
-			return arg.Value, true
-		}
-	}
-	return nil, false
-}
-
-func (l ArgumentList) MustGet(name string) Literal {
-	value, ok := l.Get(name)
-	if !ok {
-		panic("argument not found")
-	}
-	return value
-}
-
-func ParseArguments(l *Lexer) ArgumentList {
-	var args ArgumentList
+func ParseArgumentList(l *Lexer) types.ArgumentList {
+	var args types.ArgumentList
 	l.ConsumeToken('(')
 	for l.Peek() != ')' {
 		name := l.ConsumeIdentWithLoc()
 		l.ConsumeToken(':')
 		value := ParseLiteral(l, false)
-		args = append(args, Argument{Name: name, Value: value})
+		args = append(args, &types.Argument{
+			Name:  name,
+			Value: value,
+		})
 	}
 	l.ConsumeToken(')')
 	return args

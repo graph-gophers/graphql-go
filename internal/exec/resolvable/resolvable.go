@@ -7,14 +7,13 @@ import (
 	"strings"
 
 	"github.com/graph-gophers/graphql-go/decode"
-	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
-	"github.com/graph-gophers/graphql-go/internal/schema"
+	"github.com/graph-gophers/graphql-go/types"
 )
 
 type Schema struct {
 	*Meta
-	schema.Schema
+	types.Schema
 	Query        Resolvable
 	Mutation     Resolvable
 	Subscription Resolvable
@@ -32,7 +31,7 @@ type Object struct {
 }
 
 type Field struct {
-	schema.Field
+	types.FieldDefinition
 	TypeName    string
 	MethodIndex int
 	FieldIndex  []int
@@ -62,7 +61,7 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
+func ApplyResolver(s *types.Schema, resolver interface{}) (*Schema, error) {
 	if resolver == nil {
 		return &Schema{Meta: newMeta(s), Schema: *s}, nil
 	}
@@ -104,13 +103,13 @@ func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 }
 
 type execBuilder struct {
-	schema        *schema.Schema
+	schema        *types.Schema
 	resMap        map[typePair]*resMapEntry
 	packerBuilder *packer.Builder
 }
 
 type typePair struct {
-	graphQLType  common.Type
+	graphQLType  types.Type
 	resolverType reflect.Type
 }
 
@@ -119,7 +118,7 @@ type resMapEntry struct {
 	targets []*Resolvable
 }
 
-func newBuilder(s *schema.Schema) *execBuilder {
+func newBuilder(s *types.Schema) *execBuilder {
 	return &execBuilder{
 		schema:        s,
 		resMap:        make(map[typePair]*resMapEntry),
@@ -137,7 +136,7 @@ func (b *execBuilder) finish() error {
 	return b.packerBuilder.Finish()
 }
 
-func (b *execBuilder) assignExec(target *Resolvable, t common.Type, resolverType reflect.Type) error {
+func (b *execBuilder) assignExec(target *Resolvable, t types.Type, resolverType reflect.Type) error {
 	k := typePair{t, resolverType}
 	ref, ok := b.resMap[k]
 	if !ok {
@@ -153,19 +152,19 @@ func (b *execBuilder) assignExec(target *Resolvable, t common.Type, resolverType
 	return nil
 }
 
-func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type) (Resolvable, error) {
+func (b *execBuilder) makeExec(t types.Type, resolverType reflect.Type) (Resolvable, error) {
 	var nonNull bool
 	t, nonNull = unwrapNonNull(t)
 
 	switch t := t.(type) {
-	case *schema.Object:
+	case *types.ObjectTypeDefinition:
 		return b.makeObjectExec(t.Name, t.Fields, nil, nonNull, resolverType)
 
-	case *schema.Interface:
+	case *types.InterfaceTypeDefinition:
 		return b.makeObjectExec(t.Name, t.Fields, t.PossibleTypes, nonNull, resolverType)
 
-	case *schema.Union:
-		return b.makeObjectExec(t.Name, nil, t.PossibleTypes, nonNull, resolverType)
+	case *types.Union:
+		return b.makeObjectExec(t.Name, nil, t.UnionMemberTypes, nonNull, resolverType)
 	}
 
 	if !nonNull {
@@ -176,13 +175,13 @@ func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type) (Resolv
 	}
 
 	switch t := t.(type) {
-	case *schema.Scalar:
+	case *types.ScalarTypeDefinition:
 		return makeScalarExec(t, resolverType)
 
-	case *schema.Enum:
+	case *types.EnumTypeDefinition:
 		return &Scalar{}, nil
 
-	case *common.List:
+	case *types.List:
 		if resolverType.Kind() != reflect.Slice {
 			return nil, fmt.Errorf("%s is not a slice", resolverType)
 		}
@@ -197,7 +196,7 @@ func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type) (Resolv
 	}
 }
 
-func makeScalarExec(t *schema.Scalar, resolverType reflect.Type) (Resolvable, error) {
+func makeScalarExec(t *types.ScalarTypeDefinition, resolverType reflect.Type) (Resolvable, error) {
 	implementsType := false
 	switch r := reflect.New(resolverType).Interface().(type) {
 	case *int32:
@@ -211,13 +210,14 @@ func makeScalarExec(t *schema.Scalar, resolverType reflect.Type) (Resolvable, er
 	case decode.Unmarshaler:
 		implementsType = r.ImplementsGraphQLType(t.Name)
 	}
+
 	if !implementsType {
 		return nil, fmt.Errorf("can not use %s as %s", resolverType, t.Name)
 	}
 	return &Scalar{}, nil
 }
 
-func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, possibleTypes []*schema.Object,
+func (b *execBuilder) makeObjectExec(typeName string, fields types.FieldsDefinition, possibleTypes []*types.ObjectTypeDefinition,
 	nonNull bool, resolverType reflect.Type) (*Object, error) {
 	if !nonNull {
 		if resolverType.Kind() != reflect.Ptr && resolverType.Kind() != reflect.Interface {
@@ -294,7 +294,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
 
-func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.Method, sf reflect.StructField,
+func (b *execBuilder) makeFieldExec(typeName string, f *types.FieldDefinition, m reflect.Method, sf reflect.StructField,
 	methodIndex int, fieldIndex []int, methodHasReceiver bool) (*Field, error) {
 
 	var argsPacker *packer.StructPacker
@@ -316,12 +316,12 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 			in = in[1:]
 		}
 
-		if len(f.Args) > 0 {
+		if len(f.Arguments) > 0 {
 			if len(in) == 0 {
 				return nil, fmt.Errorf("must have parameter for field arguments")
 			}
 			var err error
-			argsPacker, err = b.packerBuilder.MakeStructPacker(f.Args, in[0])
+			argsPacker, err = b.packerBuilder.MakeStructPacker(f.Arguments, in[0])
 			if err != nil {
 				return nil, err
 			}
@@ -350,14 +350,14 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 	}
 
 	fe := &Field{
-		Field:       *f,
-		TypeName:    typeName,
-		MethodIndex: methodIndex,
-		FieldIndex:  fieldIndex,
-		HasContext:  hasContext,
-		ArgsPacker:  argsPacker,
-		HasError:    hasError,
-		TraceLabel:  fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name),
+		FieldDefinition: *f,
+		TypeName:        typeName,
+		MethodIndex:     methodIndex,
+		FieldIndex:      fieldIndex,
+		HasContext:      hasContext,
+		ArgsPacker:      argsPacker,
+		HasError:        hasError,
+		TraceLabel:      fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name),
 	}
 
 	var out reflect.Type
@@ -428,8 +428,8 @@ func fieldCount(t reflect.Type, count map[string]int) map[string]int {
 	return count
 }
 
-func unwrapNonNull(t common.Type) (common.Type, bool) {
-	if nn, ok := t.(*common.NonNull); ok {
+func unwrapNonNull(t types.Type) (types.Type, bool) {
+	if nn, ok := t.(*types.NonNull); ok {
 		return nn.OfType, true
 	}
 	return t, false

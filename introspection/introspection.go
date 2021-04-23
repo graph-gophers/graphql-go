@@ -3,16 +3,15 @@ package introspection
 import (
 	"sort"
 
-	"github.com/graph-gophers/graphql-go/internal/common"
-	"github.com/graph-gophers/graphql-go/internal/schema"
+	"github.com/graph-gophers/graphql-go/types"
 )
 
 type Schema struct {
-	schema *schema.Schema
+	schema *types.Schema
 }
 
 // WrapSchema is only used internally.
-func WrapSchema(schema *schema.Schema) *Schema {
+func WrapSchema(schema *types.Schema) *Schema {
 	return &Schema{schema}
 }
 
@@ -69,11 +68,11 @@ func (r *Schema) SubscriptionType() *Type {
 }
 
 type Type struct {
-	typ common.Type
+	typ types.Type
 }
 
 // WrapType is only used internally.
-func WrapType(typ common.Type) *Type {
+func WrapType(typ types.Type) *Type {
 	return &Type{typ}
 }
 
@@ -82,7 +81,7 @@ func (r *Type) Kind() string {
 }
 
 func (r *Type) Name() *string {
-	if named, ok := r.typ.(schema.NamedType); ok {
+	if named, ok := r.typ.(types.NamedType); ok {
 		name := named.TypeName()
 		return &name
 	}
@@ -90,7 +89,7 @@ func (r *Type) Name() *string {
 }
 
 func (r *Type) Description() *string {
-	if named, ok := r.typ.(schema.NamedType); ok {
+	if named, ok := r.typ.(types.NamedType); ok {
 		desc := named.Description()
 		if desc == "" {
 			return nil
@@ -101,11 +100,11 @@ func (r *Type) Description() *string {
 }
 
 func (r *Type) Fields(args *struct{ IncludeDeprecated bool }) *[]*Field {
-	var fields schema.FieldList
+	var fields types.FieldsDefinition
 	switch t := r.typ.(type) {
-	case *schema.Object:
+	case *types.ObjectTypeDefinition:
 		fields = t.Fields
-	case *schema.Interface:
+	case *types.InterfaceTypeDefinition:
 		fields = t.Fields
 	default:
 		return nil
@@ -114,14 +113,14 @@ func (r *Type) Fields(args *struct{ IncludeDeprecated bool }) *[]*Field {
 	var l []*Field
 	for _, f := range fields {
 		if d := f.Directives.Get("deprecated"); d == nil || args.IncludeDeprecated {
-			l = append(l, &Field{f})
+			l = append(l, &Field{field: f})
 		}
 	}
 	return &l
 }
 
 func (r *Type) Interfaces() *[]*Type {
-	t, ok := r.typ.(*schema.Object)
+	t, ok := r.typ.(*types.ObjectTypeDefinition)
 	if !ok {
 		return nil
 	}
@@ -134,12 +133,12 @@ func (r *Type) Interfaces() *[]*Type {
 }
 
 func (r *Type) PossibleTypes() *[]*Type {
-	var possibleTypes []*schema.Object
+	var possibleTypes []*types.ObjectTypeDefinition
 	switch t := r.typ.(type) {
-	case *schema.Interface:
+	case *types.InterfaceTypeDefinition:
 		possibleTypes = t.PossibleTypes
-	case *schema.Union:
-		possibleTypes = t.PossibleTypes
+	case *types.Union:
+		possibleTypes = t.UnionMemberTypes
 	default:
 		return nil
 	}
@@ -152,13 +151,13 @@ func (r *Type) PossibleTypes() *[]*Type {
 }
 
 func (r *Type) EnumValues(args *struct{ IncludeDeprecated bool }) *[]*EnumValue {
-	t, ok := r.typ.(*schema.Enum)
+	t, ok := r.typ.(*types.EnumTypeDefinition)
 	if !ok {
 		return nil
 	}
 
 	var l []*EnumValue
-	for _, v := range t.Values {
+	for _, v := range t.EnumValuesDefinition {
 		if d := v.Directives.Get("deprecated"); d == nil || args.IncludeDeprecated {
 			l = append(l, &EnumValue{v})
 		}
@@ -167,7 +166,7 @@ func (r *Type) EnumValues(args *struct{ IncludeDeprecated bool }) *[]*EnumValue 
 }
 
 func (r *Type) InputFields() *[]*InputValue {
-	t, ok := r.typ.(*schema.InputObject)
+	t, ok := r.typ.(*types.InputObject)
 	if !ok {
 		return nil
 	}
@@ -181,9 +180,9 @@ func (r *Type) InputFields() *[]*InputValue {
 
 func (r *Type) OfType() *Type {
 	switch t := r.typ.(type) {
-	case *common.List:
+	case *types.List:
 		return &Type{t.OfType}
-	case *common.NonNull:
+	case *types.NonNull:
 		return &Type{t.OfType}
 	default:
 		return nil
@@ -191,7 +190,7 @@ func (r *Type) OfType() *Type {
 }
 
 type Field struct {
-	field *schema.Field
+	field *types.FieldDefinition
 }
 
 func (r *Field) Name() string {
@@ -206,8 +205,8 @@ func (r *Field) Description() *string {
 }
 
 func (r *Field) Args() []*InputValue {
-	l := make([]*InputValue, len(r.field.Args))
-	for i, v := range r.field.Args {
+	l := make([]*InputValue, len(r.field.Arguments))
+	for i, v := range r.field.Arguments {
 		l[i] = &InputValue{v}
 	}
 	return l
@@ -226,12 +225,12 @@ func (r *Field) DeprecationReason() *string {
 	if d == nil {
 		return nil
 	}
-	reason := d.Args.MustGet("reason").Value(nil).(string)
+	reason := d.Arguments.MustGet("reason").Deserialize(nil).(string)
 	return &reason
 }
 
 type InputValue struct {
-	value *common.InputValue
+	value *types.InputValueDefinition
 }
 
 func (r *InputValue) Name() string {
@@ -258,11 +257,11 @@ func (r *InputValue) DefaultValue() *string {
 }
 
 type EnumValue struct {
-	value *schema.EnumValue
+	value *types.EnumValueDefinition
 }
 
 func (r *EnumValue) Name() string {
-	return r.value.Name
+	return r.value.EnumValue
 }
 
 func (r *EnumValue) Description() *string {
@@ -281,12 +280,12 @@ func (r *EnumValue) DeprecationReason() *string {
 	if d == nil {
 		return nil
 	}
-	reason := d.Args.MustGet("reason").Value(nil).(string)
+	reason := d.Arguments.MustGet("reason").Deserialize(nil).(string)
 	return &reason
 }
 
 type Directive struct {
-	directive *schema.DirectiveDecl
+	directive *types.DirectiveDefinition
 }
 
 func (r *Directive) Name() string {
@@ -301,12 +300,12 @@ func (r *Directive) Description() *string {
 }
 
 func (r *Directive) Locations() []string {
-	return r.directive.Locs
+	return r.directive.Locations
 }
 
 func (r *Directive) Args() []*InputValue {
-	l := make([]*InputValue, len(r.directive.Args))
-	for i, v := range r.directive.Args {
+	l := make([]*InputValue, len(r.directive.Arguments))
+	for i, v := range r.directive.Arguments {
 		l[i] = &InputValue{v}
 	}
 	return l

@@ -12,6 +12,7 @@ import (
 	"github.com/graph-gophers/graphql-go/internal/query"
 	"github.com/graph-gophers/graphql-go/internal/schema"
 	"github.com/graph-gophers/graphql-go/internal/validation"
+	"github.com/graph-gophers/graphql-go/types"
 )
 
 type Test struct {
@@ -37,10 +38,11 @@ func TestValidate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	schemas := make([]*schema.Schema, len(testData.Schemas))
+	schemas := make([]*types.Schema, len(testData.Schemas))
 	for i, schemaStr := range testData.Schemas {
 		schemas[i] = schema.New()
-		if err := schemas[i].Parse(schemaStr, false); err != nil {
+		err := schema.Parse(schemas[i], schemaStr, false)
+		if err != nil {
 			t.Fatal(err)
 		}
 	}

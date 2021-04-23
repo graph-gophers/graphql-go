@@ -1,17 +1,23 @@
 package schema
 
+import (
+	"github.com/graph-gophers/graphql-go/types"
+)
+
 func init() {
 	_ = newMeta()
 }
 
 // newMeta initializes an instance of the meta Schema.
-func newMeta() *Schema {
-	s := &Schema{
-		entryPointNames: make(map[string]string),
-		Types:           make(map[string]NamedType),
-		Directives:      make(map[string]*DirectiveDecl),
+func newMeta() *types.Schema {
+	s := &types.Schema{
+		EntryPointNames: make(map[string]string),
+		Types:           make(map[string]types.NamedType),
+		Directives:      make(map[string]*types.DirectiveDefinition),
 	}
-	if err := s.Parse(metaSrc, false); err != nil {
+
+	err := Parse(s, metaSrc, false)
+	if err != nil {
 		panic(err)
 	}
 	return s
