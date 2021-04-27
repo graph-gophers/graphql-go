@@ -1,5 +1,7 @@
 package types
 
+import "github.com/graph-gophers/graphql-go/errors"
+
 // EnumTypeDefinition defines a set of possible enum values.
 //
 // Like scalar types, an EnumTypeDefinition also represents a leaf value in a GraphQL type system.
@@ -10,6 +12,7 @@ type EnumTypeDefinition struct {
 	EnumValuesDefinition []*EnumValueDefinition
 	Desc                 string
 	Directives           DirectiveList
+	Loc                  errors.Location
 }
 
 // EnumValueDefinition are unique values that may be serialized as a string: the name of the
@@ -20,6 +23,7 @@ type EnumValueDefinition struct {
 	EnumValue  string
 	Directives DirectiveList
 	Desc       string
+	Loc        errors.Location
 }
 
 func (*EnumTypeDefinition) Kind() string          { return "ENUM" }

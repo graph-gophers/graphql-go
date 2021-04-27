@@ -38,6 +38,7 @@ type InputObject struct {
 	Desc       string
 	Values     ArgumentsDefinition
 	Directives DirectiveList
+	Loc        errors.Location
 }
 
 func (*InputObject) Kind() string          { return "INPUT_OBJECT" }

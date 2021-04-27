@@ -1,5 +1,7 @@
 package types
 
+import "github.com/graph-gophers/graphql-go/errors"
+
 // InterfaceTypeDefinition represents a list of named fields and their arguments.
 //
 // GraphQL objects can then implement these interfaces which requires that the object type will
@@ -12,6 +14,7 @@ type InterfaceTypeDefinition struct {
 	Fields        FieldsDefinition
 	Desc          string
 	Directives    DirectiveList
+	Loc           errors.Location
 }
 
 func (*InterfaceTypeDefinition) Kind() string          { return "INTERFACE" }
