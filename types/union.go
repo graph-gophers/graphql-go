@@ -1,5 +1,7 @@
 package types
 
+import "github.com/graph-gophers/graphql-go/errors"
+
 // Union types represent objects that could be one of a list of GraphQL object types, but provides no
 // guaranteed fields between those types.
 //
@@ -13,6 +15,7 @@ type Union struct {
 	Desc             string
 	Directives       DirectiveList
 	TypeNames        []string
+	Loc              errors.Location
 }
 
 func (*Union) Kind() string          { return "UNION" }

@@ -1,5 +1,7 @@
 package types
 
+import "github.com/graph-gophers/graphql-go/errors"
+
 // FieldDefinition is a representation of a GraphQL FieldDefinition.
 //
 // http://spec.graphql.org/draft/#FieldDefinition
@@ -9,6 +11,7 @@ type FieldDefinition struct {
 	Type       Type
 	Directives DirectiveList
 	Desc       string
+	Loc        errors.Location
 }
 
 // FieldsDefinition is a list of an ObjectTypeDefinition's Fields.

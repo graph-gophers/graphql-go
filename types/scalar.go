@@ -1,5 +1,7 @@
 package types
 
+import "github.com/graph-gophers/graphql-go/errors"
+
 // ScalarTypeDefinition types represent primitive leaf values (e.g. a string or an integer) in a GraphQL type
 // system.
 //
@@ -11,6 +13,7 @@ type ScalarTypeDefinition struct {
 	Name       string
 	Desc       string
 	Directives DirectiveList
+	Loc        errors.Location
 }
 
 func (*ScalarTypeDefinition) Kind() string          { return "SCALAR" }
