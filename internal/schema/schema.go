@@ -348,9 +348,10 @@ func parseSchema(s *types.Schema, l *common.Lexer) {
 			s.Types[input.Name] = input
 
 		case "scalar":
+			loc := l.Location()
 			name := l.ConsumeIdent()
 			directives := common.ParseDirectives(l)
-			s.Types[name] = &types.ScalarTypeDefinition{Name: name, Desc: desc, Directives: directives}
+			s.Types[name] = &types.ScalarTypeDefinition{Name: name, Desc: desc, Directives: directives, Loc: loc}
 
 		case "directive":
 			directive := parseDirectiveDef(l)
@@ -368,7 +369,7 @@ func parseSchema(s *types.Schema, l *common.Lexer) {
 }
 
 func parseObjectDef(l *common.Lexer) *types.ObjectTypeDefinition {
-	object := &types.ObjectTypeDefinition{Name: l.ConsumeIdent()}
+	object := &types.ObjectTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
 
 	for {
 		if l.Peek() == '{' {
@@ -403,7 +404,7 @@ func parseObjectDef(l *common.Lexer) *types.ObjectTypeDefinition {
 }
 
 func parseInterfaceDef(l *common.Lexer) *types.InterfaceTypeDefinition {
-	i := &types.InterfaceTypeDefinition{Name: l.ConsumeIdent()}
+	i := &types.InterfaceTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
 
 	i.Directives = common.ParseDirectives(l)
 
@@ -415,7 +416,7 @@ func parseInterfaceDef(l *common.Lexer) *types.InterfaceTypeDefinition {
 }
 
 func parseUnionDef(l *common.Lexer) *types.Union {
-	union := &types.Union{Name: l.ConsumeIdent()}
+	union := &types.Union{Loc: l.Location(), Name: l.ConsumeIdent()}
 
 	union.Directives = common.ParseDirectives(l)
 	l.ConsumeToken('=')
@@ -430,6 +431,7 @@ func parseUnionDef(l *common.Lexer) *types.Union {
 
 func parseInputDef(l *common.Lexer) *types.InputObject {
 	i := &types.InputObject{}
+	i.Loc = l.Location()
 	i.Name = l.ConsumeIdent()
 	i.Directives = common.ParseDirectives(l)
 	l.ConsumeToken('{')
@@ -441,13 +443,14 @@ func parseInputDef(l *common.Lexer) *types.InputObject {
 }
 
 func parseEnumDef(l *common.Lexer) *types.EnumTypeDefinition {
-	enum := &types.EnumTypeDefinition{Name: l.ConsumeIdent()}
+	enum := &types.EnumTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
 
 	enum.Directives = common.ParseDirectives(l)
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
 		v := &types.EnumValueDefinition{
 			Desc:       l.DescComment(),
+			Loc:        l.Location(),
 			EnumValue:  l.ConsumeIdent(),
 			Directives: common.ParseDirectives(l),
 		}
@@ -459,7 +462,8 @@ func parseEnumDef(l *common.Lexer) *types.EnumTypeDefinition {
 }
 func parseDirectiveDef(l *common.Lexer) *types.DirectiveDefinition {
 	l.ConsumeToken('@')
-	d := &types.DirectiveDefinition{Name: l.ConsumeIdent()}
+	loc := l.Location()
+	d := &types.DirectiveDefinition{Name: l.ConsumeIdent(), Loc: loc}
 
 	if l.Peek() == '(' {
 		l.ConsumeToken('(')
@@ -484,6 +488,7 @@ func parseDirectiveDef(l *common.Lexer) *types.DirectiveDefinition {
 }
 
 func parseExtension(s *types.Schema, l *common.Lexer) {
+	loc := l.Location()
 	switch x := l.ConsumeIdent(); x {
 	case "schema":
 		l.ConsumeToken('{')
@@ -497,23 +502,23 @@ func parseExtension(s *types.Schema, l *common.Lexer) {
 
 	case "type":
 		obj := parseObjectDef(l)
-		s.Extensions = append(s.Extensions, &types.Extension{Type: obj})
+		s.Extensions = append(s.Extensions, &types.Extension{Type: obj, Loc: loc})
 
 	case "interface":
 		iface := parseInterfaceDef(l)
-		s.Extensions = append(s.Extensions, &types.Extension{Type: iface})
+		s.Extensions = append(s.Extensions, &types.Extension{Type: iface, Loc: loc})
 
 	case "union":
 		union := parseUnionDef(l)
-		s.Extensions = append(s.Extensions, &types.Extension{Type: union})
+		s.Extensions = append(s.Extensions, &types.Extension{Type: union, Loc: loc})
 
 	case "enum":
 		enum := parseEnumDef(l)
-		s.Extensions = append(s.Extensions, &types.Extension{Type: enum})
+		s.Extensions = append(s.Extensions, &types.Extension{Type: enum, Loc: loc})
 
 	case "input":
 		input := parseInputDef(l)
-		s.Extensions = append(s.Extensions, &types.Extension{Type: input})
+		s.Extensions = append(s.Extensions, &types.Extension{Type: input, Loc: loc})
 
 	default:
 		// TODO: Add ScalarTypeDefinition when adding directives
@@ -526,6 +531,7 @@ func parseFieldsDef(l *common.Lexer) types.FieldsDefinition {
 	for l.Peek() != '}' {
 		f := &types.FieldDefinition{}
 		f.Desc = l.DescComment()
+		f.Loc = l.Location()
 		f.Name = l.ConsumeIdent()
 		if l.Peek() == '(' {
 			l.ConsumeToken('(')

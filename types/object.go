@@ -1,5 +1,7 @@
 package types
 
+import "github.com/graph-gophers/graphql-go/errors"
+
 // ObjectTypeDefinition represents a GraphQL ObjectTypeDefinition.
 //
 // type FooObject {
@@ -8,13 +10,13 @@ package types
 //
 // https://spec.graphql.org/draft/#sec-Objects
 type ObjectTypeDefinition struct {
-	Name       string
-	Interfaces []*InterfaceTypeDefinition
-	Fields     FieldsDefinition
-	Desc       string
-	Directives DirectiveList
-
+	Name           string
+	Interfaces     []*InterfaceTypeDefinition
+	Fields         FieldsDefinition
+	Desc           string
+	Directives     DirectiveList
 	InterfaceNames []string
+	Loc            errors.Location
 }
 
 func (*ObjectTypeDefinition) Kind() string          { return "OBJECT" }

@@ -1,5 +1,7 @@
 package types
 
+import "github.com/graph-gophers/graphql-go/errors"
+
 // Directive is a representation of the GraphQL Directive.
 //
 // http://spec.graphql.org/draft/#sec-Language.Directives
@@ -16,6 +18,7 @@ type DirectiveDefinition struct {
 	Desc      string
 	Locations []string
 	Arguments ArgumentsDefinition
+	Loc       errors.Location
 }
 
 type DirectiveList []*Directive
