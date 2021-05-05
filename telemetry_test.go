@@ -3,8 +3,8 @@ package graphql_test
 import (
 	"testing"
 
-	"github.com/JoinCAD/graphql-go"
-	"github.com/JoinCAD/graphql-go/internal/query"
+	"github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/internal/query"
 )
 
 func equalLoggedOperation(a, b graphql.LoggedOperation) bool {
