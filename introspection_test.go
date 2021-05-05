@@ -6,10 +6,12 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/JoinCAD/graphql-go"
-	"github.com/JoinCAD/graphql-go/example/social"
-	"github.com/JoinCAD/graphql-go/example/starwars"
+	"github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/example/social"
+	"github.com/graph-gophers/graphql-go/example/starwars"
 )
+
+var socialSchema = graphql.MustParseSchema(social.Schema, &social.Resolver{}, graphql.UseFieldResolvers())
 
 func TestSchema_ToJSON(t *testing.T) {
 	t.Parallel()
@@ -27,7 +29,7 @@ func TestSchema_ToJSON(t *testing.T) {
 	}{
 		{
 			Name: "Social Schema",
-			Args: args{Schema: graphql.MustParseSchema(social.Schema, &social.Resolver{}, graphql.UseFieldResolvers())},
+			Args: args{Schema: socialSchema},
 			Want: want{JSON: mustReadFile("example/social/introspect.json")},
 		},
 		{

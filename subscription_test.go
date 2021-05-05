@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
-	graphql "github.com/JoinCAD/graphql-go"
-	qerrors "github.com/JoinCAD/graphql-go/errors"
-	"github.com/JoinCAD/graphql-go/gqltesting"
+	graphql "github.com/graph-gophers/graphql-go"
+	qerrors "github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/gqltesting"
 )
 
 type rootResolver struct {
@@ -24,6 +25,7 @@ func (r *helloResolver) Hello() string {
 }
 
 var resolverErr = errors.New("resolver error")
+var resolverQueryErr = &qerrors.QueryError{Message: "query", ResolverError: resolverErr}
 
 type helloSaidResolver struct {
 	err      error
@@ -54,6 +56,10 @@ func (r *helloSaidResolver) HelloSaid(ctx context.Context) (chan *helloSaidEvent
 	}()
 
 	return c, nil
+}
+
+func (r *rootResolver) OtherField(ctx context.Context) <-chan int32 {
+	return make(chan int32)
 }
 
 func (r *helloSaidEventResolver) Msg() (string, error) {
@@ -262,6 +268,27 @@ func TestSchemaSubscribe(t *testing.T) {
 			},
 		},
 		{
+			Name: "subscription_resolver_can_query_error",
+			Schema: graphql.MustParseSchema(schema, &rootResolver{
+				helloSaidResolver: &helloSaidResolver{err: resolverQueryErr},
+			}),
+			Query: `
+				subscription onHelloSaid {
+					helloSaid {
+						msg
+					}
+				}
+			`,
+			ExpectedResults: []gqltesting.TestResponse{
+				{
+					Data: json.RawMessage(`
+						null
+					`),
+					Errors: []*qerrors.QueryError{resolverQueryErr},
+				},
+			},
+		},
+		{
 			Name:   "schema_without_resolver_errors",
 			Schema: graphql.MustParseSchema(schema, nil),
 			Query: `
@@ -416,6 +443,36 @@ func TestRootOperations_validSubscriptionSchema(t *testing.T) {
 	})
 }
 
+func TestError_multiple_subscription_fields(t *testing.T) {
+	gqltesting.RunSubscribes(t, []*gqltesting.TestSubscription{
+		{
+			Name: "Explicit schema without subscription field",
+			Schema: graphql.MustParseSchema(`
+					schema {
+						query: Query
+						subscription: Subscription
+					}
+					type Query {
+						hello: String!
+					}
+					type Subscription {
+						helloSaid: HelloSaidEvent!
+						otherField: Int!
+					}
+					type HelloSaidEvent {
+						msg: String!
+					}
+			`, &rootResolver{helloSaidResolver: &helloSaidResolver{upstream: closedUpstream(&helloSaidEventResolver{msg: "Hello world!"})}}),
+			Query: `subscription { helloSaid { msg } otherField }`,
+			ExpectedResults: []gqltesting.TestResponse{
+				{
+					Errors: []*qerrors.QueryError{qerrors.Errorf("can subscribe to at most one subscription at a time")},
+				},
+			},
+		},
+	})
+}
+
 const schema = `
 	schema {
 		subscription: Subscription,
@@ -439,3 +496,80 @@ const schema = `
 		hello: String!
 	}
 `
+
+type subscriptionsCustomTimeout struct{}
+
+type messageResolver struct{}
+
+func (r messageResolver) Msg() string {
+	time.Sleep(5 * time.Millisecond)
+	return "failed!"
+}
+
+func (r *subscriptionsCustomTimeout) OnTimeout() <-chan *messageResolver {
+	c := make(chan *messageResolver)
+	go func() {
+		c <- &messageResolver{}
+		close(c)
+	}()
+
+	return c
+}
+
+func TestSchemaSubscribe_CustomResolverTimeout(t *testing.T) {
+	r := &struct {
+		*subscriptionsCustomTimeout
+	}{
+		subscriptionsCustomTimeout: &subscriptionsCustomTimeout{},
+	}
+	gqltesting.RunSubscribe(t, &gqltesting.TestSubscription{
+		Schema: graphql.MustParseSchema(`
+			type Query {}
+			type Subscription {
+				onTimeout : Message!
+			}
+
+			type Message {
+				msg: String!
+			}
+		`, r, graphql.SubscribeResolverTimeout(1*time.Millisecond)),
+		Query: `
+			subscription {
+				onTimeout { msg }
+			}
+		`,
+		ExpectedResults: []gqltesting.TestResponse{
+			{Errors: []*qerrors.QueryError{{Message: "context deadline exceeded"}}},
+		},
+	})
+}
+
+type subscriptionsPanicInResolver struct{}
+
+func (r *subscriptionsPanicInResolver) OnPanic() <-chan string {
+	panic("subscriptionsPanicInResolver")
+}
+
+func TestSchemaSubscribe_PanicInResolver(t *testing.T) {
+	r := &struct {
+		*subscriptionsPanicInResolver
+	}{
+		subscriptionsPanicInResolver: &subscriptionsPanicInResolver{},
+	}
+	gqltesting.RunSubscribe(t, &gqltesting.TestSubscription{
+		Schema: graphql.MustParseSchema(`
+			type Query {}
+			type Subscription {
+				onPanic : String!
+			}
+		`, r),
+		Query: `
+			subscription {
+				onPanic
+			}
+		`,
+		ExpectedResults: []gqltesting.TestResponse{
+			{Errors: []*qerrors.QueryError{{Message: "panic occurred: subscriptionsPanicInResolver"}}},
+		},
+	})
+}

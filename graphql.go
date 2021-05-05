@@ -5,18 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"time"
 
-	"github.com/JoinCAD/graphql-go/errors"
-	"github.com/JoinCAD/graphql-go/internal/common"
-	"github.com/JoinCAD/graphql-go/internal/exec"
-	"github.com/JoinCAD/graphql-go/internal/exec/resolvable"
-	"github.com/JoinCAD/graphql-go/internal/exec/selected"
-	"github.com/JoinCAD/graphql-go/internal/query"
-	"github.com/JoinCAD/graphql-go/internal/schema"
-	"github.com/JoinCAD/graphql-go/internal/validation"
-	"github.com/JoinCAD/graphql-go/introspection"
-	"github.com/JoinCAD/graphql-go/log"
-	"github.com/JoinCAD/graphql-go/trace"
+	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/internal/common"
+	"github.com/graph-gophers/graphql-go/internal/exec"
+	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
+	"github.com/graph-gophers/graphql-go/internal/exec/selected"
+	"github.com/graph-gophers/graphql-go/internal/query"
+	"github.com/graph-gophers/graphql-go/internal/schema"
+	"github.com/graph-gophers/graphql-go/internal/validation"
+	"github.com/graph-gophers/graphql-go/introspection"
+	"github.com/graph-gophers/graphql-go/log"
+	"github.com/graph-gophers/graphql-go/trace"
+	"github.com/graph-gophers/graphql-go/types"
 )
 
 // ParseSchema parses a GraphQL schema and attaches the given root resolver. It returns an error if
@@ -24,17 +26,24 @@ import (
 // resolver, then the schema can not be executed, but it may be inspected (e.g. with ToJSON).
 func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (*Schema, error) {
 	s := &Schema{
-		schema:           schema.New(),
-		maxParallelism:   10,
-		tracer:           trace.OpenTracingTracer{},
-		validationTracer: trace.NoopValidationTracer{},
-		logger:           &log.DefaultLogger{},
+		schema:         schema.New(),
+		maxParallelism: 10,
+		tracer:         trace.OpenTracingTracer{},
+		logger:         &log.DefaultLogger{},
 	}
 	for _, opt := range opts {
 		opt(s)
 	}
 
-	if err := s.schema.Parse(schemaString, s.useStringDescriptions); err != nil {
+	if s.validationTracer == nil {
+		if tracer, ok := s.tracer.(trace.ValidationTracerContext); ok {
+			s.validationTracer = tracer
+		} else {
+			s.validationTracer = &validationBridgingTracer{tracer: trace.NoopValidationTracer{}}
+		}
+	}
+
+	if err := schema.Parse(s.schema, schemaString, s.useStringDescriptions); err != nil {
 		return nil, err
 	}
 	if err := s.validateSchema(); err != nil {
@@ -61,16 +70,21 @@ func MustParseSchema(schemaString string, resolver interface{}, opts ...SchemaOp
 
 // Schema represents a GraphQL schema with an optional resolver.
 type Schema struct {
-	schema *schema.Schema
+	schema *types.Schema
 	res    *resolvable.Schema
 
-	maxDepth              int
-	maxParallelism        int
-	tracer                trace.Tracer
-	validationTracer      trace.ValidationTracer
-	logger                log.Logger
-	useStringDescriptions bool
-	disableIntrospection  bool
+	maxDepth                 int
+	maxParallelism           int
+	tracer                   trace.Tracer
+	validationTracer         trace.ValidationTracerContext
+	logger                   log.Logger
+	useStringDescriptions    bool
+	disableIntrospection     bool
+	subscribeResolverTimeout time.Duration
+}
+
+func (s *Schema) ASTSchema() *types.Schema {
+	return s.schema
 }
 
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
@@ -115,9 +129,10 @@ func Tracer(tracer trace.Tracer) SchemaOpt {
 }
 
 // ValidationTracer is used to trace validation errors. It defaults to trace.NoopValidationTracer.
+// Deprecated: context is needed to support tracing correctly. Use a Tracer which implements trace.ValidationTracerContext.
 func ValidationTracer(tracer trace.ValidationTracer) SchemaOpt {
 	return func(s *Schema) {
-		s.validationTracer = tracer
+		s.validationTracer = &validationBridgingTracer{tracer: tracer}
 	}
 }
 
@@ -135,6 +150,15 @@ func DisableIntrospection() SchemaOpt {
 	}
 }
 
+// SubscribeResolverTimeout is an option to control the amount of time
+// we allow for a single subscribe message resolver to complete it's job
+// before it times out and returns an error to the subscriber.
+func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
+	return func(s *Schema) {
+		s.subscribeResolverTimeout = timeout
+	}
+}
+
 // Response represents a typical response of a GraphQL server. It may be encoded to JSON directly or
 // it may be further processed to a custom response type, for example to include custom error data.
 // Errors are intentionally serialized first based on the advice in https://github.com/facebook/graphql/commit/7b40390d48680b15cb93e02d46ac5eb249689876#diff-757cea6edf0288677a9eea4cfc801d87R107
@@ -146,12 +170,17 @@ type Response struct {
 
 // Validate validates the given query with the schema.
 func (s *Schema) Validate(queryString string) []*errors.QueryError {
+	return s.ValidateWithVariables(queryString, nil)
+}
+
+// ValidateWithVariables validates the given query with the schema and the input variables.
+func (s *Schema) ValidateWithVariables(queryString string, variables map[string]interface{}) []*errors.QueryError {
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
 		return []*errors.QueryError{qErr}
 	}
 
-	return validation.Validate(s.schema, doc, nil, s.maxDepth)
+	return validation.Validate(s.schema, doc, variables, s.maxDepth)
 }
 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
@@ -170,7 +199,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		return &Response{Errors: []*errors.QueryError{qErr}}
 	}
 
-	validationFinish := s.validationTracer.TraceValidation()
+	validationFinish := s.validationTracer.TraceValidation(ctx)
 	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
 	validationFinish(errs)
 	if len(errs) != 0 {
@@ -182,13 +211,19 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		return &Response{Errors: []*errors.QueryError{errors.Errorf("%s", err)}}
 	}
 
+	// If the optional "operationName" POST parameter is not provided then
+	// use the query's operation name for improved tracing.
+	if operationName == "" {
+		operationName = op.Name.Name
+	}
+
 	// Subscriptions are not valid in Exec. Use schema.Subscribe() instead.
 	if op.Type == query.Subscription {
-		return &Response{Errors: []*errors.QueryError{&errors.QueryError{ Message: "graphql-ws protocol header is missing" }}}
+		return &Response{Errors: []*errors.QueryError{{Message: "graphql-ws protocol header is missing"}}}
 	}
 	if op.Type == query.Mutation {
 		if _, ok := s.schema.EntryPoints["mutation"]; !ok {
-			return &Response{Errors: []*errors.QueryError{{ Message: "no mutations are offered by the schema" }}}
+			return &Response{Errors: []*errors.QueryError{{Message: "no mutations are offered by the schema"}}}
 		}
 	}
 
@@ -198,7 +233,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	}
 	for _, v := range op.Vars {
 		if _, ok := variables[v.Name.Name]; !ok && v.Default != nil {
-			variables[v.Name.Name] = v.Default.Value(nil)
+			variables[v.Name.Name] = v.Default.Deserialize(nil)
 		}
 	}
 
@@ -250,7 +285,15 @@ func (s *Schema) validateSchema() error {
 	return nil
 }
 
-func validateRootOp(s *schema.Schema, name string, mandatory bool) error {
+type validationBridgingTracer struct {
+	tracer trace.ValidationTracer
+}
+
+func (t *validationBridgingTracer) TraceValidation(context.Context) trace.TraceValidationFinishFunc {
+	return t.tracer.TraceValidation()
+}
+
+func validateRootOp(s *types.Schema, name string, mandatory bool) error {
 	t, ok := s.EntryPoints[name]
 	if !ok {
 		if mandatory {
@@ -264,7 +307,7 @@ func validateRootOp(s *schema.Schema, name string, mandatory bool) error {
 	return nil
 }
 
-func getOperation(document *query.Document, operationName string) (*query.Operation, error) {
+func getOperation(document *types.ExecutableDefinition, operationName string) (*types.OperationDefinition, error) {
 	if len(document.Operations) == 0 {
 		return nil, fmt.Errorf("no operations in query document")
 	}

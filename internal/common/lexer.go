@@ -7,7 +7,8 @@ import (
 	"strings"
 	"text/scanner"
 
-	"github.com/JoinCAD/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/types"
 )
 
 type syntaxError string
@@ -30,7 +31,10 @@ func NewLexer(s string, useStringDescriptions bool) *Lexer {
 	}
 	sc.Init(strings.NewReader(s))
 
-	return &Lexer{sc: sc, useStringDescriptions: useStringDescriptions}
+	l := Lexer{sc: sc, useStringDescriptions: useStringDescriptions}
+	l.sc.Error = l.CatchScannerError
+
+	return &l
 }
 
 func (l *Lexer) CatchSyntaxError(f func()) (errRes *errors.QueryError) {
@@ -115,11 +119,11 @@ func (l *Lexer) ConsumeIdent() string {
 	return name
 }
 
-func (l *Lexer) ConsumeIdentWithLoc() Ident {
+func (l *Lexer) ConsumeIdentWithLoc() types.Ident {
 	loc := l.Location()
 	name := l.sc.TokenText()
 	l.ConsumeToken(scanner.Ident)
-	return Ident{name, loc}
+	return types.Ident{name, loc}
 }
 
 func (l *Lexer) ConsumeKeyword(keyword string) {
@@ -129,8 +133,8 @@ func (l *Lexer) ConsumeKeyword(keyword string) {
 	l.ConsumeWhitespace()
 }
 
-func (l *Lexer) ConsumeLiteral() *BasicLit {
-	lit := &BasicLit{Type: l.next, Text: l.sc.TokenText()}
+func (l *Lexer) ConsumeLiteral() *types.PrimitiveValue {
+	lit := &types.PrimitiveValue{Type: l.next, Text: l.sc.TokenText()}
 	l.ConsumeWhitespace()
 	return lit
 }
@@ -218,4 +222,8 @@ func (l *Lexer) consumeComment() {
 		}
 		l.comment.WriteRune(next)
 	}
+}
+
+func (l *Lexer) CatchScannerError(s *scanner.Scanner, msg string) {
+	l.SyntaxError(msg)
 }

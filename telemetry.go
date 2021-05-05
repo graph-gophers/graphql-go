@@ -3,17 +3,17 @@ package graphql
 import (
 	"fmt"
 
-	"github.com/JoinCAD/graphql-go/errors"
-	"github.com/JoinCAD/graphql-go/internal/common"
-	"github.com/JoinCAD/graphql-go/internal/query"
-	"github.com/JoinCAD/graphql-go/internal/validation"
+	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/internal/query"
+	"github.com/graph-gophers/graphql-go/internal/validation"
+	"github.com/graph-gophers/graphql-go/types"
 )
 
 // LoggedOperation represents a summary of an operation suitable for concise
 // telemetry, for example in a web server context.
 type LoggedOperation struct {
 	Name      string `json:",omitempty"`
-	Type      query.OperationType
+	Type      types.OperationType
 	Variables map[string]string `json:",omitempty"`
 	Fields    []LoggedField     `json:",omitempty"`
 }
@@ -24,8 +24,8 @@ type LoggedField struct {
 	Arguments map[string]string `json:",omitempty"`
 }
 
-func logField(field query.Field) LoggedField {
-	args := []common.Argument(field.Arguments)
+func logField(field types.Field) LoggedField {
+	args := []*types.Argument(field.Arguments)
 	var loggedArgs map[string]string
 	if len(args) > 0 {
 		loggedArgs = make(map[string]string)
@@ -39,11 +39,11 @@ func logField(field query.Field) LoggedField {
 	}
 }
 
-func logOperations(doc *query.Document) []LoggedOperation {
-	ops := []*query.Operation(doc.Operations)
+func logOperations(doc *types.ExecutableDefinition) []LoggedOperation {
+	ops := []*types.OperationDefinition(doc.Operations)
 	lops := make([]LoggedOperation, len(ops))
 	for i, op := range ops {
-		inputs := []*common.InputValue(op.Vars)
+		inputs := []*types.InputValueDefinition(op.Vars)
 		var args map[string]string
 		if len(inputs) > 0 {
 			args = make(map[string]string)
@@ -57,9 +57,9 @@ func logOperations(doc *query.Document) []LoggedOperation {
 		fields := make([]LoggedField, 0, len(op.Selections))
 		for _, sel := range op.Selections {
 			fmt.Printf("%+v\n", sel)
-			if field, ok := sel.(query.Field); ok {
+			if field, ok := sel.(types.Field); ok {
 				fields = append(fields, logField(field))
-			} else if field, ok := sel.(*query.Field); ok {
+			} else if field, ok := sel.(*types.Field); ok {
 				fields = append(fields, logField(*field))
 			}
 		}
@@ -82,9 +82,7 @@ func (s *Schema) ValidateAndLog(queryString string, variables map[string]interfa
 		return []*errors.QueryError{qErr}, nil
 	}
 
-	validationFinish := s.validationTracer.TraceValidation()
 	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
-	validationFinish(errs)
 	if len(errs) != 0 {
 		return errs, []LoggedOperation{}
 	}

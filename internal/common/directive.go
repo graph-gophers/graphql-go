@@ -1,32 +1,18 @@
 package common
 
-type Directive struct {
-	Name Ident
-	Args ArgumentList
-}
+import "github.com/graph-gophers/graphql-go/types"
 
-func ParseDirectives(l *Lexer) DirectiveList {
-	var directives DirectiveList
+func ParseDirectives(l *Lexer) types.DirectiveList {
+	var directives types.DirectiveList
 	for l.Peek() == '@' {
 		l.ConsumeToken('@')
-		d := &Directive{}
+		d := &types.Directive{}
 		d.Name = l.ConsumeIdentWithLoc()
 		d.Name.Loc.Column--
 		if l.Peek() == '(' {
-			d.Args = ParseArguments(l)
+			d.Arguments = ParseArgumentList(l)
 		}
 		directives = append(directives, d)
 	}
 	return directives
-}
-
-type DirectiveList []*Directive
-
-func (l DirectiveList) Get(name string) *Directive {
-	for _, d := range l {
-		if d.Name.Name == name {
-			return d
-		}
-	}
-	return nil
 }
