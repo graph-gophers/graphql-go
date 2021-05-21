@@ -266,7 +266,11 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 
 		if s.ExtResolver != nil {
 			if v, ok := s.ExtResolver[t.String()]; ok {
-				resolver = reflect.NewAt(v.Elem().Type(), unsafe.Pointer(resolver.Elem().UnsafeAddr()))
+				if resolver.Kind() == reflect.Struct {
+					resolver = reflect.NewAt(v.Elem().Type(), unsafe.Pointer(resolver.UnsafeAddr()))
+				} else {
+					resolver = reflect.NewAt(v.Elem().Type(), unsafe.Pointer(resolver.Elem().UnsafeAddr()))
+				}
 			}
 		}
 
