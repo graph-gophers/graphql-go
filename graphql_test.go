@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 	gqlerrors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/example/starwars"
 	"github.com/graph-gophers/graphql-go/gqltesting"
+	"github.com/graph-gophers/graphql-go/introspection"
+	"github.com/graph-gophers/graphql-go/trace"
 )
 
 type helloWorldResolver1 struct{}
@@ -3998,4 +4001,154 @@ func TestNullable(t *testing.T) {
 			`,
 		},
 	})
+}
+
+type testTracer struct {
+	mu      *sync.Mutex
+	fields  []fieldTrace
+	queries []queryTrace
+}
+
+type fieldTrace struct {
+	label     string
+	typeName  string
+	fieldName string
+	isTrivial bool
+	args      map[string]interface{}
+	err       *gqlerrors.QueryError
+}
+
+type queryTrace struct {
+	document  string
+	opName    string
+	variables map[string]interface{}
+	varTypes  map[string]*introspection.Type
+	errors    []*gqlerrors.QueryError
+}
+
+func (t *testTracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, trace.TraceFieldFinishFunc) {
+	return ctx, func(qe *gqlerrors.QueryError) {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+
+		ft := fieldTrace{
+			label:     label,
+			typeName:  typeName,
+			fieldName: fieldName,
+			isTrivial: trivial,
+			args:      args,
+			err:       qe,
+		}
+
+		t.fields = append(t.fields, ft)
+	}
+}
+
+func (t *testTracer) TraceQuery(ctx context.Context, document string, opName string, vars map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, trace.TraceQueryFinishFunc) {
+	return ctx, func(qe []*gqlerrors.QueryError) {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+
+		qt := queryTrace{
+			document:  document,
+			opName:    opName,
+			variables: vars,
+			varTypes:  varTypes,
+			errors:    qe,
+		}
+
+		t.queries = append(t.queries, qt)
+	}
+}
+
+var _ trace.Tracer = (*testTracer)(nil)
+
+func TestTracer(t *testing.T) {
+	t.Parallel()
+
+	tracer := &testTracer{mu: &sync.Mutex{}}
+
+	schema, err := graphql.ParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.Tracer(tracer))
+	if err != nil {
+		t.Fatalf("graphql.ParseSchema: %s", err)
+	}
+
+	ctx := context.Background()
+	doc := `
+	query TestTracer($id: ID!) {
+		HanSolo: human(id: $id) {
+			__typename
+			name
+		}
+	}
+	`
+	opName := "TestTracer"
+	variables := map[string]interface{}{
+		"id": "1002",
+	}
+
+	_ = schema.Exec(ctx, doc, opName, variables)
+
+	tracer.mu.Lock()
+	defer tracer.mu.Unlock()
+
+	if len(tracer.queries) != 1 {
+		t.Fatalf("expected one query trace, but got %d: %#v", len(tracer.queries), tracer.queries)
+	}
+
+	qt := tracer.queries[0]
+	if qt.document != doc {
+		t.Errorf("mismatched query trace document:\nwant: %q\ngot : %q", doc, qt.document)
+	}
+	if qt.opName != opName {
+		t.Errorf("mismated query trace operationName:\nwant: %q\ngot : %q", opName, qt.opName)
+	}
+
+	expectedFieldTraces := []fieldTrace{
+		{fieldName: "human", typeName: "Query"},
+		{fieldName: "__typename", typeName: "Human"},
+		{fieldName: "name", typeName: "Human"},
+	}
+
+	checkFieldTraces(t, expectedFieldTraces, tracer.fields)
+}
+
+func checkFieldTraces(t *testing.T, want, have []fieldTrace) {
+	if len(want) != len(have) {
+		t.Errorf("mismatched field traces: expected %d but got %d: %#v", len(want), len(have), have)
+	}
+
+	type comparsion struct {
+		want fieldTrace
+		have fieldTrace
+	}
+
+	m := map[string]comparsion{}
+
+	for _, ft := range want {
+		m[ft.fieldName] = comparsion{want: ft}
+	}
+
+	for _, ft := range have {
+		c := m[ft.fieldName]
+		c.have = ft
+		m[ft.fieldName] = c
+	}
+
+	for _, c := range m {
+		if err := stringsEqual(c.want.fieldName, c.have.fieldName); err != "" {
+			t.Error("mismatched field name:", err)
+		}
+		if err := stringsEqual(c.want.typeName, c.have.typeName); err != "" {
+			t.Error("mismatched field parent type:", err)
+		}
+	}
+}
+
+func stringsEqual(want, have string) string {
+	if want != have {
+		return fmt.Sprintf("mismatched values:\nwant: %q\nhave: %q", want, have)
+	}
+
+	return ""
 }

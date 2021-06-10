@@ -130,11 +130,16 @@ func collectFieldsToResolve(sels []selected.Selection, s *resolvable.Schema, res
 		case *selected.TypenameField:
 			_, ok := fieldByAlias[sel.Alias]
 			if !ok {
+				res := reflect.ValueOf(typeOf(sel, resolver))
+				f := s.FieldTypename
+				f.TypeName = res.String()
+
 				sf := &selected.SchemaField{
-					Field:       s.Meta.FieldTypename,
+					Field:       f,
 					Alias:       sel.Alias,
-					FixedResult: reflect.ValueOf(typeOf(sel, resolver)),
+					FixedResult: res,
 				}
+
 				field := &fieldToExec{field: sf, resolver: resolver}
 				*fields = append(*fields, field)
 				fieldByAlias[sel.Alias] = field
