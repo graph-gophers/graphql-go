@@ -780,7 +780,7 @@ func validateValueType(c *opContext, v types.Value, t types.Type) (bool, string)
 				return true, ""
 			}
 
-			return false, ""
+			return false, fmt.Sprintf("Expected type %q, found %s.", t, v)
 		}
 		
 		return true, ""
