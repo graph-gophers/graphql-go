@@ -774,15 +774,12 @@ func validateValueType(c *opContext, v types.Value, t types.Type) (bool, string)
 
 	switch t := t.(type) {
 	case *types.ScalarTypeDefinition, *types.EnumTypeDefinition:
-
 		if lit, ok := v.(*types.PrimitiveValue); ok {
 			if validateBasicLit(lit, t) {
 				return true, ""
 			}
-
 			return false, fmt.Sprintf("Expected type %q, found %s.", t, v)
 		}
-		
 		return true, ""
 
 	case *types.List:
