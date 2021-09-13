@@ -778,7 +778,9 @@ func validateValueType(c *opContext, v types.Value, t types.Type) (bool, string)
 			if validateBasicLit(lit, t) {
 				return true, ""
 			}
+			return false, fmt.Sprintf("Expected type %q, found %s.", t, v)
 		}
+		return true, ""
 
 	case *types.List:
 		list, ok := v.(*types.ListValue)
