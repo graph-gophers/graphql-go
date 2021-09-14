@@ -14,5 +14,5 @@ type DefaultPanicHandler struct{}
 
 // MakePanicError creates a new QueryError from a panic that occurred during execution
 func (h *DefaultPanicHandler) MakePanicError(ctx context.Context, value interface{}) *QueryError {
-	return Errorf("graphql: panic occurred: %v", value)
+	return Errorf("panic occurred: %v", value)
 }
