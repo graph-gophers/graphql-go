@@ -109,6 +109,7 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 - `Tracer(tracer trace.Tracer)` is used to trace queries and fields. It defaults to `trace.OpenTracingTracer`.
 - `ValidationTracer(tracer trace.ValidationTracer)` is used to trace validation errors. It defaults to `trace.NoopValidationTracer`.
 - `Logger(logger log.Logger)` is used to log panics during query execution. It defaults to `exec.DefaultLogger`.
+- `PanicHandler(panicHandler errors.PanicHandler)` is used to transform panics into errors during query execution. It defaults to `errors.DefaultPanicHandler`.
 - `DisableIntrospection()` disables introspection queries.
 
 ### Custom Errors
