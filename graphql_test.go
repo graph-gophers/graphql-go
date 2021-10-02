@@ -4152,3 +4152,71 @@ func stringsEqual(want, have string) string {
 
 	return ""
 }
+
+type queryVarResolver struct{}
+type filterArgs struct {
+	Required string
+	Optional *string
+}
+type filterSearchResults struct {
+	Match *string
+}
+
+func (r *queryVarResolver) Search(ctx context.Context, args *struct{ Filter filterArgs }) []filterSearchResults {
+	return []filterSearchResults{}
+}
+
+func TestQueryVariablesValidation(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{{
+		Schema: graphql.MustParseSchema(`
+			input SearchFilter {
+			  	required: String!
+			  	optional: String
+			}
+			
+			type SearchResults {
+				match: String
+			}
+			
+			type Query {
+				search(filter: SearchFilter!): [SearchResults!]!
+			}`, &queryVarResolver{}, graphql.UseFieldResolvers()),
+		Query: `
+        		query {
+        			search(filter: {}) {
+        				match
+        			}
+        		}`,
+		ExpectedErrors: []*gqlerrors.QueryError{{
+			Message:   "Argument \"filter\" has invalid value {}.\nIn field \"required\": Expected \"String!\", found null.",
+			Locations: []gqlerrors.Location{{Line: 3, Column: 27}},
+			Rule:      "ArgumentsOfCorrectType",
+		}},
+	}, {
+		Schema: graphql.MustParseSchema(`
+			input SearchFilter {
+				required: String!
+				optional: String
+			}
+			
+			type SearchResults {
+				match: String
+			}
+			
+			type Query {
+				search(filter: SearchFilter!): [SearchResults!]!
+			}`, &queryVarResolver{}, graphql.UseFieldResolvers()),
+		Query: `
+			query q($filter: SearchFilter!) {
+				search(filter: $filter) {
+					match
+				}
+			}`,
+		Variables: map[string]interface{}{"filter": map[string]interface{}{}},
+		ExpectedErrors: []*gqlerrors.QueryError{{
+			Message:   "Variable \"required\" has invalid value null.\nExpected type \"String!\", found null.",
+			Locations: []gqlerrors.Location{{Line: 3, Column: 5}},
+			Rule:      "VariablesOfCorrectType",
+		}},
+	}})
+}
