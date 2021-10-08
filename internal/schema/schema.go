@@ -406,6 +406,16 @@ func parseObjectDef(l *common.Lexer) *types.ObjectTypeDefinition {
 func parseInterfaceDef(l *common.Lexer) *types.InterfaceTypeDefinition {
 	i := &types.InterfaceTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
 
+	if l.Peek() == scanner.Ident {
+		l.ConsumeKeyword("implements")
+		i.Interfaces = append(i.Interfaces, &types.InterfaceTypeDefinition{Name: l.ConsumeIdent()})
+
+		for l.Peek() == '&' {
+			l.ConsumeToken('&')
+			i.Interfaces = append(i.Interfaces, &types.InterfaceTypeDefinition{Name: l.ConsumeIdent()})
+		}
+	}
+
 	i.Directives = common.ParseDirectives(l)
 
 	l.ConsumeToken('{')
