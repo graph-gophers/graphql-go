@@ -76,6 +76,33 @@ func Parse(s *types.Schema, schemaString string, useStringDescriptions bool) err
 		s.EntryPoints[key] = t
 	}
 
+	// Interface types need validation: https://spec.graphql.org/draft/#sec-Interfaces.Interfaces-Implementing-Interfaces
+	for _, typeDef := range s.Types {
+		switch t := typeDef.(type) {
+		case *types.InterfaceTypeDefinition:
+			for i, implements := range t.Interfaces {
+				typ, ok := s.Types[implements.Name]
+				if !ok {
+					return errors.Errorf("interface %q not found", implements)
+				}
+				inteface, ok := typ.(*types.InterfaceTypeDefinition)
+				if !ok {
+					return errors.Errorf("type %q is not an interface", inteface)
+				}
+
+				for _, f := range inteface.Fields.Names() {
+					if t.Fields.Get(f) == nil {
+						return errors.Errorf("interface %q expects field %q but %q does not provide it", inteface.Name, f, t.Name)
+					}
+				}
+
+				t.Interfaces[i] = inteface
+			}
+		default:
+			continue
+		}
+	}
+
 	for _, obj := range s.Objects {
 		obj.Interfaces = make([]*types.InterfaceTypeDefinition, len(obj.InterfaceNames))
 		if err := resolveDirectives(s, obj.Directives, "OBJECT"); err != nil {
