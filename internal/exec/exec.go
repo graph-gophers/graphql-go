@@ -281,7 +281,8 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 		v := resolver.Interface()
 		data, err := json.Marshal(v)
 		if err != nil {
-			panic(errors.Errorf("could not marshal %v: %s", v, err))
+			query, _ := ctx.Value(ctx.Value("query_name")).(string)
+			panic(errors.Errorf("could not marshal %v [%s]: %s", v, query, err))
 		}
 		out.Write(data)
 
