@@ -56,20 +56,10 @@ func main() {
 ```
 
 To test:
-
-<table><tr style="padding: 0 !important;"><td style="padding: 0 !important; border: none !important;">
-  <strong style="
-	font-family:  ui-monospace,SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace !important;
-	padding:      0 !important;
-  "> $ </strong>
-</td><td style="border: none !important;">
 	    
 ```sh
-curl -XPOST -d '{"query": "{ hello }"}' localhost:8080/query			
-
+curl -XPOST -d '{"query": "{ hello }"}' localhost:8080/query
 ```
-</td></tr></table>
-
 ### Resolvers
 
 A resolver must have one method or field for each field of the GraphQL type it resolves. The method or field name has to be [exported](https://golang.org/ref/spec#Exported_identifiers) and match the schema's field's name in a non-case-sensitive way.
