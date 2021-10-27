@@ -56,8 +56,9 @@ func main() {
 ```
 
 To test:
+	    
 ```sh
-$ curl -XPOST -d '{"query": "{ hello }"}' localhost:8080/query
+curl -XPOST -d '{"query": "{ hello }"}' localhost:8080/query
 ```
 
 ### Resolvers
