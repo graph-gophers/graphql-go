@@ -60,6 +60,7 @@ To test:
 ```sh
 curl -XPOST -d '{"query": "{ hello }"}' localhost:8080/query
 ```
+
 ### Resolvers
 
 A resolver must have one method or field for each field of the GraphQL type it resolves. The method or field name has to be [exported](https://golang.org/ref/spec#Exported_identifiers) and match the schema's field's name in a non-case-sensitive way.
