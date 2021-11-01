@@ -30,6 +30,10 @@ func NewLexer(s string, useStringDescriptions bool) *Lexer {
 	}
 	sc.Init(strings.NewReader(s))
 
+	sc.Error = func(s *scanner.Scanner, msg string) {
+		// do nothing, as we get a large volume of bad requests and we dont want to log these
+	}
+
 	return &Lexer{sc: sc, useStringDescriptions: useStringDescriptions}
 }
 
