@@ -17,8 +17,6 @@ import (
 	"github.com/graph-gophers/graphql-go/introspection"
 	"github.com/graph-gophers/graphql-go/log"
 	"github.com/graph-gophers/graphql-go/trace"
-
-	"github.com/redsift/go-stats/stats"
 )
 
 // ParseSchema parses a GraphQL schema and attaches the given root resolver. It returns an error if
@@ -71,7 +69,6 @@ type Schema struct {
 	tracer                trace.Tracer
 	validationTracer      trace.ValidationTracer
 	logger                log.Logger
-	collector             stats.Collector
 	useStringDescriptions bool
 	disableIntrospection  bool
 }
@@ -138,13 +135,6 @@ func DisableIntrospection() SchemaOpt {
 	}
 }
 
-// Collector used to send metrics
-func Collector(collector stats.Collector) SchemaOpt {
-	return func(s *Schema) {
-		s.collector = collector
-	}
-}
-
 // Response represents a typical response of a GraphQL server. It may be encoded to JSON directly or
 // it may be further processed to a custom response type, for example to include custom error data.
 // Errors are intentionally serialized first based on the advice in https://github.com/facebook/graphql/commit/7b40390d48680b15cb93e02d46ac5eb249689876#diff-757cea6edf0288677a9eea4cfc801d87R107
@@ -177,10 +167,6 @@ func (s *Schema) Exec(ctx context.Context, queryString string, operationName str
 func (s *Schema) exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, res *resolvable.Schema) *Response {
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
-		if s.collector != nil {
-			s.collector.Count("graphql.parse_error", float64(1))
-		}
-
 		return &Response{Errors: []*errors.QueryError{qErr}}
 	}
 
