@@ -256,7 +256,13 @@ func (b *execBuilder) makeObjectExec(typeName string, fields types.FieldsDefinit
 		}
 		fe, err := b.makeFieldExec(typeName, f, m, sf, methodIndex, fieldIndex, methodHasReceiver)
 		if err != nil {
-			return nil, fmt.Errorf("%s\n\tused by (%s).%s", err, resolverType, m.Name)
+			var resolverName string
+			if methodIndex != -1 {
+				resolverName = m.Name
+			} else {
+				resolverName = sf.Name
+			}
+			return nil, fmt.Errorf("%s\n\tused by (%s).%s", err, resolverType, resolverName)
 		}
 		Fields[f.Name] = fe
 	}
