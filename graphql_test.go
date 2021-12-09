@@ -3074,6 +3074,8 @@ type inputArgumentsObjectMismatch2 struct{}
 
 type inputArgumentsObjectMismatch3 struct{}
 
+type fieldNameMismatch struct{}
+
 type helloInput struct {
 	Name string
 }
@@ -3082,7 +3084,7 @@ type helloOutput struct {
 	Name string
 }
 
-func (*helloOutput) Hello() helloOutput {
+func (*fieldNameMismatch) Hello() helloOutput {
 	return helloOutput{}
 }
 
@@ -3228,7 +3230,7 @@ func TestInputArguments_failSchemaParsing(t *testing.T) {
 		},
 		"Struct field name inclusion": {
 			Args: args{
-				Resolver: &helloOutput{},
+				Resolver: &fieldNameMismatch{},
 				Opts:     []graphql.SchemaOpt{graphql.UseFieldResolvers()},
 				Schema: `
 					type Query {
@@ -3239,7 +3241,7 @@ func TestInputArguments_failSchemaParsing(t *testing.T) {
 					}
 				`,
 			},
-			Want: want{Error: "string is not a pointer\n\tused by (graphql_test.helloOutput).Name\n\tused by (*graphql_test.helloOutput).Hello"},
+			Want: want{Error: "string is not a pointer\n\tused by (graphql_test.helloOutput).Name\n\tused by (*graphql_test.fieldNameMismatch).Hello"},
 		},
 	}
 
