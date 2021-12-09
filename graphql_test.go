@@ -3078,6 +3078,14 @@ type helloInput struct {
 	Name string
 }
 
+type helloOutput struct {
+	Name string
+}
+
+func (*helloOutput) Hello() helloOutput {
+	return helloOutput{}
+}
+
 type helloInputMismatch struct {
 	World string
 }
@@ -3110,6 +3118,7 @@ func TestInputArguments_failSchemaParsing(t *testing.T) {
 	type args struct {
 		Resolver interface{}
 		Schema   string
+		Opts     []graphql.SchemaOpt
 	}
 	type want struct {
 		Error string
@@ -3217,6 +3226,21 @@ func TestInputArguments_failSchemaParsing(t *testing.T) {
 			},
 			Want: want{Error: "field \"Input\": *struct { Thing string } does not define field \"name\" (hint: missing `args struct { ... }` wrapper for field arguments, or missing field on input struct)\n\tused by (*graphql_test.inputArgumentsObjectMismatch3).Hello"},
 		},
+		"Struct field name inclusion": {
+			Args: args{
+				Resolver: &helloOutput{},
+				Opts:     []graphql.SchemaOpt{graphql.UseFieldResolvers()},
+				Schema: `
+					type Query {
+						hello(): HelloOutput!
+					}
+					type HelloOutput {
+						name: Int
+					}
+				`,
+			},
+			Want: want{Error: "string is not a pointer\n\tused by (graphql_test.helloOutput).Name\n\tused by (*graphql_test.helloOutput).Hello"},
+		},
 	}
 
 	for name, tt := range testTable {
@@ -3224,7 +3248,7 @@ func TestInputArguments_failSchemaParsing(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := graphql.ParseSchema(tt.Args.Schema, tt.Args.Resolver)
+			_, err := graphql.ParseSchema(tt.Args.Schema, tt.Args.Resolver, tt.Args.Opts...)
 			if err == nil || err.Error() != tt.Want.Error {
 				t.Log("Schema parsing error mismatch")
 				t.Logf("got: %s", err)
