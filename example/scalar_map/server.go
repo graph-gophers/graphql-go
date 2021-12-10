@@ -10,19 +10,17 @@ import (
 	"github.com/graph-gophers/graphql-go/relay"
 )
 
-
 type Args struct {
 	Name string
 	Data types.Map
 }
 
-
 type mutation struct{}
 
-func (_ *mutation) Hello(args Args) string { 
+func (_ *mutation) Hello(args Args) string {
 
 	fmt.Println(args)
-	
+
 	return "Args accept!"
 }
 

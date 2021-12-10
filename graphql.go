@@ -132,7 +132,7 @@ func Tracer(tracer trace.Tracer) SchemaOpt {
 
 // ValidationTracer is used to trace validation errors. It defaults to trace.NoopValidationTracer.
 // Deprecated: context is needed to support tracing correctly. Use a Tracer which implements trace.ValidationTracerContext.
-func ValidationTracer(tracer trace.ValidationTracer) SchemaOpt {
+func ValidationTracer(tracer trace.ValidationTracer) SchemaOpt { //nolint:staticcheck
 	return func(s *Schema) {
 		s.validationTracer = &validationBridgingTracer{tracer: tracer}
 	}
@@ -297,7 +297,7 @@ func (s *Schema) validateSchema() error {
 }
 
 type validationBridgingTracer struct {
-	tracer trace.ValidationTracer
+	tracer trace.ValidationTracer //nolint:staticcheck
 }
 
 func (t *validationBridgingTracer) TraceValidation(context.Context) trace.TraceValidationFinishFunc {

@@ -1,7 +1,6 @@
 package resolvable
 
 import (
-	"fmt"
 	"reflect"
 
 	"github.com/graph-gophers/graphql-go/introspection"
@@ -42,7 +41,7 @@ func newMeta(s *types.Schema) *Meta {
 			Name: "__typename",
 			Type: &types.NonNull{OfType: s.Types["String"]},
 		},
-		TraceLabel: fmt.Sprintf("GraphQL field: __typename"),
+		TraceLabel: "GraphQL field: __typename",
 	}
 
 	fieldSchema := Field{
@@ -50,7 +49,7 @@ func newMeta(s *types.Schema) *Meta {
 			Name: "__schema",
 			Type: s.Types["__Schema"],
 		},
-		TraceLabel: fmt.Sprintf("GraphQL field: __schema"),
+		TraceLabel: "GraphQL field: __schema",
 	}
 
 	fieldType := Field{
@@ -58,7 +57,7 @@ func newMeta(s *types.Schema) *Meta {
 			Name: "__type",
 			Type: s.Types["__Type"],
 		},
-		TraceLabel: fmt.Sprintf("GraphQL field: __type"),
+		TraceLabel: "GraphQL field: __type",
 	}
 
 	return &Meta{
