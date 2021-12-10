@@ -76,6 +76,33 @@ func Parse(s *types.Schema, schemaString string, useStringDescriptions bool) err
 		s.EntryPoints[key] = t
 	}
 
+	// Interface types need validation: https://spec.graphql.org/draft/#sec-Interfaces.Interfaces-Implementing-Interfaces
+	for _, typeDef := range s.Types {
+		switch t := typeDef.(type) {
+		case *types.InterfaceTypeDefinition:
+			for i, implements := range t.Interfaces {
+				typ, ok := s.Types[implements.Name]
+				if !ok {
+					return errors.Errorf("interface %q not found", implements)
+				}
+				inteface, ok := typ.(*types.InterfaceTypeDefinition)
+				if !ok {
+					return errors.Errorf("type %q is not an interface", inteface)
+				}
+
+				for _, f := range inteface.Fields.Names() {
+					if t.Fields.Get(f) == nil {
+						return errors.Errorf("interface %q expects field %q but %q does not provide it", inteface.Name, f, t.Name)
+					}
+				}
+
+				t.Interfaces[i] = inteface
+			}
+		default:
+			continue
+		}
+	}
+
 	for _, obj := range s.Objects {
 		obj.Interfaces = make([]*types.InterfaceTypeDefinition, len(obj.InterfaceNames))
 		if err := resolveDirectives(s, obj.Directives, "OBJECT"); err != nil {
@@ -405,6 +432,16 @@ func parseObjectDef(l *common.Lexer) *types.ObjectTypeDefinition {
 
 func parseInterfaceDef(l *common.Lexer) *types.InterfaceTypeDefinition {
 	i := &types.InterfaceTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
+
+	if l.Peek() == scanner.Ident {
+		l.ConsumeKeyword("implements")
+		i.Interfaces = append(i.Interfaces, &types.InterfaceTypeDefinition{Name: l.ConsumeIdent()})
+
+		for l.Peek() == '&' {
+			l.ConsumeToken('&')
+			i.Interfaces = append(i.Interfaces, &types.InterfaceTypeDefinition{Name: l.ConsumeIdent()})
+		}
+	}
 
 	i.Directives = common.ParseDirectives(l)
 

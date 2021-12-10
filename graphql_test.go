@@ -4246,3 +4246,54 @@ func TestQueryVariablesValidation(t *testing.T) {
 		}},
 	}})
 }
+
+type interfaceImplementingInterfaceResolver struct{}
+type interfaceImplementingInterfaceExample struct {
+	A string
+	B string
+	C bool
+}
+
+func (r *interfaceImplementingInterfaceResolver) Hey() *interfaceImplementingInterfaceExample {
+	return &interfaceImplementingInterfaceExample{
+		A: "testing",
+		B: "test",
+		C: true,
+	}
+}
+
+func TestInterfaceImplementingInterface(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{{
+		Schema: graphql.MustParseSchema(`
+        interface A {
+          a: String!
+        }
+        interface B implements A {
+          a: String!
+          b: String!
+        }
+        interface C implements B & A {
+          a: String!
+          b: String!
+          c: Boolean!
+        }
+        type ABC implements C {
+          a: String!
+          b: String!
+          c: Boolean!
+        }
+        type Query {
+          hey: ABC
+        }`, &interfaceImplementingInterfaceResolver{}, graphql.UseFieldResolvers(), graphql.UseFieldResolvers()),
+		Query: `query {hey { a b c }}`,
+		ExpectedResult: `
+				{
+					"hey": {
+						"a": "testing",
+						"b": "test",
+						"c": true
+					}
+				}
+			`,
+	}})
+}
