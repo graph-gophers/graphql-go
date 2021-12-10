@@ -875,7 +875,7 @@ Second line of the description.
 }
 
 func TestInterfaceImplementsInterface(t *testing.T) {
-	for _, test := range []struct {
+	for _, tt := range []struct {
 		name                  string
 		sdl                   string
 		useStringDescriptions bool
@@ -890,8 +890,8 @@ func TestInterfaceImplementsInterface(t *testing.T) {
 			}
 			interface Bar implements Foo {
 				field: String!
-      }
-      `,
+			}
+			`,
 			validateSchema: func(s *types.Schema) error {
 				const implementedInterfaceName = "Bar"
 				typ, ok := s.Types[implementedInterfaceName].(*types.InterfaceTypeDefinition)
@@ -922,7 +922,7 @@ func TestInterfaceImplementsInterface(t *testing.T) {
 		{
 			name: "Parses interface transitively implementing an interface that implements an interface",
 			sdl: `
-      interface Foo {
+			interface Foo {
 				field: String!
 			}
 			interface Bar implements Foo {
@@ -931,7 +931,7 @@ func TestInterfaceImplementsInterface(t *testing.T) {
 			interface Baz implements Bar & Foo {
 				field: String!
 			}
-      `,
+			`,
 			validateSchema: func(s *types.Schema) error {
 				const implementedInterfaceName = "Baz"
 				typ, ok := s.Types[implementedInterfaceName].(*types.InterfaceTypeDefinition)
@@ -967,7 +967,7 @@ func TestInterfaceImplementsInterface(t *testing.T) {
 		{
 			name: "Transitively implemented interfaces must also be defined on an implementing type or interface",
 			sdl: `
-		  interface A {
+			interface A {
 				message: String!
 			}
 			interface B implements A {
@@ -979,7 +979,7 @@ func TestInterfaceImplementsInterface(t *testing.T) {
 				name: String!
 				hug: Boolean!
 			}
-		  `,
+			`,
 			validateError: func(err error) error {
 				msg := `graphql: interface "C" must explicitly implement transitive interface "A"`
 				if err == nil || err.Error() != msg {
@@ -989,18 +989,18 @@ func TestInterfaceImplementsInterface(t *testing.T) {
 			},
 		},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			s, err := schema.ParseSchema(test.sdl, test.useStringDescriptions)
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := schema.ParseSchema(tt.sdl, tt.useStringDescriptions)
 			if err != nil {
-				if test.validateError == nil {
+				if tt.validateError == nil {
 					t.Fatal(err)
 				}
-				if err := test.validateError(err); err != nil {
+				if err := tt.validateError(err); err != nil {
 					t.Fatal(err)
 				}
 			}
-			if test.validateSchema != nil {
-				if err := test.validateSchema(s); err != nil {
+			if tt.validateSchema != nil {
+				if err := tt.validateSchema(s); err != nil {
 					t.Fatal(err)
 				}
 			}
