@@ -715,7 +715,7 @@ func TestNilInterface(t *testing.T) {
 				}
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
+				{
 					Message:       "x",
 					Path:          []interface{}{"b"},
 					ResolverError: errors.New("x"),
@@ -753,7 +753,7 @@ func TestErrorPropagationInLists(t *testing.T) {
 				null
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
+				{
 					Message:       droidNotFoundError.Error(),
 					Path:          []interface{}{"findDroids", 1, "name"},
 					ResolverError: droidNotFoundError,
@@ -795,7 +795,7 @@ func TestErrorPropagationInLists(t *testing.T) {
 				}
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
+				{
 					Message:       droidNotFoundError.Error(),
 					Path:          []interface{}{"findDroids", 1, "name"},
 					ResolverError: droidNotFoundError,
@@ -829,7 +829,7 @@ func TestErrorPropagationInLists(t *testing.T) {
 				}
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
+				{
 					Message: `graphql: got nil for non-null "Droid"`,
 					Path:    []interface{}{"findNilDroids", 1},
 				},
@@ -906,7 +906,7 @@ func TestErrorPropagationInLists(t *testing.T) {
 				}
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
+				{
 					Message:       quoteError.Error(),
 					ResolverError: quoteError,
 					Path:          []interface{}{"findDroids", 0, "quotes"},
@@ -941,12 +941,12 @@ func TestErrorPropagationInLists(t *testing.T) {
 				}
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
+				{
 					Message:       quoteError.Error(),
 					ResolverError: quoteError,
 					Path:          []interface{}{"findNilDroids", 0, "quotes"},
 				},
-				&gqlerrors.QueryError{
+				{
 					Message: `graphql: got nil for non-null "Droid"`,
 					Path:    []interface{}{"findNilDroids", 1},
 				},
@@ -985,7 +985,7 @@ func TestErrorWithExtensions(t *testing.T) {
 				null
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
+				{
 					Message:       droidNotFoundError.Error(),
 					Path:          []interface{}{"FindDroid"},
 					ResolverError: droidNotFoundError,
@@ -1021,7 +1021,7 @@ func TestErrorWithNoExtensions(t *testing.T) {
 				null
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
-				&gqlerrors.QueryError{
+				{
 					Message:       err.Error(),
 					Path:          []interface{}{"DismissVader"},
 					ResolverError: err,

@@ -2,10 +2,10 @@ package types
 
 import "fmt"
 
-type Map map[string]interface {}
+type Map map[string]interface{}
 
 func (Map) ImplementsGraphQLType(name string) bool {
-	return name == "Map" 
+	return name == "Map"
 }
 
 func (j *Map) UnmarshalGraphQL(input interface{}) error {

@@ -469,9 +469,9 @@ Second line of the description.
 					return fmt.Errorf("Expected 3 possible types, but instead got %d types", len(typ.UnionMemberTypes))
 				}
 				posible := map[string]struct{}{
-					"Coloured": struct{}{},
-					"Named":    struct{}{},
-					"Numbered": struct{}{},
+					"Coloured": {},
+					"Named":    {},
+					"Numbered": {},
 				}
 				for _, pt := range typ.UnionMemberTypes {
 					if _, ok := posible[pt.Name]; !ok {
@@ -503,11 +503,11 @@ Second line of the description.
 					return fmt.Errorf("Expected 5 enum values, but instead got %d types", len(typ.EnumValuesDefinition))
 				}
 				posible := map[string]struct{}{
-					"AUD": struct{}{},
-					"USD": struct{}{},
-					"EUR": struct{}{},
-					"BGN": struct{}{},
-					"GBP": struct{}{},
+					"AUD": {},
+					"USD": {},
+					"EUR": {},
+					"BGN": {},
+					"GBP": {},
 				}
 				for _, v := range typ.EnumValuesDefinition {
 					if _, ok := posible[v.EnumValue]; !ok {
@@ -604,9 +604,9 @@ Second line of the description.
 					return fmt.Errorf("Expected 3 possible types, but instead got %d types", len(typ.UnionMemberTypes))
 				}
 				posible := map[string]struct{}{
-					"Coloured": struct{}{},
-					"Named":    struct{}{},
-					"Numbered": struct{}{},
+					"Coloured": {},
+					"Named":    {},
+					"Numbered": {},
 				}
 				for _, pt := range typ.UnionMemberTypes {
 					if _, ok := posible[pt.Name]; !ok {
@@ -641,10 +641,10 @@ Second line of the description.
 					return fmt.Errorf("Expected 4 fields, but instead got %d types", len(typ.Values))
 				}
 				posible := map[string]struct{}{
-					"id":       struct{}{},
-					"name":     struct{}{},
-					"category": struct{}{},
-					"tags":     struct{}{},
+					"id":       {},
+					"name":     {},
+					"category": {},
+					"tags":     {},
 				}
 				for _, pt := range typ.Values {
 					if _, ok := posible[pt.Name.Name]; !ok {
@@ -741,9 +741,9 @@ Second line of the description.
 					return fmt.Errorf("Expected 3 fields, but instead got %d types", len(typ.Fields))
 				}
 				fields := map[string]struct{}{
-					"id":       struct{}{},
-					"name":     struct{}{},
-					"category": struct{}{},
+					"id":       {},
+					"name":     {},
+					"category": {},
 				}
 				for _, f := range typ.Fields {
 					if _, ok := fields[f.Name]; !ok {
@@ -861,8 +861,8 @@ Second line of the description.
 				if test.validateError == nil {
 					t.Fatal(err)
 				}
-				if err := test.validateError(err); err != nil {
-					t.Fatal(err)
+				if err2 := test.validateError(err); err2 != nil {
+					t.Fatal(err2)
 				}
 			}
 			if test.validateSchema != nil {
