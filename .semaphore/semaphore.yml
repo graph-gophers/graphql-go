@@ -5,17 +5,31 @@ agent:
     type: e1-standard-2
     os_image: ubuntu2004
 blocks:
-  - name: Test
+  - name: Style Check
     task:
       jobs:
-        - name: go test
+        - name: fmt
           commands:
             - sem-version go 1.17
-            - export GO111MODULE=on
-            - export GOPATH=~/go
-            - 'export PATH=/home/semaphore/go/bin:$PATH'
             - checkout
-            - go version
-            - go get ./...
+            - ./scripts/golangci_install.sh -b $(go env GOPATH)/bin v1.42.1
+            - export PATH=$(go env GOPATH)/bin:$PATH
+            - golangci-lint run ./...
+
+  - name: Test & Build
+    task:
+      prologue:
+        commands:
+          - sem-version go 1.17
+          - export PATH=$(go env GOPATH)/bin:$PATH
+          - checkout
+          - go version
+
+      jobs:
+        - name: Test
+          commands:
             - go test ./...
+
+        - name: Build
+          commands:
             - go build -v .

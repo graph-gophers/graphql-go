@@ -995,13 +995,13 @@ func TestInterfaceImplementsInterface(t *testing.T) {
 				if tt.validateError == nil {
 					t.Fatal(err)
 				}
-				if err := tt.validateError(err); err != nil {
-					t.Fatal(err)
+				if err2 := tt.validateError(err); err2 != nil {
+					t.Fatal(err2)
 				}
 			}
 			if tt.validateSchema != nil {
-				if err := tt.validateSchema(s); err != nil {
-					t.Fatal(err)
+				if err2 := tt.validateSchema(s); err2 != nil {
+					t.Fatal(err2)
 				}
 			}
 		})
