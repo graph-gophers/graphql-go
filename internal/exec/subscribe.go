@@ -82,7 +82,7 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *types
 
 	c := make(chan *Response)
 	// TODO: handle resolver nil channel better?
-	if result == reflect.Zero(result.Type()) {
+	if result.IsZero() {
 		close(c)
 		return c
 	}
