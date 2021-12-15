@@ -7,6 +7,7 @@ import (
 	errlib "errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"sync"
 
 	"github.com/tokopedia/graphql-go/errors"
@@ -41,19 +42,53 @@ func makePanicError(value interface{}) *errors.QueryError {
 	return errors.Errorf("graphql: panic occurred: %v", value)
 }
 
+var myMap = make(map[string]string)
+var mutex = &sync.RWMutex{}
+
+var objMap = map[string]int{
+	"String": 0,
+	"Int":    0,
+}
+var cost = 0
+var firstTime = true
+
 func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *query.Operation) ([]byte, []*errors.QueryError) {
 	var out bytes.Buffer
+	myMap = make(map[string]string)
+	cost = 0
 	func() {
 		defer r.handlePanic(ctx)
 		sels := selected.ApplyOperation(&r.Request, s, op)
 		r.execSelections(ctx, sels, nil, s, s.Resolver, &out, op.Type == query.Mutation)
 	}()
-
 	if err := ctx.Err(); err != nil {
 		return nil, []*errors.QueryError{errors.Errorf("%s", err)}
 	}
-
+	if !firstTime {
+		out.WriteByte(',')
+		out.WriteByte('"')
+		out.WriteString("QueryCost")
+		out.WriteByte('"')
+		out.WriteByte(':')
+		out.WriteByte([]byte(calculateTheCost())[0])
+	} else {
+		firstTime = false
+	}
 	return out.Bytes(), r.Errs
+}
+
+func calculateTheCost() string {
+	mutex.Lock()
+	cost = 0
+	for _, v := range myMap {
+		if _, ok := objMap[v]; !ok {
+			cost += 1
+		} else {
+			cost += objMap[v]
+		}
+	}
+	mutex.Unlock()
+	return strconv.Itoa(cost)
 }
 
 type fieldToExec struct {
@@ -202,6 +237,9 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 				in = append(in, f.field.PackedArgs)
 			}
 			callOut := f.resolver.Method(f.field.MethodIndex).Call(in)
+			mutex.Lock()
+			myMap[f.field.Alias] = f.field.Type.String()
+			mutex.Unlock()
 			result = callOut[0]
 			if f.field.HasError && !callOut[1].IsNil() {
 				graphQLErr, ok := callOut[1].Interface().(errors.GraphQLError)
