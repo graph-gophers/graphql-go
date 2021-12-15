@@ -24,7 +24,7 @@ func UnmarshalKind(id graphql.ID) string {
 	if err != nil {
 		return ""
 	}
-	i := strings.IndexByte(string(s),  ':')
+	i := strings.IndexByte(string(s), ':')
 	if i == -1 {
 		return ""
 	}
