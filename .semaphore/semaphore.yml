@@ -30,7 +30,6 @@ blocks:
           commands:
             - go test ./...
 
-      jobs:
         - name: Build
           commands:
             - go build -v .
