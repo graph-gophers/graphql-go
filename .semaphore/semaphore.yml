@@ -12,9 +12,7 @@ blocks:
           commands:
             - sem-version go 1.17
             - checkout
-            # Recommended way to install golang-ci
-            # https://golangci-lint.run/usage/install/#other-ci.
-            - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.42.1
+            - ./scripts/golangci_install.sh -b $(go env GOPATH)/bin v1.42.1
             - export PATH=$(go env GOPATH)/bin:$PATH
             - golangci-lint run ./...
 
