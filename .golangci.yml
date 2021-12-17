@@ -9,7 +9,6 @@ linters-settings:
     enable-all: true
     disable:
       - fieldalignment
-      - composites # remove later
       - deepequalerrors # remove later
 
 linters:
@@ -26,7 +25,7 @@ linters:
     - unconvert
     - unused
     - varcheck
-    # - misspell add later
+    - misspell
     - goimports
 
 issues:
