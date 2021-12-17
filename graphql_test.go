@@ -4144,15 +4144,15 @@ func checkFieldTraces(t *testing.T, want, have []fieldTrace) {
 		t.Errorf("mismatched field traces: expected %d but got %d: %#v", len(want), len(have), have)
 	}
 
-	type comparsion struct {
+	type comparison struct {
 		want fieldTrace
 		have fieldTrace
 	}
 
-	m := map[string]comparsion{}
+	m := map[string]comparison{}
 
 	for _, ft := range want {
-		m[ft.fieldName] = comparsion{want: ft}
+		m[ft.fieldName] = comparison{want: ft}
 	}
 
 	for _, ft := range have {
