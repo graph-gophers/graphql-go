@@ -15,12 +15,12 @@ func ParseLiteral(l *Lexer, constOnly bool) types.Value {
 			panic("unreachable")
 		}
 		l.ConsumeToken('$')
-		return &types.Variable{l.ConsumeIdent(), loc}
+		return &types.Variable{Name: l.ConsumeIdent(), Loc: loc}
 
 	case scanner.Int, scanner.Float, scanner.String, scanner.Ident:
 		lit := l.ConsumeLiteral()
 		if lit.Type == scanner.Ident && lit.Text == "null" {
-			return &types.NullValue{loc}
+			return &types.NullValue{Loc: loc}
 		}
 		lit.Loc = loc
 		return lit
@@ -37,7 +37,7 @@ func ParseLiteral(l *Lexer, constOnly bool) types.Value {
 			list = append(list, ParseLiteral(l, constOnly))
 		}
 		l.ConsumeToken(']')
-		return &types.ListValue{list, loc}
+		return &types.ListValue{Values: list, Loc: loc}
 
 	case '{':
 		l.ConsumeToken('{')
@@ -46,10 +46,10 @@ func ParseLiteral(l *Lexer, constOnly bool) types.Value {
 			name := l.ConsumeIdentWithLoc()
 			l.ConsumeToken(':')
 			value := ParseLiteral(l, constOnly)
-			fields = append(fields, &types.ObjectField{name, value})
+			fields = append(fields, &types.ObjectField{Name: name, Value: value})
 		}
 		l.ConsumeToken('}')
-		return &types.ObjectValue{fields, loc}
+		return &types.ObjectValue{Fields: fields, Loc: loc}
 
 	default:
 		l.SyntaxError("invalid value")
