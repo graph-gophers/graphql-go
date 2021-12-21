@@ -22,7 +22,7 @@ func TestTime_ImplementsUnmarshaler(t *testing.T) {
 }
 
 func TestTime_ImplementsGraphQLType(t *testing.T) {
-	gt := new(Time)
+	gt := &Time{}
 
 	if gt.ImplementsGraphQLType("foobar") {
 		t.Error("Type *Time must not claim to implement GraphQL type 'foobar'")
@@ -36,7 +36,7 @@ func TestTime_ImplementsGraphQLType(t *testing.T) {
 func TestTime_MarshalJSON(t *testing.T) {
 	var err error
 	var b1, b2 []byte
-	ref := time.Date(2021, time.April, 20, 12, 3, 23, 0, time.UTC)
+	ref := time.Date(2021, time.April, 20, 12, 3, 23, 551476231, time.UTC)
 
 	if b1, err = json.Marshal(ref); err != nil {
 		t.Error(err)
@@ -57,8 +57,8 @@ func TestTime_UnmarshalGraphQL(t *testing.T) {
 	type args struct {
 		input interface{}
 	}
-
-	ref := time.Date(2021, time.April, 20, 12, 3, 23, 0, time.UTC)
+	ref := time.Date(2021, time.April, 20, 12, 3, 23, 551476231, time.UTC)
+	refZeroNano := time.Unix(ref.Unix(), 0)
 
 	t.Run("invalid", func(t *testing.T) {
 		tests := []struct {
@@ -111,26 +111,33 @@ func TestTime_UnmarshalGraphQL(t *testing.T) {
 			args: args{
 				input: ref.Format(time.RFC3339),
 			},
-			wantEq: ref,
+			wantEq: refZeroNano,
 		},
 		{
 			name: "bytes",
 			args: args{
 				input: []byte(ref.Format(time.RFC3339)),
 			},
-			wantEq: ref,
+			wantEq: refZeroNano,
 		},
 		{
 			name: "int32",
 			args: args{
 				input: int32(ref.Unix()),
 			},
-			wantEq: ref,
+			wantEq: refZeroNano,
 		},
 		{
 			name: "int64",
 			args: args{
 				input: ref.Unix(),
+			},
+			wantEq: refZeroNano,
+		},
+		{
+			name: "int64-nano",
+			args: args{
+				input: ref.UnixNano(),
 			},
 			wantEq: ref,
 		},
@@ -139,18 +146,17 @@ func TestTime_UnmarshalGraphQL(t *testing.T) {
 			args: args{
 				input: float64(ref.Unix()),
 			},
-			wantEq: ref,
+			wantEq: refZeroNano,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gt := new(Time)
+			gt := &Time{}
 			if err := gt.UnmarshalGraphQL(tt.args.input); err != nil {
 				t.Errorf("UnmarshalGraphQL() error = %v", err)
 				return
 			}
-
 			if !gt.Equal(tt.wantEq) {
 				t.Errorf("UnmarshalGraphQL() got = %v, want = %v", gt, tt.wantEq)
 			}
