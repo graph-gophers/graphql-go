@@ -39,7 +39,13 @@ func (t *Time) UnmarshalGraphQL(input interface{}) error {
 		t.Time = time.Unix(int64(input), 0)
 		return nil
 	case int64:
-		t.Time = time.Unix(input, 0)
+		if input >= 1e10 {
+			sec := input / 1e9
+			nsec := input - (sec * 1e9)
+			t.Time = time.Unix(sec, nsec)
+		} else {
+			t.Time = time.Unix(input, 0)
+		}
 		return nil
 	case float64:
 		t.Time = time.Unix(int64(input), 0)
