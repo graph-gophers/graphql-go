@@ -76,7 +76,7 @@ func Validate(s *types.Schema, doc *types.ExecutableDefinition, variables map[st
 
 		// Check if max depth is exceeded, if it's set. If max depth is exceeded,
 		// don't continue to validate the document and exit early.
-		if validateMaxDepth(opc, op.Selections, 1) {
+		if validateMaxDepth(opc, op.Selections, nil, 1) {
 			return c.errs
 		}
 
@@ -235,13 +235,19 @@ func validateValue(c *opContext, v *types.InputValueDefinition, val interface{},
 
 // validates the query doesn't go deeper than maxDepth (if set). Returns whether
 // or not query validated max depth to avoid excessive recursion.
-func validateMaxDepth(c *opContext, sels []types.Selection, depth int) bool {
+//
+// The visited map is necessary to ensure that max depth validation does not get stuck in cyclical
+// fragment spreads.
+func validateMaxDepth(c *opContext, sels []types.Selection, visited map[*types.FragmentDefinition]struct{}, depth int) bool {
 	// maxDepth checking is turned off when maxDepth is 0
 	if c.maxDepth == 0 {
 		return false
 	}
 
 	exceededMaxDepth := false
+	if visited == nil {
+		visited = map[*types.FragmentDefinition]struct{}{}
+	}
 
 	for _, sel := range sels {
 		switch sel := sel.(type) {
@@ -251,11 +257,12 @@ func validateMaxDepth(c *opContext, sels []types.Selection, depth int) bool {
 				c.addErr(sel.Alias.Loc, "MaxDepthExceeded", "Field %q has depth %d that exceeds max depth %d", sel.Name.Name, depth, c.maxDepth)
 				continue
 			}
-			exceededMaxDepth = exceededMaxDepth || validateMaxDepth(c, sel.SelectionSet, depth+1)
+			exceededMaxDepth = exceededMaxDepth || validateMaxDepth(c, sel.SelectionSet, visited, depth+1)
+
 		case *types.InlineFragment:
 			// Depth is not checked because inline fragments resolve to other fields which are checked.
 			// Depth is not incremented because inline fragments have the same depth as neighboring fields
-			exceededMaxDepth = exceededMaxDepth || validateMaxDepth(c, sel.Selections, depth)
+			exceededMaxDepth = exceededMaxDepth || validateMaxDepth(c, sel.Selections, visited, depth)
 		case *types.FragmentSpread:
 			// Depth is not checked because fragments resolve to other fields which are checked.
 			frag := c.doc.Fragments.Get(sel.Name.Name)
@@ -264,8 +271,15 @@ func validateMaxDepth(c *opContext, sels []types.Selection, depth int) bool {
 				c.addErr(sel.Loc, "MaxDepthEvaluationError", "Unknown fragment %q. Unable to evaluate depth.", sel.Name.Name)
 				continue
 			}
+
+			if _, ok := visited[frag]; ok {
+				// we've already seen this fragment, don't check depth again.
+				continue
+			}
+			visited[frag] = struct{}{}
+
 			// Depth is not incremented because fragments have the same depth as surrounding fields
-			exceededMaxDepth = exceededMaxDepth || validateMaxDepth(c, frag.Selections, depth)
+			exceededMaxDepth = exceededMaxDepth || validateMaxDepth(c, frag.Selections, visited, depth)
 		}
 	}
 

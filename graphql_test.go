@@ -4297,3 +4297,32 @@ func TestInterfaceImplementingInterface(t *testing.T) {
 			`,
 	}})
 }
+
+func TestCircularFragmentMaxDepth(t *testing.T) {
+	withMaxDepth := graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.MaxDepth(2))
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: withMaxDepth,
+			Query: `
+	              query {
+	                  ...X
+	              }
+
+	              fragment X on Query {
+	                  ...Y
+	              }
+	              fragment Y on Query {
+	                  ...X
+	              }
+	          `,
+			ExpectedErrors: []*gqlerrors.QueryError{{
+				Message: `Cannot spread fragment "X" within itself via Y.`,
+				Rule:    "NoFragmentCycles",
+				Locations: []gqlerrors.Location{
+					{Line: 7, Column: 20},
+					{Line: 10, Column: 20},
+				},
+			}},
+		},
+	})
+}
