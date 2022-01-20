@@ -28,7 +28,7 @@ Feedback is welcome and appreciated.
 
 ### Getting started
 
-Create a `main.go` file with the following content:
+In order to run a simple GraphQL server locally create a `main.go` file with the following content:
 ```go
 package main
 
