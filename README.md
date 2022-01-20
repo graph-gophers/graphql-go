@@ -26,8 +26,9 @@ Feedback is welcome and appreciated.
 
 ## (Some) Documentation
 
-### Basic Sample
+### Getting started
 
+Create a `main.go` file with the following content:
 ```go
 package main
 
@@ -54,12 +55,12 @@ func main() {
         log.Fatal(http.ListenAndServe(":8080", nil))
 }
 ```
-
-To test:
+Then run the file with `go run main.go`. To test:
 	    
 ```sh
 curl -XPOST -d '{"query": "{ hello }"}' localhost:8080/query
 ```
+For more realistic usecases check the examples section below.
 
 ### Resolvers
 
