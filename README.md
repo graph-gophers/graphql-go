@@ -60,7 +60,7 @@ Then run the file with `go run main.go`. To test:
 ```sh
 curl -XPOST -d '{"query": "{ hello }"}' localhost:8080/query
 ```
-For more realistic usecases check the examples section below.
+For more realistic usecases check our [examples section](https://github.com/graph-gophers/graphql-go/wiki/Examples).
 
 ### Resolvers
 
