@@ -6,7 +6,6 @@ import (
 
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/introspection"
-	"github.com/graph-gophers/graphql-go/trace"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -15,7 +14,7 @@ import (
 )
 
 // DefaultOpenTelemetryTracer creates a tracer using a default name
-func DefaultOpenTelemetryTracer() trace.Tracer {
+func DefaultOpenTelemetryTracer() Tracer {
 	return &OpenTelemetryTracer{
 		Tracer: otel.Tracer("graphql-go"),
 	}
@@ -27,7 +26,7 @@ type OpenTelemetryTracer struct {
 	Tracer oteltrace.Tracer
 }
 
-func (t *OpenTelemetryTracer) TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, trace.TraceQueryFinishFunc) {
+func (t *OpenTelemetryTracer) TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, TraceQueryFinishFunc) {
 	spanCtx, span := t.Tracer.Start(ctx, "GraphQL Request")
 
 	var attributes []attribute.KeyValue
@@ -53,7 +52,7 @@ func (t *OpenTelemetryTracer) TraceQuery(ctx context.Context, queryString string
 	}
 }
 
-func (t *OpenTelemetryTracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, trace.TraceFieldFinishFunc) {
+func (t *OpenTelemetryTracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, TraceFieldFinishFunc) {
 	if trivial {
 		return ctx, func(*errors.QueryError) {}
 	}
@@ -76,7 +75,7 @@ func (t *OpenTelemetryTracer) TraceField(ctx context.Context, label, typeName, f
 	}
 }
 
-func (t *OpenTelemetryTracer) TraceValidation(ctx context.Context) trace.TraceValidationFinishFunc {
+func (t *OpenTelemetryTracer) TraceValidation(ctx context.Context) TraceValidationFinishFunc {
 	_, span := t.Tracer.Start(ctx, "GraphQL Validate")
 
 	return func(errs []*errors.QueryError) {
