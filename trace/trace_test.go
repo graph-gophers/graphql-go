@@ -7,9 +7,6 @@ import (
 )
 
 func TestInterfaceImplementation(t *testing.T) {
-	var _ trace.ValidationTracerContext = &trace.OpenTelemetryTracer{}
-	var _ trace.Tracer = &trace.OpenTelemetryTracer{}
-
 	var _ trace.ValidationTracerContext = &trace.OpenTracingTracer{}
 	var _ trace.Tracer = &trace.OpenTracingTracer{}
 }

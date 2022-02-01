@@ -16,7 +16,7 @@ import (
 	"github.com/graph-gophers/graphql-go/internal/validation"
 	"github.com/graph-gophers/graphql-go/introspection"
 	"github.com/graph-gophers/graphql-go/log"
-	"github.com/graph-gophers/graphql-go/trace"
+	"github.com/graph-gophers/graphql-go/tracer"
 	"github.com/graph-gophers/graphql-go/types"
 )
 
@@ -27,7 +27,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 	s := &Schema{
 		schema:         schema.New(),
 		maxParallelism: 10,
-		tracer:         trace.OpenTracingTracer{},
+		tracer:         tracer.Noop{},
 		logger:         &log.DefaultLogger{},
 		panicHandler:   &errors.DefaultPanicHandler{},
 	}
@@ -36,10 +36,10 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 	}
 
 	if s.validationTracer == nil {
-		if tracer, ok := s.tracer.(trace.ValidationTracerContext); ok {
-			s.validationTracer = tracer
+		if t, ok := s.tracer.(tracer.ValidationTracerContext); ok {
+			s.validationTracer = t
 		} else {
-			s.validationTracer = &validationBridgingTracer{tracer: trace.NoopValidationTracer{}}
+			s.validationTracer = &validationBridgingTracer{tracer: tracer.NoopValidationTracer{}}
 		}
 	}
 
@@ -75,8 +75,8 @@ type Schema struct {
 
 	maxDepth                 int
 	maxParallelism           int
-	tracer                   trace.Tracer
-	validationTracer         trace.ValidationTracerContext
+	tracer                   tracer.Tracer
+	validationTracer         tracer.ValidationTracerContext
 	logger                   log.Logger
 	panicHandler             errors.PanicHandler
 	useStringDescriptions    bool
@@ -122,16 +122,16 @@ func MaxParallelism(n int) SchemaOpt {
 	}
 }
 
-// Tracer is used to trace queries and fields. It defaults to trace.OpenTracingTracer.
-func Tracer(tracer trace.Tracer) SchemaOpt {
+// Tracer is used to trace queries and fields. It defaults to tracer.Noop.
+func Tracer(tracer tracer.Tracer) SchemaOpt {
 	return func(s *Schema) {
 		s.tracer = tracer
 	}
 }
 
-// ValidationTracer is used to trace validation errors. It defaults to trace.NoopValidationTracer.
-// Deprecated: context is needed to support tracing correctly. Use a Tracer which implements trace.ValidationTracerContext.
-func ValidationTracer(tracer trace.ValidationTracer) SchemaOpt { //nolint:staticcheck
+// ValidationTracer is used to trace validation errors. It defaults to tracer.NoopValidationTracer.
+// Deprecated: context is needed to support tracing correctly. Use a Tracer which implements tracer.ValidationTracerContext.
+func ValidationTracer(tracer tracer.ValidationTracer) SchemaOpt { //nolint:staticcheck
 	return func(s *Schema) {
 		s.validationTracer = &validationBridgingTracer{tracer: tracer}
 	}
@@ -296,10 +296,10 @@ func (s *Schema) validateSchema() error {
 }
 
 type validationBridgingTracer struct {
-	tracer trace.ValidationTracer //nolint:staticcheck
+	tracer tracer.ValidationTracer //nolint:staticcheck
 }
 
-func (t *validationBridgingTracer) TraceValidation(context.Context) trace.TraceValidationFinishFunc {
+func (t *validationBridgingTracer) TraceValidation(context.Context) tracer.ValidationFinishFunc {
 	return t.tracer.TraceValidation()
 }
 
