@@ -6,19 +6,18 @@ import (
 
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/introspection"
+	"github.com/graph-gophers/graphql-go/tracer"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	"github.com/opentracing/opentracing-go/log"
 )
 
-type TraceQueryFinishFunc func([]*errors.QueryError)
-type TraceFieldFinishFunc func(*errors.QueryError)
+type TraceQueryFinishFunc = tracer.QueryFinishFunc
+type TraceFieldFinishFunc = tracer.FieldFinishFunc
 
-type Tracer interface {
-	TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, TraceQueryFinishFunc)
-	TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, TraceFieldFinishFunc)
-}
+type Tracer = tracer.Tracer
 
+// Deprecated: <reason> ?
 type OpenTracingTracer struct{}
 
 func (OpenTracingTracer) TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, TraceQueryFinishFunc) {
@@ -85,12 +84,4 @@ func (OpenTracingTracer) TraceValidation(ctx context.Context) TraceValidationFin
 
 func noop(*errors.QueryError) {}
 
-type NoopTracer struct{}
-
-func (NoopTracer) TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, TraceQueryFinishFunc) {
-	return ctx, func(errs []*errors.QueryError) {}
-}
-
-func (NoopTracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, TraceFieldFinishFunc) {
-	return ctx, func(err *errors.QueryError) {}
-}
+type NoopTracer = tracer.Noop
