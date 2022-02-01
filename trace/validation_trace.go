@@ -1,17 +1,18 @@
 package trace
 
 import (
-	"github.com/graph-gophers/graphql-go/tracer"
+	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/trace/tracer"
 )
 
-// Deprecated: <reason> ?
-type TraceValidationFinishFunc = tracer.ValidationFinishFunc
+// Deprecated: this type has been deprecated. Use func([]*errors.QueryError) instead.
+type TraceValidationFinishFunc = func([]*errors.QueryError)
 
 // Deprecated: use ValidationTracerContext.
-type ValidationTracer = tracer.ValidationTracer
+type ValidationTracer = tracer.LegacyValidationTracer
 
-// Deprecated: <reason> ?
-type ValidationTracerContext = tracer.ValidationTracerContext
+// Deprecated: this type has been deprecated. Use tracer.ValidationTracer instead.
+type ValidationTracerContext = tracer.ValidationTracer
 
-// Deprecated: <reason> ?
-type NoopValidationTracer = tracer.NoopValidationTracer
+// Deprecated: use a tracer that implements ValidationTracerContext.
+type NoopValidationTracer = tracer.LegacyNoopValidationTracer
