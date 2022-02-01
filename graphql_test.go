@@ -13,7 +13,7 @@ import (
 	"github.com/graph-gophers/graphql-go/example/starwars"
 	"github.com/graph-gophers/graphql-go/gqltesting"
 	"github.com/graph-gophers/graphql-go/introspection"
-	"github.com/graph-gophers/graphql-go/trace"
+	"github.com/graph-gophers/graphql-go/trace/tracer"
 )
 
 type helloWorldResolver1 struct{}
@@ -4053,7 +4053,7 @@ type queryTrace struct {
 	errors    []*gqlerrors.QueryError
 }
 
-func (t *testTracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, trace.TraceFieldFinishFunc) {
+func (t *testTracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, func(*gqlerrors.QueryError)) {
 	return ctx, func(qe *gqlerrors.QueryError) {
 		t.mu.Lock()
 		defer t.mu.Unlock()
@@ -4071,7 +4071,7 @@ func (t *testTracer) TraceField(ctx context.Context, label, typeName, fieldName 
 	}
 }
 
-func (t *testTracer) TraceQuery(ctx context.Context, document string, opName string, vars map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, trace.TraceQueryFinishFunc) {
+func (t *testTracer) TraceQuery(ctx context.Context, document string, opName string, vars map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, func([]*gqlerrors.QueryError)) {
 	return ctx, func(qe []*gqlerrors.QueryError) {
 		t.mu.Lock()
 		defer t.mu.Unlock()
@@ -4088,14 +4088,14 @@ func (t *testTracer) TraceQuery(ctx context.Context, document string, opName str
 	}
 }
 
-var _ trace.Tracer = (*testTracer)(nil)
+var _ tracer.Tracer = (*testTracer)(nil)
 
 func TestTracer(t *testing.T) {
 	t.Parallel()
 
-	tracer := &testTracer{mu: &sync.Mutex{}}
+	tt := &testTracer{mu: &sync.Mutex{}}
 
-	schema, err := graphql.ParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.Tracer(tracer))
+	schema, err := graphql.ParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.Tracer(tt))
 	if err != nil {
 		t.Fatalf("graphql.ParseSchema: %s", err)
 	}
@@ -4116,14 +4116,14 @@ func TestTracer(t *testing.T) {
 
 	_ = schema.Exec(ctx, doc, opName, variables)
 
-	tracer.mu.Lock()
-	defer tracer.mu.Unlock()
+	tt.mu.Lock()
+	defer tt.mu.Unlock()
 
-	if len(tracer.queries) != 1 {
-		t.Fatalf("expected one query trace, but got %d: %#v", len(tracer.queries), tracer.queries)
+	if len(tt.queries) != 1 {
+		t.Fatalf("expected one query trace, but got %d: %#v", len(tt.queries), tt.queries)
 	}
 
-	qt := tracer.queries[0]
+	qt := tt.queries[0]
 	if qt.document != doc {
 		t.Errorf("mismatched query trace document:\nwant: %q\ngot : %q", doc, qt.document)
 	}
@@ -4137,7 +4137,7 @@ func TestTracer(t *testing.T) {
 		{fieldName: "name", typeName: "Human"},
 	}
 
-	checkFieldTraces(t, expectedFieldTraces, tracer.fields)
+	checkFieldTraces(t, expectedFieldTraces, tt.fields)
 }
 
 func checkFieldTraces(t *testing.T, want, have []fieldTrace) {
