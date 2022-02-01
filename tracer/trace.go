@@ -25,20 +25,25 @@ func (Noop) TraceField(ctx context.Context, label, typeName, fieldName string, t
 	return ctx, func(err *errors.QueryError) {}
 }
 
+func (Noop) TraceValidation(context.Context) ValidationFinishFunc {
+	return func(errs []*errors.QueryError) {}
+}
+
 type ValidationFinishFunc = QueryFinishFunc
 
-// Deprecated: use ValidationTracerContext.
-type ValidationTracer interface {
+// Deprecated: use ValidationTracer.
+type LegacyValidationTracer interface {
 	TraceValidation() ValidationFinishFunc
 }
 
-type ValidationTracerContext interface {
+type ValidationTracer interface {
 	TraceValidation(ctx context.Context) ValidationFinishFunc
 }
 
+// Deprecated: <reason> ?
 type NoopValidationTracer struct{}
 
-// Deprecated: use a Tracer which implements ValidationTracerContext.
+// Deprecated: use a Tracer which implements ValidationTracer.
 func (NoopValidationTracer) TraceValidation() ValidationFinishFunc {
 	return func(errs []*errors.QueryError) {}
 }

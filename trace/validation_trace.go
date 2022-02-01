@@ -8,10 +8,10 @@ import (
 type TraceValidationFinishFunc = tracer.ValidationFinishFunc
 
 // Deprecated: use ValidationTracerContext.
-type ValidationTracer = tracer.ValidationTracer
+type ValidationTracer = tracer.LegacyValidationTracer
 
 // Deprecated: <reason> ?
-type ValidationTracerContext = tracer.ValidationTracerContext
+type ValidationTracerContext = tracer.ValidationTracer
 
 // Deprecated: <reason> ?
 type NoopValidationTracer = tracer.NoopValidationTracer
