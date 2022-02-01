@@ -1,4 +1,4 @@
-package otelgraphql
+package otel
 
 import (
 	"context"
@@ -11,23 +11,22 @@ import (
 
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/introspection"
-	"github.com/graph-gophers/graphql-go/tracer"
 )
 
-// DefaultOpenTelemetryTracer creates a tracer using a default name
-func DefaultOpenTelemetryTracer() tracer.Tracer {
-	return &OpenTelemetryTracer{
+// DefaultTracer creates a tracer using a default name.
+func DefaultTracer() *Tracer {
+	return &Tracer{
 		Tracer: otel.Tracer("graphql-go"),
 	}
 }
 
-// OpenTelemetryTracer is an OpenTelemetry implementation for graphql-go. Set the Tracer
+// Tracer is an OpenTelemetry implementation for graphql-go. Set the Tracer
 // property to your tracer instance as required.
-type OpenTelemetryTracer struct {
+type Tracer struct {
 	Tracer oteltrace.Tracer
 }
 
-func (t *OpenTelemetryTracer) TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, tracer.QueryFinishFunc) {
+func (t *Tracer) TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, func([]*errors.QueryError)) {
 	spanCtx, span := t.Tracer.Start(ctx, "GraphQL Request")
 
 	var attributes []attribute.KeyValue
@@ -53,7 +52,7 @@ func (t *OpenTelemetryTracer) TraceQuery(ctx context.Context, queryString string
 	}
 }
 
-func (t *OpenTelemetryTracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, tracer.FieldFinishFunc) {
+func (t *Tracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, func(*errors.QueryError)) {
 	if trivial {
 		return ctx, func(*errors.QueryError) {}
 	}
@@ -76,7 +75,7 @@ func (t *OpenTelemetryTracer) TraceField(ctx context.Context, label, typeName, f
 	}
 }
 
-func (t *OpenTelemetryTracer) TraceValidation(ctx context.Context) tracer.ValidationFinishFunc {
+func (t *Tracer) TraceValidation(ctx context.Context) func([]*errors.QueryError) {
 	_, span := t.Tracer.Start(ctx, "GraphQL Validate")
 
 	return func(errs []*errors.QueryError) {
@@ -90,4 +89,3 @@ func (t *OpenTelemetryTracer) TraceValidation(ctx context.Context) tracer.Valida
 		span.End()
 	}
 }
-

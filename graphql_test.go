@@ -13,7 +13,7 @@ import (
 	"github.com/graph-gophers/graphql-go/example/starwars"
 	"github.com/graph-gophers/graphql-go/gqltesting"
 	"github.com/graph-gophers/graphql-go/introspection"
-	"github.com/graph-gophers/graphql-go/tracer"
+	"github.com/graph-gophers/graphql-go/trace/tracer"
 )
 
 type helloWorldResolver1 struct{}
@@ -4053,7 +4053,7 @@ type queryTrace struct {
 	errors    []*gqlerrors.QueryError
 }
 
-func (t *testTracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, tracer.FieldFinishFunc) {
+func (t *testTracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, func(*gqlerrors.QueryError)) {
 	return ctx, func(qe *gqlerrors.QueryError) {
 		t.mu.Lock()
 		defer t.mu.Unlock()
@@ -4071,7 +4071,7 @@ func (t *testTracer) TraceField(ctx context.Context, label, typeName, fieldName 
 	}
 }
 
-func (t *testTracer) TraceQuery(ctx context.Context, document string, opName string, vars map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, tracer.QueryFinishFunc) {
+func (t *testTracer) TraceQuery(ctx context.Context, document string, opName string, vars map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, func([]*gqlerrors.QueryError)) {
 	return ctx, func(qe []*gqlerrors.QueryError) {
 		t.mu.Lock()
 		defer t.mu.Unlock()

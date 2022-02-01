@@ -14,7 +14,7 @@ import (
 	"github.com/graph-gophers/graphql-go/internal/exec/selected"
 	"github.com/graph-gophers/graphql-go/internal/query"
 	"github.com/graph-gophers/graphql-go/log"
-	"github.com/graph-gophers/graphql-go/tracer"
+	"github.com/graph-gophers/graphql-go/trace/tracer"
 	"github.com/graph-gophers/graphql-go/types"
 )
 
