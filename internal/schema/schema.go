@@ -408,19 +408,19 @@ func parseObjectDef(l *common.Lexer) *types.ObjectTypeDefinition {
 			continue
 		}
 
-		if l.Peek() == scanner.Ident {
-			l.ConsumeKeyword("implements")
-
-			for l.Peek() != '{' && l.Peek() != '@' {
-				if l.Peek() == '&' {
-					l.ConsumeToken('&')
-				}
-
-				object.InterfaceNames = append(object.InterfaceNames, l.ConsumeIdent())
-			}
-			continue
+		if l.Peek() != scanner.Ident {
+			break
 		}
 
+		l.ConsumeKeyword("implements")
+
+		for l.Peek() != '{' && l.Peek() != '@' {
+			if l.Peek() == '&' {
+				l.ConsumeToken('&')
+			}
+
+			object.InterfaceNames = append(object.InterfaceNames, l.ConsumeIdent())
+		}
 	}
 	l.ConsumeToken('{')
 	object.Fields = parseFieldsDef(l)

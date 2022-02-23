@@ -232,6 +232,19 @@ Second line of the description.
 			},
 		},
 		{
+			name: "Parses type invalid syntax",
+			sdl: `
+			type U = T
+			`,
+			validateError: func(err error) error {
+				msg := `graphql: syntax error: unexpected "=", expecting "{" (line 2, column 11)`
+				if err == nil || err.Error() != msg {
+					return fmt.Errorf("expected error %q, but got %q", msg, err)
+				}
+				return nil
+			},
+		},
+		{
 			name: "Description is correctly parsed for non-described types",
 			sdl: `
 			"Some description."
