@@ -813,6 +813,7 @@ Second line of the description.
 				| ENUM_VALUE
 				| INPUT_OBJECT
 				| INPUT_FIELD_DEFINITION
+			directive @repeatabledirective repeatable on SCALAR
 
 			interface NamedEntity @directive { name: String }
 
@@ -834,6 +835,8 @@ Second line of the description.
 			}
 
 			union Union @uniondirective = Photo | Person
+
+			scalar Repeatable @repeatabledirective @repeatabledirective
 			`,
 			validateSchema: func(s *types.Schema) error {
 				namedEntityDirectives := s.Types["NamedEntity"].(*types.InterfaceTypeDefinition).Directives
@@ -863,6 +866,11 @@ Second line of the description.
 				unionDirectives := s.Types["Union"].(*types.Union).Directives
 				if len(unionDirectives) != 1 || unionDirectives[0].Name.Name != "uniondirective" {
 					return fmt.Errorf("missing directive on Union union, expected @uniondirective but got %v", unionDirectives)
+				}
+
+				repeatableDirectives := s.Types["Repeatable"].(*types.ScalarTypeDefinition).Directives
+				if len(repeatableDirectives) != 2 || repeatableDirectives[0].Name.Name != "repeatabledirective" || repeatableDirectives[1].Name.Name != "repeatabledirective" {
+					return fmt.Errorf("missing directive on Repeatable scalar, expected @repeatabledirective @repeatabledirective but got %v", repeatableDirectives)
 				}
 				return nil
 			},
