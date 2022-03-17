@@ -200,4 +200,8 @@ var metaSrc = `
 		# Indicates this type is a non-null. ` + "`" + `ofType` + "`" + ` is a valid field.
 		NON_NULL
 	}
+
+	type _Service {
+		sdl: String!
+	}
 `

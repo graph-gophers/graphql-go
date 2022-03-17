@@ -121,6 +121,17 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 					})
 				}
 
+			case "_service":
+				if !r.DisableIntrospection {
+					flattenedSels = append(flattenedSels, &SchemaField{
+						Field:       s.Meta.FieldService,
+						Alias:       field.Alias.Name,
+						Sels:        applySelectionSet(r, s, s.Meta.Service, field.SelectionSet),
+						Async:       true,
+						FixedResult: reflect.ValueOf(introspection.WrapService(r.Schema)),
+					})
+				}
+
 			default:
 				fe := e.Fields[field.Name.Name]
 

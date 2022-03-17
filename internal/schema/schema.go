@@ -161,6 +161,8 @@ func Parse(s *types.Schema, schemaString string, useStringDescriptions bool) err
 		}
 	}
 
+	s.SchemaString = schemaString
+
 	return nil
 }
 
