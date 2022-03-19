@@ -524,10 +524,7 @@ func parseDirectiveDef(l *common.Lexer) *types.DirectiveDefinition {
 
 	for {
 		loc := l.ConsumeIdent()
-		if _, ok := legalDirectiveFieldLocations[loc]; !ok {
-			l.SyntaxError(fmt.Sprintf("%q is not a legal directive location (options: %v)", loc, legalDirectiveFieldLocationsSlice))
-		}
-		if ok, err := regexp.MatchString("^[A-Z][A-Z_]*$", loc); err != nil || !ok {
+		if ok, err := regexp.MatchString("^[A-Z_]+$", loc); err != nil || !ok {
 			l.SyntaxError(fmt.Sprintf("expected directive location-spec to be SNAKE_CASE, but got %q", loc))
 		}
 		d.Locations = append(d.Locations, loc)
@@ -599,32 +596,3 @@ func parseFieldsDef(l *common.Lexer) types.FieldsDefinition {
 	}
 	return fields
 }
-
-var legalDirectiveFieldLocations = map[string]struct{}{
-	"SCHEMA":                 {},
-	"SCALAR":                 {},
-	"OBJECT":                 {},
-	"FIELD_DEFINITION":       {},
-	"ARGUMENT_DEFINITION":    {},
-	"INTERFACE":              {},
-	"UNION":                  {},
-	"ENUM":                   {},
-	"ENUM_VALUE":             {},
-	"INPUT_OBJECT":           {},
-	"INPUT_FIELD_DEFINITION": {},
-	"QUERY":                  {},
-	"MUTATION":               {},
-	"SUBSCRIPTION":           {},
-	"FIELD":                  {},
-	"FRAGMENT_DEFINITION":    {},
-	"FRAGMENT_SPREAD":        {},
-	"INLINE_FRAGMENT":        {},
-	"VARIABLE_DEFINITION":    {},
-}
-var legalDirectiveFieldLocationsSlice = func() []string {
-	var words []string
-	for loc, _ := range legalDirectiveFieldLocations {
-		words = append(words, loc)
-	}
-	return words
-}()
