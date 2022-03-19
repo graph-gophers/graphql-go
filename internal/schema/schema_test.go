@@ -836,7 +836,7 @@ Second line of the description.
 
 			union Union @uniondirective = Photo | Person
 
-			scalar Repeatable @repeatabledirective @repeatabledirective
+			scalar Mass @repeatabledirective @repeatabledirective
 			`,
 			validateSchema: func(s *types.Schema) error {
 				namedEntityDirectives := s.Types["NamedEntity"].(*types.InterfaceTypeDefinition).Directives
@@ -868,9 +868,9 @@ Second line of the description.
 					return fmt.Errorf("missing directive on Union union, expected @uniondirective but got %v", unionDirectives)
 				}
 
-				repeatableDirectives := s.Types["Repeatable"].(*types.ScalarTypeDefinition).Directives
-				if len(repeatableDirectives) != 2 || repeatableDirectives[0].Name.Name != "repeatabledirective" || repeatableDirectives[1].Name.Name != "repeatabledirective" {
-					return fmt.Errorf("missing directive on Repeatable scalar, expected @repeatabledirective @repeatabledirective but got %v", repeatableDirectives)
+				massDirectives := s.Types["Mass"].(*types.ScalarTypeDefinition).Directives
+				if len(massDirectives) != 2 || massDirectives[0].Name.Name != "repeatabledirective" || massDirectives[1].Name.Name != "repeatabledirective" {
+					return fmt.Errorf("missing directive on Repeatable scalar, expected @repeatabledirective @repeatabledirective but got %v", massDirectives)
 				}
 				return nil
 			},
