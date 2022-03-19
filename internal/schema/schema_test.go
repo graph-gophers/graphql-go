@@ -876,7 +876,7 @@ Second line of the description.
 			},
 		},
 		{
-			name: "Sets Directive.Repeatable iff `repeatable` keyword is given",
+			name: "Sets Directive.Repeatable if `repeatable` keyword is given",
 			sdl: `
 			directive @nonrepeatabledirective on SCALAR
 			directive @repeatabledirective repeatable on SCALAR
