@@ -514,7 +514,7 @@ func parseDirectiveDef(l *common.Lexer) *types.DirectiveDefinition {
 
 	switch x := l.ConsumeIdent(); x {
 	case "on":
-		d.Repeatable = false
+		// no-op; Go doesn't fallthrough by default
 	case "repeatable":
 		d.Repeatable = true
 		l.ConsumeKeyword("on")
