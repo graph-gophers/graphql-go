@@ -514,6 +514,7 @@ func parseDirectiveDef(l *common.Lexer) *types.DirectiveDefinition {
 	switch x := l.ConsumeIdent(); x {
 	case "on":
 	case "repeatable":
+		d.Repeatable = true
 		l.ConsumeKeyword("on")
 	default:
 		l.SyntaxError(fmt.Sprintf(`unexpected %q, expecting "on" or "repeatable"`, x))
