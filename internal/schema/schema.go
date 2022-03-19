@@ -524,7 +524,7 @@ func parseDirectiveDef(l *common.Lexer) *types.DirectiveDefinition {
 
 	for {
 		loc := l.ConsumeIdent()
-		if ok, err := regexp.MatchString("^[A-Z_]+$", loc); err != nil || !ok {
+		if ok, err := regexp.MatchString("^[A-Z][A-Z_]+$", loc); err != nil || !ok {
 			l.SyntaxError(fmt.Sprintf("expected directive location-spec to be SNAKE_CASE, but got %q", loc))
 		}
 		d.Locations = append(d.Locations, loc)
