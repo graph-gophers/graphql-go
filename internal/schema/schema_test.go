@@ -875,6 +875,50 @@ Second line of the description.
 				return nil
 			},
 		},
+		{
+			name: "Sets Directive.Repeatable iff `repeatable` keyword is given",
+			sdl: `
+			directive @nonrepeatabledirective on SCALAR
+			directive @repeatabledirective repeatable on SCALAR
+			`,
+			validateSchema: func(s *types.Schema) error {
+				if dir := s.Directives["nonrepeatabledirective"]; dir.Repeatable {
+					return fmt.Errorf("did not expect directive to be repeatable: %v", dir)
+				}
+				if dir := s.Directives["repeatabledirective"]; !dir.Repeatable {
+					return fmt.Errorf("expected directive to be repeatable: %v", dir)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Directive definition does not allow double-`repeatable`",
+			sdl: `
+			directive @mydirective repeatable repeatable SCALAR
+			scalar MyScalar @mydirective
+			`,
+			validateError: func(err error) error {
+				msg := `graphql: syntax error: unexpected "repeatable", expecting "on" (line 2, column 38)`
+				if err == nil || err.Error() != msg {
+					return fmt.Errorf("expected error %q, but got %q", msg, err)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Directive definition does not allow double-`on` instead of `repeatable on`",
+			sdl: `
+			directive @mydirective on on SCALAR
+			scalar MyScalar @mydirective
+			`,
+			validateError: func(err error) error {
+				msg := `graphql: syntax error: expected directive location-spec to be SNAKE_CASE, but got "on" (line 2, column 33)`
+				if err == nil || err.Error() != msg {
+					return fmt.Errorf("expected error %q, but got %q", msg, err)
+				}
+				return nil
+			},
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			s, err := schema.ParseSchema(test.sdl, test.useStringDescriptions)
