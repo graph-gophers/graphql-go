@@ -2,6 +2,7 @@ package schema_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/graph-gophers/graphql-go/internal/schema"
@@ -912,9 +913,9 @@ Second line of the description.
 			scalar MyScalar @mydirective
 			`,
 			validateError: func(err error) error {
-				msg := `graphql: syntax error: expected directive location-spec to be SNAKE_CASE, but got "on" (line 2, column 33)`
-				if err == nil || err.Error() != msg {
-					return fmt.Errorf("expected error %q, but got %q", msg, err)
+				prefix := `graphql: syntax error: "on" is not a legal directive location`
+				if err == nil || !strings.HasPrefix(err.Error(), prefix) {
+					return fmt.Errorf("expected error starting with %q, but got %q", prefix, err)
 				}
 				return nil
 			},
