@@ -12,8 +12,10 @@ type Meta struct {
 	FieldSchema   Field
 	FieldType     Field
 	FieldTypename Field
+	FieldService  Field
 	Schema        *Object
 	Type          *Object
+	Service       *Object
 }
 
 func newMeta(s *types.Schema) *Meta {
@@ -28,6 +30,12 @@ func newMeta(s *types.Schema) *Meta {
 
 	metaType := s.Types["__Type"].(*types.ObjectTypeDefinition)
 	t, err := b.makeObjectExec(metaType.Name, metaType.Fields, nil, false, reflect.TypeOf(&introspection.Type{}))
+	if err != nil {
+		panic(err)
+	}
+
+	metaService := s.Types["_Service"].(*types.ObjectTypeDefinition)
+	sv, err := b.makeObjectExec(metaService.Name, metaService.Fields, nil, false, reflect.TypeOf(&introspection.Service{}))
 	if err != nil {
 		panic(err)
 	}
@@ -60,11 +68,21 @@ func newMeta(s *types.Schema) *Meta {
 		TraceLabel: "GraphQL field: __type",
 	}
 
+	fieldService := Field{
+		FieldDefinition: types.FieldDefinition{
+			Name: "_service",
+			Type: s.Types["_Service"],
+		},
+		TraceLabel: "GraphQL field: _service",
+	}
+
 	return &Meta{
 		FieldSchema:   fieldSchema,
 		FieldTypename: fieldTypename,
 		FieldType:     fieldType,
+		FieldService:  fieldService,
 		Schema:        so,
 		Type:          t,
+		Service:       sv,
 	}
 }

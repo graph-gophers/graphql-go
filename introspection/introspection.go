@@ -310,3 +310,16 @@ func (r *Directive) Args() []*InputValue {
 	}
 	return l
 }
+
+type Service struct {
+	schema *types.Schema
+}
+
+// WrapService is only used internally.
+func WrapService(schema *types.Schema) *Service {
+	return &Service{schema}
+}
+
+func (r *Service) SDL() string {
+	return r.schema.SchemaString
+}

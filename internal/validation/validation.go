@@ -327,6 +327,11 @@ func validateSelection(c *opContext, sel types.Selection, t types.NamedType) {
 				},
 				Type: c.schema.Types["__Type"],
 			}
+		case "_service":
+			f = &types.FieldDefinition{
+				Name: "_service",
+				Type: c.schema.Types["_Service"],
+			}
 		default:
 			f = fields(t).Get(fieldName)
 			if f == nil && t != nil {

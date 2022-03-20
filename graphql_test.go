@@ -2144,6 +2144,7 @@ func TestIntrospection(t *testing.T) {
 							{ "name": "SearchResult" },
 							{ "name": "Starship" },
 							{ "name": "String" },
+							{ "name": "_Service" },
 							{ "name": "__Directive" },
 							{ "name": "__DirectiveLocation" },
 							{ "name": "__EnumValue" },
@@ -4323,6 +4324,39 @@ func TestCircularFragmentMaxDepth(t *testing.T) {
 					{Line: 10, Column: 20},
 				},
 			}},
+		},
+	})
+}
+
+func TestQueryService(t *testing.T) {
+	t.Parallel()
+
+	schemaString := `
+	schema {
+		query: Query
+	}
+
+	type Query {
+		hello: String!
+	}`
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(schemaString, &helloWorldResolver1{}),
+			Query: `
+				{
+					_service{
+						sdl
+					}
+				}
+			`,
+			ExpectedResult: fmt.Sprintf(`
+				{
+					"_service": {
+						"sdl": "\n\tschema {\n\t\tquery: Query\n\t}\n\n\ttype Query {\n\t\thello: String!\n\t}"
+					}
+				}
+			`),
 		},
 	})
 }
