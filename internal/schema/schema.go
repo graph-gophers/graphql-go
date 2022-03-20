@@ -524,8 +524,8 @@ func parseDirectiveDef(l *common.Lexer) *types.DirectiveDefinition {
 
 	for {
 		loc := l.ConsumeIdent()
-		if _, ok := legalDirectiveFieldLocations[loc]; !ok {
-			l.SyntaxError(fmt.Sprintf("%q is not a legal directive location (options: %v)", loc, legalDirectiveFieldLocationsSlice))
+		if _, ok := legalDirectiveLocationNames[loc]; !ok {
+			l.SyntaxError(fmt.Sprintf("%q is not a legal directive location (options: %v)", loc, legalDirectiveLocationNames))
 		}
 		if ok, err := regexp.MatchString("^[A-Z][A-Z_]*$", loc); err != nil || !ok {
 			l.SyntaxError(fmt.Sprintf("expected directive location-spec to be SNAKE_CASE, but got %q", loc))
@@ -600,7 +600,7 @@ func parseFieldsDef(l *common.Lexer) types.FieldsDefinition {
 	return fields
 }
 
-var legalDirectiveFieldLocations = map[string]struct{}{
+var legalDirectiveLocationNames = map[string]struct{}{
 	"SCHEMA":                 {},
 	"SCALAR":                 {},
 	"OBJECT":                 {},
@@ -621,9 +621,9 @@ var legalDirectiveFieldLocations = map[string]struct{}{
 	"INLINE_FRAGMENT":        {},
 	"VARIABLE_DEFINITION":    {},
 }
-var legalDirectiveFieldLocationsSlice = func() []string {
+var legalDirectiveLocationNamesSlice = func() []string {
 	var words []string
-	for loc, _ := range legalDirectiveFieldLocations {
+	for loc, _ := range legalDirectiveLocationNames {
 		words = append(words, loc)
 	}
 	return words
