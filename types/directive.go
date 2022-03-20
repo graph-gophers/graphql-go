@@ -14,11 +14,12 @@ type Directive struct {
 //
 // http://spec.graphql.org/draft/#sec-Type-System.Directives
 type DirectiveDefinition struct {
-	Name      string
-	Desc      string
-	Locations []string
-	Arguments ArgumentsDefinition
-	Loc       errors.Location
+	Name       string
+	Desc       string
+	Repeatable bool
+	Locations  []string
+	Arguments  ArgumentsDefinition
+	Loc        errors.Location
 }
 
 type DirectiveList []*Directive

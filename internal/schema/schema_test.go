@@ -2,6 +2,7 @@ package schema_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/graph-gophers/graphql-go/internal/schema"
@@ -813,6 +814,7 @@ Second line of the description.
 				| ENUM_VALUE
 				| INPUT_OBJECT
 				| INPUT_FIELD_DEFINITION
+			directive @repeatabledirective repeatable on SCALAR
 
 			interface NamedEntity @directive { name: String }
 
@@ -834,6 +836,8 @@ Second line of the description.
 			}
 
 			union Union @uniondirective = Photo | Person
+
+			scalar Mass @repeatabledirective @repeatabledirective
 			`,
 			validateSchema: func(s *types.Schema) error {
 				namedEntityDirectives := s.Types["NamedEntity"].(*types.InterfaceTypeDefinition).Directives
@@ -863,6 +867,55 @@ Second line of the description.
 				unionDirectives := s.Types["Union"].(*types.Union).Directives
 				if len(unionDirectives) != 1 || unionDirectives[0].Name.Name != "uniondirective" {
 					return fmt.Errorf("missing directive on Union union, expected @uniondirective but got %v", unionDirectives)
+				}
+
+				massDirectives := s.Types["Mass"].(*types.ScalarTypeDefinition).Directives
+				if len(massDirectives) != 2 || massDirectives[0].Name.Name != "repeatabledirective" || massDirectives[1].Name.Name != "repeatabledirective" {
+					return fmt.Errorf("missing directive on Repeatable scalar, expected @repeatabledirective @repeatabledirective but got %v", massDirectives)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Sets Directive.Repeatable if `repeatable` keyword is given",
+			sdl: `
+			directive @nonrepeatabledirective on SCALAR
+			directive @repeatabledirective repeatable on SCALAR
+			`,
+			validateSchema: func(s *types.Schema) error {
+				if dir := s.Directives["nonrepeatabledirective"]; dir.Repeatable {
+					return fmt.Errorf("did not expect directive to be repeatable: %v", dir)
+				}
+				if dir := s.Directives["repeatabledirective"]; !dir.Repeatable {
+					return fmt.Errorf("expected directive to be repeatable: %v", dir)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Directive definition does not allow double-`repeatable`",
+			sdl: `
+			directive @mydirective repeatable repeatable SCALAR
+			scalar MyScalar @mydirective
+			`,
+			validateError: func(err error) error {
+				msg := `graphql: syntax error: unexpected "repeatable", expecting "on" (line 2, column 38)`
+				if err == nil || err.Error() != msg {
+					return fmt.Errorf("expected error %q, but got %q", msg, err)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Directive definition does not allow double-`on` instead of `repeatable on`",
+			sdl: `
+			directive @mydirective on on SCALAR
+			scalar MyScalar @mydirective
+			`,
+			validateError: func(err error) error {
+				prefix := `graphql: syntax error: "on" is not a legal directive location`
+				if err == nil || !strings.HasPrefix(err.Error(), prefix) {
+					return fmt.Errorf("expected error starting with %q, but got %q", prefix, err)
 				}
 				return nil
 			},
