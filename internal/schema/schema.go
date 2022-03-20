@@ -2,7 +2,6 @@ package schema
 
 import (
 	"fmt"
-	"regexp"
 	"text/scanner"
 
 	"github.com/graph-gophers/graphql-go/errors"
@@ -527,9 +526,6 @@ func parseDirectiveDef(l *common.Lexer) *types.DirectiveDefinition {
 		if _, ok := legalDirectiveLocationNames[loc]; !ok {
 			l.SyntaxError(fmt.Sprintf("%q is not a legal directive location (options: %v)", loc, legalDirectiveLocationNames))
 		}
-		if ok, err := regexp.MatchString("^[A-Z][A-Z_]*$", loc); err != nil || !ok {
-			l.SyntaxError(fmt.Sprintf("expected directive location-spec to be SNAKE_CASE, but got %q", loc))
-		}
 		d.Locations = append(d.Locations, loc)
 		if l.Peek() != '|' {
 			break
@@ -621,10 +617,3 @@ var legalDirectiveLocationNames = map[string]struct{}{
 	"INLINE_FRAGMENT":        {},
 	"VARIABLE_DEFINITION":    {},
 }
-var legalDirectiveLocationNamesSlice = func() []string {
-	var words []string
-	for loc, _ := range legalDirectiveLocationNames {
-		words = append(words, loc)
-	}
-	return words
-}()
