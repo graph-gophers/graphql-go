@@ -92,12 +92,12 @@ type contact struct {
 }
 
 type user struct {
-	IDField   string
-	NameField string
-	RoleField string
-	Address   *[]string
-	Friends   *[]*user
-	CreatedAt graphql.Time
+	IDField      string
+	NameField    string
+	RoleField    string
+	Address      *[]string
+	FriendsField *[]*user
+	CreatedAt    graphql.Time
 	contact
 }
 
@@ -113,9 +113,9 @@ func (u user) Role() string {
 	return u.RoleField
 }
 
-func (u user) FriendsResolver(args struct{ Page *page }) (*[]*user, error) {
+func (u user) Friends(args struct{ Page *page }) (*[]*user, error) {
 	var from int
-	numFriends := len(*u.Friends)
+	numFriends := len(*u.FriendsField)
 	to := numFriends
 
 	if args.Page != nil {
@@ -133,7 +133,7 @@ func (u user) FriendsResolver(args struct{ Page *page }) (*[]*user, error) {
 		}
 	}
 
-	friends := (*u.Friends)[from:to]
+	friends := (*u.FriendsField)[from:to]
 
 	return &friends, nil
 }
@@ -188,10 +188,10 @@ var users = []*user{
 var usersMap = make(map[string]*user)
 
 func init() {
-	users[0].Friends = &[]*user{users[1]}
-	users[1].Friends = &[]*user{users[0], users[2], users[3]}
-	users[2].Friends = &[]*user{users[1], users[3]}
-	users[3].Friends = &[]*user{users[1], users[2]}
+	users[0].FriendsField = &[]*user{users[1]}
+	users[1].FriendsField = &[]*user{users[0], users[2], users[3]}
+	users[2].FriendsField = &[]*user{users[1], users[3]}
+	users[3].FriendsField = &[]*user{users[1], users[2]}
 	for _, usr := range users {
 		usersMap[usr.IDField] = usr
 	}
