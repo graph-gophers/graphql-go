@@ -403,11 +403,18 @@ func findMethod(t reflect.Type, name string) int {
 }
 
 func findField(t reflect.Type, name string, index []int) []int {
+	var (
+		newIndex []int
+	)
+	defer func() {
+		// need to catch panic for lib can generate convinient error
+		_ = recover()
+	}()
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 
 		if field.Type.Kind() == reflect.Struct && field.Anonymous {
-			newIndex := findField(field.Type, name, []int{i})
+			newIndex = findField(field.Type, name, []int{i})
 			if len(newIndex) > 1 {
 				return append(index, newIndex...)
 			}
