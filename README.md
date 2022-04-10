@@ -11,7 +11,7 @@ safe for production use.
 
 - minimal API
 - support for `context.Context`
-- support for the `OpenTracing` standard
+- support for the `OpenTelemetry` and `OpenTracing` standards
 - schema type-checking against resolvers
 - resolvers are matched to the schema based on method sets (can resolve a GraphQL schema with a Go interface or Go struct).
 - handles panics in resolvers
@@ -108,8 +108,7 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 - `UseFieldResolvers()` specifies whether to use struct field resolvers.
 - `MaxDepth(n int)` specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
 - `MaxParallelism(n int)` specifies the maximum number of resolvers per request allowed to run in parallel. The default is 10.
-- `Tracer(tracer trace.Tracer)` is used to trace queries and fields. It defaults to `trace.OpenTracingTracer`.
-- `ValidationTracer(tracer trace.ValidationTracer)` is used to trace validation errors. It defaults to `trace.NoopValidationTracer`.
+- `Tracer(tracer trace.Tracer)` is used to trace queries and fields. It defaults to `noop.Tracer`.
 - `Logger(logger log.Logger)` is used to log panics during query execution. It defaults to `exec.DefaultLogger`.
 - `PanicHandler(panicHandler errors.PanicHandler)` is used to transform panics into errors during query execution. It defaults to `errors.DefaultPanicHandler`.
 - `DisableIntrospection()` disables introspection queries.
@@ -164,6 +163,48 @@ Which could produce a GraphQL error such as:
   "data": null
 }
 ```
+
+### Tracing
+
+By default the library uses `noop.Tracer`. If you want to change that you can use the OpenTelemetry or the OpenTracing implementations, respectively:
+
+```go
+// OpenTelemetry tracer
+package main
+
+import (
+	"github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/example/starwars"
+	otelgraphql "github.com/graph-gophers/graphql-go/trace/otel"
+	"github.com/graph-gophers/graphql-go/trace/tracer"
+)
+// ...
+_, err := graphql.ParseSchema(starwars.Schema, nil, graphql.Tracer(otelgraphql.DefaultTracer()))
+// ...
+```
+Alternatively you can pass an existing trace.Tracer instance:
+```go
+tr := otel.Tracer("example")
+_, err = graphql.ParseSchema(starwars.Schema, nil, graphql.Tracer(&otelgraphql.Tracer{Tracer: tr}))
+```
+
+
+```go
+// OpenTracing tracer
+package main
+
+import (
+	"github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/example/starwars"
+	"github.com/graph-gophers/graphql-go/trace/opentracing"
+	"github.com/graph-gophers/graphql-go/trace/tracer"
+)
+// ...
+_, err := graphql.ParseSchema(starwars.Schema, nil, graphql.Tracer(opentracing.Tracer{}))
+
+// ...
+```
+
 
 ### [Examples](https://github.com/graph-gophers/graphql-go/wiki/Examples)
 
