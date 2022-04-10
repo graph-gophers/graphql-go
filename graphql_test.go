@@ -4350,13 +4350,13 @@ func TestQueryService(t *testing.T) {
 					}
 				}
 			`,
-			ExpectedResult: fmt.Sprintf(`
+			ExpectedResult: `
 				{
 					"_service": {
 						"sdl": "\n\tschema {\n\t\tquery: Query\n\t}\n\n\ttype Query {\n\t\thello: String!\n\t}"
 					}
 				}
-			`),
+			`,
 		},
 	})
 }
