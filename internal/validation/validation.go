@@ -856,19 +856,15 @@ func validateBasicLit(v *types.PrimitiveValue, t types.Type) bool {
 			if v.Type != scanner.Int {
 				return false
 			}
-			f, err := strconv.ParseFloat(v.Text, 64)
-			if err != nil {
-				panic(err)
-			}
-			return f >= math.MinInt32 && f <= math.MaxInt32
+			return validateBuiltInScalar(v.Text, "Int")
 		case "Float":
-			return v.Type == scanner.Int || v.Type == scanner.Float
+			return (v.Type == scanner.Int || v.Type == scanner.Float) && validateBuiltInScalar(v.Text, "Float")
 		case "String":
-			return v.Type == scanner.String
+			return v.Type == scanner.String && validateBuiltInScalar(v.Text, "String")
 		case "Boolean":
-			return v.Type == scanner.Ident && (v.Text == "true" || v.Text == "false")
+			return v.Type == scanner.Ident && validateBuiltInScalar(v.Text, "Boolean")
 		case "ID":
-			return v.Type == scanner.Int || v.Type == scanner.String
+			return (v.Type == scanner.Int && validateBuiltInScalar(v.Text, "Int")) || (v.Type == scanner.String && validateBuiltInScalar(v.Text, "String"))
 		default:
 			//TODO: Type-check against expected type by Unmarshalling
 			return true
@@ -887,6 +883,27 @@ func validateBasicLit(v *types.PrimitiveValue, t types.Type) bool {
 	}
 
 	return false
+}
+
+func validateBuiltInScalar(v string, n string) bool {
+	switch n {
+	case "Int":
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return false
+		}
+		return f >= math.MinInt32 && f <= math.MaxInt32
+	case "Float":
+		f, fe := strconv.ParseFloat(v, 64)
+		return fe == nil && f >= math.SmallestNonzeroFloat64 && f <= math.MaxFloat64
+	case "String":
+		vl := len(v)
+		return vl >= 2 && v[0] == '"' && v[vl-1] == '"'
+	case "Boolean":
+		return v == "true" || v == "false"
+	default:
+		return false
+	}
 }
 
 func canBeFragment(t types.Type) bool {
