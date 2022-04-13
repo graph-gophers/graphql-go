@@ -205,6 +205,15 @@ _, err := graphql.ParseSchema(starwars.Schema, nil, graphql.Tracer(opentracing.T
 // ...
 ```
 
+If you need to implement a custom tracer the library would accept any tracer which implements the interface below:
+```go
+type Tracer interface {
+    TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, func([]*errors.QueryError))
+    TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, func(*errors.QueryError))
+    TraceValidation(context.Context) func([]*errors.QueryError)
+}
+```
+
 
 ### [Examples](https://github.com/graph-gophers/graphql-go/wiki/Examples)
 
