@@ -217,4 +217,3 @@ type Tracer interface {
 
 ### [Examples](https://github.com/graph-gophers/graphql-go/wiki/Examples)
 
-### [Companies that use this library](https://github.com/graph-gophers/graphql-go/wiki/Users)
