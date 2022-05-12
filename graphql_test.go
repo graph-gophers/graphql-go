@@ -3666,6 +3666,106 @@ func TestErrorPropagation(t *testing.T) {
 	})
 }
 
+type assertionResolver struct{}
+
+func (r *assertionResolver) ToHuman() (*struct{ Name string }, bool) {
+	return &struct{ Name string }{Name: "Luke Skywalker"}, true
+}
+
+type assertionQueryResolver struct{}
+
+func (*assertionQueryResolver) Character() *assertionResolver {
+	return &assertionResolver{}
+}
+
+type badAssertionResolver struct{}
+
+func (r *badAssertionResolver) ToHuman(ctx context.Context) (*struct{ Name string }, bool) {
+	return &struct{ Name string }{Name: "Luke Skywalker"}, true
+}
+
+type badAssertionQueryResolver struct{}
+
+func (*badAssertionQueryResolver) Character() *badAssertionResolver {
+	return &badAssertionResolver{}
+}
+
+func TestTypeAssertions(t *testing.T) {
+	assertionSchema := `
+		schema {
+			query: Query
+		}
+
+		type Query {
+			character: Character!
+		}
+
+		type Human {
+			name: String!
+		}
+
+		union Character = Human
+	`
+	query := `
+		query {
+			character {
+				... on Human {
+					name
+				}
+			}
+		}
+	`
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(assertionSchema, &assertionQueryResolver{}, graphql.UseFieldResolvers()),
+			Query:  query,
+			ExpectedResult: `
+				{
+					"character": {
+						"name": "Luke Skywalker"
+					}
+				}
+			`,
+		},
+	})
+}
+
+func TestPanicTypeAssertionArguments(t *testing.T) {
+	panicMessage := `*graphql_test.badAssertionResolver does not resolve "Character": method "ToHuman" should't have any arguments
+	used by (*graphql_test.badAssertionQueryResolver).Character`
+
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected schema parse to panic")
+		}
+
+		if r.(error).Error() != panicMessage {
+			t.Logf("got:  %s", r)
+			t.Logf("want: %s", panicMessage)
+			t.Fail()
+		}
+	}()
+
+	schema := `
+		schema {
+			query: Query
+		}
+
+		type Query {
+			character: Character!
+		}
+
+		type Human {
+			name: String!
+		}
+
+		union Character = Human
+	`
+	graphql.MustParseSchema(schema, &badAssertionQueryResolver{}, graphql.UseFieldResolvers())
+}
+
 type ambiguousResolver struct {
 	Name string // ambiguous
 	University
