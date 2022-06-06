@@ -11,7 +11,7 @@ import (
 	"github.com/opentracing/opentracing-go/log"
 )
 
-// Tracer implements the graphql-go Tracer inteface and creates OpenTracing spans.
+// Tracer implements the graphql-go Tracer interface and creates OpenTracing spans.
 type Tracer struct{}
 
 func (Tracer) TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, func([]*errors.QueryError)) {
