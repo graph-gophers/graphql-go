@@ -160,6 +160,14 @@ func MaxQueryLength(n int) SchemaOpt {
 }
 
 // Tracer is used to trace queries and fields. It defaults to [noop.Tracer].
+// RateLimiter is used to rate limit queries.
+func RateLimiter(r ratelimit.RateLimiter) SchemaOpt {
+	return func(s *Schema) {
+		s.rateLimiter = r
+	}
+}
+
+// Tracer is used to trace queries and fields. It defaults to tracer.Noop.
 func Tracer(t tracer.Tracer) SchemaOpt {
 	return func(s *Schema) {
 		s.tracer = t
