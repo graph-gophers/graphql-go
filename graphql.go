@@ -285,7 +285,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 
 	var data []byte
 	var statusCode *int
-	if !s.rateLimiter.LimitQuery(ctx, queryString, operationName, variables, varTypes) {
+	if !s.rateLimiter.LimitQuery(traceCtx, queryString, operationName, variables, varTypes) {
 		data, errs = r.Execute(traceCtx, res, op)
 	} else {
 		errs = []*errors.QueryError{{Message: "rate limit exceeded"}}
