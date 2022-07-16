@@ -30,6 +30,8 @@ type Schema struct {
 
 	UseFieldResolvers bool
 
+	AllowUnknownFields bool
+
 	EntryPointNames map[string]string
 	Objects         []*ObjectTypeDefinition
 	Unions          []*Union

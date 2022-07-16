@@ -109,6 +109,14 @@ func UseFieldResolvers() SchemaOpt {
 	}
 }
 
+// AllowUnknownFields specifies whether a query containing unknown fields
+// is permitted or not.
+func AllowUnknownFields() SchemaOpt {
+	return func(s *Schema) {
+		s.schema.AllowUnknownFields = true
+	}
+}
+
 // MaxDepth specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
 func MaxDepth(n int) SchemaOpt {
 	return func(s *Schema) {

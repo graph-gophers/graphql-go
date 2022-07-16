@@ -335,6 +335,9 @@ func validateSelection(c *opContext, sel types.Selection, t types.NamedType) {
 		default:
 			f = fields(t).Get(fieldName)
 			if f == nil && t != nil {
+				if c.schema.AllowUnknownFields {
+					return
+				}
 				suggestion := makeSuggestion("Did you mean", fields(t).Names(), fieldName)
 				c.addErr(sel.Alias.Loc, "FieldsOnCorrectType", "Cannot query field %q on type %q.%s", fieldName, t, suggestion)
 			}

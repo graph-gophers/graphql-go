@@ -54,10 +54,21 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *types.O
 }
 
 type fieldToExec struct {
-	field    *selected.SchemaField
-	sels     []selected.Selection
-	resolver reflect.Value
-	out      *bytes.Buffer
+	field        *selected.SchemaField
+	unknownField *selected.UnknownField
+	sels         []selected.Selection
+	resolver     reflect.Value
+	out          *bytes.Buffer
+}
+
+func (f *fieldToExec) alias() string {
+	if f.field != nil {
+		return f.field.Alias
+	}
+	if f.unknownField != nil {
+		return f.unknownField.Alias.Name
+	}
+	return ""
 }
 
 func resolvedToNull(b *bytes.Buffer) bool {
@@ -78,33 +89,35 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 				defer wg.Done()
 				defer r.handlePanic(ctx)
 				f.out = new(bytes.Buffer)
-				execFieldSelection(ctx, r, s, f, &pathSegment{path, f.field.Alias}, true)
+				execFieldSelection(ctx, r, s, f, &pathSegment{path, f.alias()}, true)
 			}(f)
 		}
 		wg.Wait()
 	} else {
 		for _, f := range fields {
 			f.out = new(bytes.Buffer)
-			execFieldSelection(ctx, r, s, f, &pathSegment{path, f.field.Alias}, true)
+			execFieldSelection(ctx, r, s, f, &pathSegment{path, f.alias()}, true)
 		}
 	}
 
 	out.WriteByte('{')
 	for i, f := range fields {
-		// If a non-nullable child resolved to null, an error was added to the
-		// "errors" list in the response, so this field resolves to null.
-		// If this field is non-nullable, the error is propagated to its parent.
-		if _, ok := f.field.Type.(*types.NonNull); ok && resolvedToNull(f.out) {
-			out.Reset()
-			out.Write([]byte("null"))
-			return
+		if f.field != nil {
+			// If a non-nullable child resolved to null, an error was added to the
+			// "errors" list in the response, so this field resolves to null.
+			// If this field is non-nullable, the error is propagated to its parent.
+			if _, ok := f.field.Type.(*types.NonNull); ok && resolvedToNull(f.out) {
+				out.Reset()
+				out.Write([]byte("null"))
+				return
+			}
 		}
 
 		if i > 0 {
 			out.WriteByte(',')
 		}
 		out.WriteByte('"')
-		out.WriteString(f.field.Alias)
+		out.WriteString(f.alias())
 		out.WriteByte('"')
 		out.WriteByte(':')
 		out.Write(f.out.Bytes())
@@ -115,6 +128,9 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 func collectFieldsToResolve(sels []selected.Selection, s *resolvable.Schema, resolver reflect.Value, fields *[]*fieldToExec, fieldByAlias map[string]*fieldToExec) {
 	for _, sel := range sels {
 		switch sel := sel.(type) {
+		case *selected.UnknownField:
+			*fields = append(*fields, &fieldToExec{unknownField: sel})
+
 		case *selected.SchemaField:
 			field, ok := fieldByAlias[sel.Alias]
 			if !ok { // validation already checked for conflict (TODO)
@@ -176,7 +192,15 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 	var result reflect.Value
 	var err *errors.QueryError
 
-	traceCtx, finish := r.Tracer.TraceField(ctx, f.field.TraceLabel, f.field.TypeName, f.field.Name, !f.field.Async, f.field.Args)
+	var traceCtx context.Context
+	var finish tracer.FieldFinishFunc
+	if f.field != nil {
+		traceCtx, finish = r.Tracer.TraceField(ctx, f.field.TraceLabel, f.field.TypeName, f.field.Name, !f.field.Async, f.field.Args)
+	} else if f.unknownField != nil {
+		traceCtx, finish = r.Tracer.TraceField(ctx, fmt.Sprintf("GraphQL unknown field: %s", f.unknownField.Name.Name), "", f.unknownField.Name.Name, true, make(map[string]interface{}))
+	} else {
+		panic("unreachable")
+	}
 	defer func() {
 		finish(err)
 	}()
@@ -189,6 +213,12 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 				err.Path = path.toSlice()
 			}
 		}()
+
+		if f.unknownField != nil {
+			err := errors.Errorf(`Could not resolve field "%s"`, f.unknownField.Name.Name)
+			err.Path = path.toSlice()
+			return err
+		}
 
 		if f.field.FixedResult.IsValid() {
 			result = f.field.FixedResult

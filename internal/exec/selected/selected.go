@@ -65,9 +65,14 @@ type TypenameField struct {
 	Alias string
 }
 
+type UnknownField struct {
+	types.Field
+}
+
 func (*SchemaField) isSelection()   {}
 func (*TypeAssertion) isSelection() {}
 func (*TypenameField) isSelection() {}
+func (*UnknownField) isSelection()  {}
 
 func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, sels []types.Selection) (flattenedSels []Selection) {
 	for _, sel := range sels {
@@ -134,6 +139,10 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 
 			default:
 				fe := e.Fields[field.Name.Name]
+				if fe == nil {
+					flattenedSels = append(flattenedSels, &UnknownField{Field: *field})
+					continue
+				}
 
 				var args map[string]interface{}
 				var packedArgs reflect.Value
@@ -262,14 +271,12 @@ func skipByDirective(r *Request, directives types.DirectiveList) bool {
 func HasAsyncSel(sels []Selection) bool {
 	for _, sel := range sels {
 		switch sel := sel.(type) {
+		case *UnknownField:
+			return true
 		case *SchemaField:
-			if sel.Async {
-				return true
-			}
+			return sel.Async
 		case *TypeAssertion:
-			if HasAsyncSel(sel.Sels) {
-				return true
-			}
+			return HasAsyncSel(sel.Sels)
 		case *TypenameField:
 			// sync
 		default:

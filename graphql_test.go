@@ -4460,3 +4460,87 @@ func TestQueryService(t *testing.T) {
 		},
 	})
 }
+
+func TestUnknownField(t *testing.T) {
+	schemaString := `
+	  schema {
+	    query: Query
+	  }
+
+	  type Query {
+	    hello: String!
+	  }`
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(schemaString, &helloWorldResolver1{}),
+			Query: `
+				{
+					hello
+					world
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{{
+				Message:   `Cannot query field "world" on type "Query".`,
+				Locations: []gqlerrors.Location{{Column: 6, Line: 4}},
+				Rule:      "FieldsOnCorrectType",
+			}},
+		},
+		{
+			Schema: graphql.MustParseSchema(schemaString, &helloWorldResolver1{}, graphql.AllowUnknownFields()),
+			Query: `
+				{
+					hello
+					world
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!",
+					"world": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{{
+				Message: `Could not resolve field "world"`,
+				Path:    []interface{}{"world"},
+			}},
+		},
+		{
+			Schema: graphql.MustParseSchema(schemaString, &helloWorldResolver1{}, graphql.AllowUnknownFields()),
+			Query: `
+				{
+					hello
+					aliasedWorld: world
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!",
+					"aliasedWorld": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{{
+				Message: `Could not resolve field "world"`,
+				Path:    []interface{}{"aliasedWorld"},
+			}},
+		},
+		{
+			Schema: graphql.MustParseSchema(schemaString, &helloWorldResolver1{}, graphql.AllowUnknownFields()),
+			Query: `
+				{
+					hello
+					world { turtles }
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!",
+					"world": null
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{{
+				Message: `Could not resolve field "world"`,
+				Path:    []interface{}{"world"},
+			}},
+		},
+	})
+}
