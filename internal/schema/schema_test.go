@@ -924,7 +924,6 @@ Second line of the description.
 			name: "Disallow repeat of a directive if it is not `repeatable`",
 			sdl: `
 			directive @nonrepeatabledirective on FIELD_DEFINITION
-			scalar MyScalar @nonrepeatabledirective @nonrepeatabledirective
 			type Foo {
 				bar: String @nonrepeatabledirective @nonrepeatabledirective
 			}
