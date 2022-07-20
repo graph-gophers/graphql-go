@@ -289,6 +289,7 @@ func resolveField(s *types.Schema, f *types.FieldDefinition) error {
 }
 
 func resolveDirectives(s *types.Schema, directives types.DirectiveList, loc string) error {
+	alreadySeenNonRepeatable := make(map[string]struct{})
 	for _, d := range directives {
 		dirName := d.Name.Name
 		dd, ok := s.Directives[dirName]
@@ -315,6 +316,14 @@ func resolveDirectives(s *types.Schema, directives types.DirectiveList, loc stri
 				d.Arguments = append(d.Arguments, &types.Argument{Name: arg.Name, Value: arg.Default})
 			}
 		}
+
+		if dd.Repeatable {
+			continue
+		}
+		if _, seen := alreadySeenNonRepeatable[dirName]; seen {
+			return errors.Errorf(`non repeatable directive %q can not be repeated. Consider adding "repeatable".`, dirName)
+		}
+		alreadySeenNonRepeatable[dirName] = struct{}{}
 	}
 	return nil
 }
