@@ -920,6 +920,22 @@ Second line of the description.
 				return nil
 			},
 		},
+		{
+			name: "Disallow repeat of a directive if it is not `repeatable`",
+			sdl: `
+			directive @nonrepeatabledirective on FIELD_DEFINITION
+			type Foo {
+				bar: String @nonrepeatabledirective @nonrepeatabledirective
+			}
+			`,
+			validateError: func(err error) error {
+				prefix := `graphql: non repeatable directive "nonrepeatabledirective" can not be repeated. Consider adding "repeatable"`
+				if err == nil || !strings.HasPrefix(err.Error(), prefix) {
+					return fmt.Errorf("expected error starting with %q, but got %q", prefix, err)
+				}
+				return nil
+			},
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			s, err := schema.ParseSchema(test.sdl, test.useStringDescriptions)
