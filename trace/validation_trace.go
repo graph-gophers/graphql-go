@@ -2,16 +2,17 @@ package trace
 
 import (
 	"github.com/tokopedia/graphql-go/errors"
+	"github.com/tokopedia/graphql-go/trace/tracer"
 )
 
-type TraceValidationFinishFunc = TraceQueryFinishFunc
+// Deprecated: this type has been deprecated. Use tracer.ValidationFinishFunc instead.
+type TraceValidationFinishFunc = func([]*errors.QueryError)
 
-type ValidationTracer interface {
-	TraceValidation() TraceValidationFinishFunc
-}
+// Deprecated: use ValidationTracerContext.
+type ValidationTracer = tracer.LegacyValidationTracer //nolint:staticcheck
 
-type NoopValidationTracer struct{}
+// Deprecated: this type has been deprecated. Use tracer.ValidationTracer instead.
+type ValidationTracerContext = tracer.ValidationTracer
 
-func (NoopValidationTracer) TraceValidation() TraceValidationFinishFunc {
-	return func(errs []*errors.QueryError) {}
-}
+// Deprecated: use a tracer that implements ValidationTracerContext.
+type NoopValidationTracer = tracer.LegacyNoopValidationTracer //nolint:staticcheck

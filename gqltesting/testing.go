@@ -23,6 +23,7 @@ type Test struct {
 	Variables      map[string]interface{}
 	ExpectedResult string
 	ExpectedErrors []*errors.QueryError
+	RawResponse    bool
 }
 
 // RunTests runs the given GraphQL test cases as subtests.
@@ -57,10 +58,22 @@ func RunTest(t *testing.T, test *Test) {
 	}
 
 	// Verify JSON to avoid red herring errors.
-	got, err := formatJSON(result.Data)
-	if err != nil {
-		t.Fatalf("got: invalid JSON: %s", err)
+	var got []byte
+
+	if test.RawResponse {
+		value, err := result.Data.MarshalJSON()
+		if err != nil {
+			t.Fatalf("got: unable to marshal JSON response: %s", err)
+		}
+		got = value
+	} else {
+		value, err := formatJSON(result.Data)
+		if err != nil {
+			t.Fatalf("got: invalid JSON: %s", err)
+		}
+		got = value
 	}
+
 	want, err := formatJSON([]byte(test.ExpectedResult))
 	if err != nil {
 		t.Fatalf("want: invalid JSON: %s", err)
@@ -88,6 +101,12 @@ func formatJSON(data []byte) ([]byte, error) {
 func checkErrors(t *testing.T, want, got []*errors.QueryError) {
 	sortErrors(want)
 	sortErrors(got)
+
+	// Clear the underlying error before the DeepEqual check.  It's too
+	// much to ask the tester to include the raw failing error.
+	for _, err := range got {
+		err.Err = nil
+	}
 
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected error: got %+v, want %+v", got, want)

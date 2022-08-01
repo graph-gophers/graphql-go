@@ -6,247 +6,15 @@ import (
 
 	"github.com/tokopedia/graphql-go/errors"
 	"github.com/tokopedia/graphql-go/internal/common"
+	"github.com/tokopedia/graphql-go/types"
 )
 
-// Schema represents a GraphQL service's collective type system capabilities.
-// A schema is defined in terms of the types and directives it supports as well as the root
-// operation types for each kind of operation: `query`, `mutation`, and `subscription`.
-//
-// For a more formal definition, read the relevant section in the specification:
-//
-// http://facebook.github.io/graphql/draft/#sec-Schema
-type Schema struct {
-	// EntryPoints determines the place in the type system where `query`, `mutation`, and
-	// `subscription` operations begin.
-	//
-	// http://facebook.github.io/graphql/draft/#sec-Root-Operation-Types
-	//
-	// NOTE: The specification refers to this concept as "Root Operation Types".
-	// TODO: Rename the `EntryPoints` field to `RootOperationTypes` to align with spec terminology.
-	EntryPoints map[string]NamedType
-
-	// Types are the fundamental unit of any GraphQL schema.
-	// There are six kinds of named types, and two wrapping types.
-	//
-	// http://facebook.github.io/graphql/draft/#sec-Types
-	Types map[string]NamedType
-
-	// TODO: Type extensions?
-	// http://facebook.github.io/graphql/draft/#sec-Type-Extensions
-
-	// Directives are used to annotate various parts of a GraphQL document as an indicator that they
-	// should be evaluated differently by a validator, executor, or client tool such as a code
-	// generator.
-	//
-	// http://facebook.github.io/graphql/draft/#sec-Type-System.Directives
-	Directives map[string]*DirectiveDecl
-
-	UseFieldResolvers bool
-
-	entryPointNames map[string]string
-	objects         []*Object
-	unions          []*Union
-	enums           []*Enum
-	extensions      []*Extension
-}
-
-// Resolve a named type in the schema by its name.
-func (s *Schema) Resolve(name string) common.Type {
-	return s.Types[name]
-}
-
-// NamedType represents a type with a name.
-//
-// http://facebook.github.io/graphql/draft/#NamedType
-type NamedType interface {
-	common.Type
-	TypeName() string
-	Description() string
-}
-
-// Scalar types represent primitive leaf values (e.g. a string or an integer) in a GraphQL type
-// system.
-//
-// GraphQL responses take the form of a hierarchical tree; the leaves on these trees are GraphQL
-// scalars.
-//
-// http://facebook.github.io/graphql/draft/#sec-Scalars
-type Scalar struct {
-	Name string
-	Desc string
-	// TODO: Add a list of directives?
-}
-
-// Object types represent a list of named fields, each of which yield a value of a specific type.
-//
-// GraphQL queries are hierarchical and composed, describing a tree of information.
-// While Scalar types describe the leaf values of these hierarchical types, Objects describe the
-// intermediate levels.
-//
-// http://facebook.github.io/graphql/draft/#sec-Objects
-type Object struct {
-	Name       string
-	Interfaces []*Interface
-	Fields     FieldList
-	Desc       string
-	// TODO: Add a list of directives?
-
-	interfaceNames []string
-}
-
-// Interface types represent a list of named fields and their arguments.
-//
-// GraphQL objects can then implement these interfaces which requires that the object type will
-// define all fields defined by those interfaces.
-//
-// http://facebook.github.io/graphql/draft/#sec-Interfaces
-type Interface struct {
-	Name          string
-	PossibleTypes []*Object
-	Fields        FieldList // NOTE: the spec refers to this as `FieldsDefinition`.
-	Desc          string
-	// TODO: Add a list of directives?
-}
-
-// Union types represent objects that could be one of a list of GraphQL object types, but provides no
-// guaranteed fields between those types.
-//
-// They also differ from interfaces in that object types declare what interfaces they implement, but
-// are not aware of what unions contain them.
-//
-// http://facebook.github.io/graphql/draft/#sec-Unions
-type Union struct {
-	Name          string
-	PossibleTypes []*Object // NOTE: the spec refers to this as `UnionMemberTypes`.
-	Desc          string
-	// TODO: Add a list of directives?
-
-	typeNames []string
-}
-
-// Enum types describe a set of possible values.
-//
-// Like scalar types, Enum types also represent leaf values in a GraphQL type system.
-//
-// http://facebook.github.io/graphql/draft/#sec-Enums
-type Enum struct {
-	Name   string
-	Values []*EnumValue // NOTE: the spec refers to this as `EnumValuesDefinition`.
-	Desc   string
-	// TODO: Add a list of directives?
-}
-
-// EnumValue types are unique values that may be serialized as a string: the name of the
-// represented value.
-//
-// http://facebook.github.io/graphql/draft/#EnumValueDefinition
-type EnumValue struct {
-	Name       string
-	Directives common.DirectiveList
-	Desc       string
-	// TODO: Add a list of directives?
-}
-
-// InputObject types define a set of input fields; the input fields are either scalars, enums, or
-// other input objects.
-//
-// This allows arguments to accept arbitrarily complex structs.
-//
-// http://facebook.github.io/graphql/draft/#sec-Input-Objects
-type InputObject struct {
-	Name   string
-	Desc   string
-	Values common.InputValueList
-	// TODO: Add a list of directives?
-}
-
-// Extension type defines a GraphQL type extension.
-// Schemas, Objects, Inputs and Scalars can be extended.
-//
-// https://facebook.github.io/graphql/draft/#sec-Type-System-Extensions
-type Extension struct {
-	Type NamedType
-	// TODO: Add a list of directives
-}
-
-// FieldsList is a list of an Object's Fields.
-//
-// http://facebook.github.io/graphql/draft/#FieldsDefinition
-type FieldList []*Field
-
-// Get iterates over the field list, returning a pointer-to-Field when the field name matches the
-// provided `name` argument.
-// Returns nil when no field was found by that name.
-func (l FieldList) Get(name string) *Field {
-	for _, f := range l {
-		if f.Name == name {
-			return f
-		}
-	}
-	return nil
-}
-
-// Names returns a string slice of the field names in the FieldList.
-func (l FieldList) Names() []string {
-	names := make([]string, len(l))
-	for i, f := range l {
-		names[i] = f.Name
-	}
-	return names
-}
-
-// http://facebook.github.io/graphql/draft/#sec-Type-System.Directives
-type DirectiveDecl struct {
-	Name string
-	Desc string
-	Locs []string
-	Args common.InputValueList
-}
-
-func (*Scalar) Kind() string      { return "SCALAR" }
-func (*Object) Kind() string      { return "OBJECT" }
-func (*Interface) Kind() string   { return "INTERFACE" }
-func (*Union) Kind() string       { return "UNION" }
-func (*Enum) Kind() string        { return "ENUM" }
-func (*InputObject) Kind() string { return "INPUT_OBJECT" }
-
-func (t *Scalar) String() string      { return t.Name }
-func (t *Object) String() string      { return t.Name }
-func (t *Interface) String() string   { return t.Name }
-func (t *Union) String() string       { return t.Name }
-func (t *Enum) String() string        { return t.Name }
-func (t *InputObject) String() string { return t.Name }
-
-func (t *Scalar) TypeName() string      { return t.Name }
-func (t *Object) TypeName() string      { return t.Name }
-func (t *Interface) TypeName() string   { return t.Name }
-func (t *Union) TypeName() string       { return t.Name }
-func (t *Enum) TypeName() string        { return t.Name }
-func (t *InputObject) TypeName() string { return t.Name }
-
-func (t *Scalar) Description() string      { return t.Desc }
-func (t *Object) Description() string      { return t.Desc }
-func (t *Interface) Description() string   { return t.Desc }
-func (t *Union) Description() string       { return t.Desc }
-func (t *Enum) Description() string        { return t.Desc }
-func (t *InputObject) Description() string { return t.Desc }
-
-// Field is a conceptual function which yields values.
-// http://facebook.github.io/graphql/draft/#FieldDefinition
-type Field struct {
-	Name       string
-	Args       common.InputValueList // NOTE: the spec refers to this as `ArgumentsDefinition`.
-	Type       common.Type
-	Directives common.DirectiveList
-	Desc       string
-}
-
 // New initializes an instance of Schema.
-func New() *Schema {
-	s := &Schema{
-		entryPointNames: make(map[string]string),
-		Types:           make(map[string]NamedType),
-		Directives:      make(map[string]*DirectiveDecl),
+func New() *types.Schema {
+	s := &types.Schema{
+		EntryPointNames: make(map[string]string),
+		Types:           make(map[string]types.NamedType),
+		Directives:      make(map[string]*types.DirectiveDefinition),
 	}
 	m := newMeta()
 	for n, t := range m.Types {
@@ -258,10 +26,8 @@ func New() *Schema {
 	return s
 }
 
-// Parse the schema string.
-func (s *Schema) Parse(schemaString string, useStringDescriptions bool) error {
+func Parse(s *types.Schema, schemaString string, useStringDescriptions bool) error {
 	l := common.NewLexer(schemaString, useStringDescriptions)
-
 	err := l.CatchSyntaxError(func() { parseSchema(s, l) })
 	if err != nil {
 		return err
@@ -277,7 +43,7 @@ func (s *Schema) Parse(schemaString string, useStringDescriptions bool) error {
 		}
 	}
 	for _, d := range s.Directives {
-		for _, arg := range d.Args {
+		for _, arg := range d.Arguments {
 			t, err := common.ResolveType(arg.Type, s.Resolve)
 			if err != nil {
 				return err
@@ -286,25 +52,73 @@ func (s *Schema) Parse(schemaString string, useStringDescriptions bool) error {
 		}
 	}
 
-	s.EntryPoints = make(map[string]NamedType)
-	for key, name := range s.entryPointNames {
+	// https://graphql.github.io/graphql-spec/June2018/#sec-Root-Operation-Types
+	// > While any type can be the root operation type for a GraphQL operation, the type system definition language can
+	// > omit the schema definition when the query, mutation, and subscription root types are named Query, Mutation,
+	// > and Subscription respectively.
+	if len(s.EntryPointNames) == 0 {
+		if _, ok := s.Types["Query"]; ok {
+			s.EntryPointNames["query"] = "Query"
+		}
+		if _, ok := s.Types["Mutation"]; ok {
+			s.EntryPointNames["mutation"] = "Mutation"
+		}
+		if _, ok := s.Types["Subscription"]; ok {
+			s.EntryPointNames["subscription"] = "Subscription"
+		}
+	}
+	s.EntryPoints = make(map[string]types.NamedType)
+	for key, name := range s.EntryPointNames {
 		t, ok := s.Types[name]
 		if !ok {
-			if !ok {
-				return errors.Errorf("type %q not found", name)
-			}
+			return errors.Errorf("type %q not found", name)
 		}
 		s.EntryPoints[key] = t
 	}
 
-	for _, obj := range s.objects {
-		obj.Interfaces = make([]*Interface, len(obj.interfaceNames))
-		for i, intfName := range obj.interfaceNames {
+	// Interface types need validation: https://spec.graphql.org/draft/#sec-Interfaces.Interfaces-Implementing-Interfaces
+	for _, typeDef := range s.Types {
+		switch t := typeDef.(type) {
+		case *types.InterfaceTypeDefinition:
+			for i, implements := range t.Interfaces {
+				typ, ok := s.Types[implements.Name]
+				if !ok {
+					return errors.Errorf("interface %q not found", implements)
+				}
+				inteface, ok := typ.(*types.InterfaceTypeDefinition)
+				if !ok {
+					return errors.Errorf("type %q is not an interface", inteface)
+				}
+
+				for _, f := range inteface.Fields.Names() {
+					if t.Fields.Get(f) == nil {
+						return errors.Errorf("interface %q expects field %q but %q does not provide it", inteface.Name, f, t.Name)
+					}
+				}
+
+				t.Interfaces[i] = inteface
+			}
+		default:
+			continue
+		}
+	}
+
+	for _, obj := range s.Objects {
+		obj.Interfaces = make([]*types.InterfaceTypeDefinition, len(obj.InterfaceNames))
+		if err := resolveDirectives(s, obj.Directives, "OBJECT"); err != nil {
+			return err
+		}
+		for _, field := range obj.Fields {
+			if err := resolveDirectives(s, field.Directives, "FIELD_DEFINITION"); err != nil {
+				return err
+			}
+		}
+		for i, intfName := range obj.InterfaceNames {
 			t, ok := s.Types[intfName]
 			if !ok {
 				return errors.Errorf("interface %q not found", intfName)
 			}
-			intf, ok := t.(*Interface)
+			intf, ok := t.(*types.InterfaceTypeDefinition)
 			if !ok {
 				return errors.Errorf("type %q is not an interface", intfName)
 			}
@@ -318,34 +132,48 @@ func (s *Schema) Parse(schemaString string, useStringDescriptions bool) error {
 		}
 	}
 
-	for _, union := range s.unions {
-		union.PossibleTypes = make([]*Object, len(union.typeNames))
-		for i, name := range union.typeNames {
+	for _, union := range s.Unions {
+		if err := resolveDirectives(s, union.Directives, "UNION"); err != nil {
+			return err
+		}
+		union.UnionMemberTypes = make([]*types.ObjectTypeDefinition, len(union.TypeNames))
+		for i, name := range union.TypeNames {
 			t, ok := s.Types[name]
 			if !ok {
 				return errors.Errorf("object type %q not found", name)
 			}
-			obj, ok := t.(*Object)
+			obj, ok := t.(*types.ObjectTypeDefinition)
 			if !ok {
 				return errors.Errorf("type %q is not an object", name)
 			}
-			union.PossibleTypes[i] = obj
+			union.UnionMemberTypes[i] = obj
 		}
 	}
 
-	for _, enum := range s.enums {
-		for _, value := range enum.Values {
-			if err := resolveDirectives(s, value.Directives); err != nil {
+	for _, enum := range s.Enums {
+		if err := resolveDirectives(s, enum.Directives, "ENUM"); err != nil {
+			return err
+		}
+		for _, value := range enum.EnumValuesDefinition {
+			if err := resolveDirectives(s, value.Directives, "ENUM_VALUE"); err != nil {
 				return err
 			}
 		}
 	}
 
+	s.SchemaString = schemaString
+
 	return nil
 }
 
-func mergeExtensions(s *Schema) error {
-	for _, ext := range s.extensions {
+func ParseSchema(schemaString string, useStringDescriptions bool) (*types.Schema, error) {
+	s := New()
+	err := Parse(s, schemaString, useStringDescriptions)
+	return s, err
+}
+
+func mergeExtensions(s *types.Schema) error {
+	for _, ext := range s.Extensions {
 		typ := s.Types[ext.Type.TypeName()]
 		if typ == nil {
 			return fmt.Errorf("trying to extend unknown type %q", ext.Type.TypeName())
@@ -356,8 +184,8 @@ func mergeExtensions(s *Schema) error {
 		}
 
 		switch og := typ.(type) {
-		case *Object:
-			e := ext.Type.(*Object)
+		case *types.ObjectTypeDefinition:
+			e := ext.Type.(*types.ObjectTypeDefinition)
 
 			for _, field := range e.Fields {
 				if og.Fields.Get(field.Name) != nil {
@@ -366,17 +194,17 @@ func mergeExtensions(s *Schema) error {
 			}
 			og.Fields = append(og.Fields, e.Fields...)
 
-			for _, en := range e.interfaceNames {
-				for _, on := range og.interfaceNames {
+			for _, en := range e.InterfaceNames {
+				for _, on := range og.InterfaceNames {
 					if on == en {
 						return fmt.Errorf("interface %q implemented in the extension is already implemented in %q", on, og.Name)
 					}
 				}
 			}
-			og.interfaceNames = append(og.interfaceNames, e.interfaceNames...)
+			og.InterfaceNames = append(og.InterfaceNames, e.InterfaceNames...)
 
-		case *InputObject:
-			e := ext.Type.(*InputObject)
+		case *types.InputObject:
+			e := ext.Type.(*types.InputObject)
 
 			for _, field := range e.Values {
 				if og.Values.Get(field.Name.Name) != nil {
@@ -385,8 +213,8 @@ func mergeExtensions(s *Schema) error {
 			}
 			og.Values = append(og.Values, e.Values...)
 
-		case *Interface:
-			e := ext.Type.(*Interface)
+		case *types.InterfaceTypeDefinition:
+			e := ext.Type.(*types.InterfaceTypeDefinition)
 
 			for _, field := range e.Fields {
 				if og.Fields.Get(field.Name) != nil {
@@ -395,29 +223,29 @@ func mergeExtensions(s *Schema) error {
 			}
 			og.Fields = append(og.Fields, e.Fields...)
 
-		case *Union:
-			e := ext.Type.(*Union)
+		case *types.Union:
+			e := ext.Type.(*types.Union)
 
-			for _, en := range e.typeNames {
-				for _, on := range og.typeNames {
+			for _, en := range e.TypeNames {
+				for _, on := range og.TypeNames {
 					if on == en {
 						return fmt.Errorf("union type %q already declared in %q", on, og.Name)
 					}
 				}
 			}
-			og.typeNames = append(og.typeNames, e.typeNames...)
+			og.TypeNames = append(og.TypeNames, e.TypeNames...)
 
-		case *Enum:
-			e := ext.Type.(*Enum)
+		case *types.EnumTypeDefinition:
+			e := ext.Type.(*types.EnumTypeDefinition)
 
-			for _, en := range e.Values {
-				for _, on := range og.Values {
-					if on.Name == en.Name {
-						return fmt.Errorf("enum value %q already declared in %q", on.Name, og.Name)
+			for _, en := range e.EnumValuesDefinition {
+				for _, on := range og.EnumValuesDefinition {
+					if on.EnumValue == en.EnumValue {
+						return fmt.Errorf("enum value %q already declared in %q", on.EnumValue, og.Name)
 					}
 				}
 			}
-			og.Values = append(og.Values, e.Values...)
+			og.EnumValuesDefinition = append(og.EnumValuesDefinition, e.EnumValuesDefinition...)
 		default:
 			return fmt.Errorf(`unexpected %q, expecting "schema", "type", "enum", "interface", "union" or "input"`, og.TypeName())
 		}
@@ -426,21 +254,21 @@ func mergeExtensions(s *Schema) error {
 	return nil
 }
 
-func resolveNamedType(s *Schema, t NamedType) error {
+func resolveNamedType(s *types.Schema, t types.NamedType) error {
 	switch t := t.(type) {
-	case *Object:
+	case *types.ObjectTypeDefinition:
 		for _, f := range t.Fields {
 			if err := resolveField(s, f); err != nil {
 				return err
 			}
 		}
-	case *Interface:
+	case *types.InterfaceTypeDefinition:
 		for _, f := range t.Fields {
 			if err := resolveField(s, f); err != nil {
 				return err
 			}
 		}
-	case *InputObject:
+	case *types.InputObject:
 		if err := resolveInputObject(s, t.Values); err != nil {
 			return err
 		}
@@ -448,40 +276,59 @@ func resolveNamedType(s *Schema, t NamedType) error {
 	return nil
 }
 
-func resolveField(s *Schema, f *Field) error {
+func resolveField(s *types.Schema, f *types.FieldDefinition) error {
 	t, err := common.ResolveType(f.Type, s.Resolve)
 	if err != nil {
 		return err
 	}
 	f.Type = t
-	if err := resolveDirectives(s, f.Directives); err != nil {
+	if err := resolveDirectives(s, f.Directives, "FIELD_DEFINITION"); err != nil {
 		return err
 	}
-	return resolveInputObject(s, f.Args)
+	return resolveInputObject(s, f.Arguments)
 }
 
-func resolveDirectives(s *Schema, directives common.DirectiveList) error {
+func resolveDirectives(s *types.Schema, directives types.DirectiveList, loc string) error {
+	alreadySeenNonRepeatable := make(map[string]struct{})
 	for _, d := range directives {
 		dirName := d.Name.Name
 		dd, ok := s.Directives[dirName]
 		if !ok {
 			return errors.Errorf("directive %q not found", dirName)
 		}
-		for _, arg := range d.Args {
-			if dd.Args.Get(arg.Name.Name) == nil {
+		validLoc := false
+		for _, l := range dd.Locations {
+			if l == loc {
+				validLoc = true
+				break
+			}
+		}
+		if !validLoc {
+			return errors.Errorf("invalid location %q for directive %q (must be one of %v)", loc, dirName, dd.Locations)
+		}
+		for _, arg := range d.Arguments {
+			if dd.Arguments.Get(arg.Name.Name) == nil {
 				return errors.Errorf("invalid argument %q for directive %q", arg.Name.Name, dirName)
 			}
 		}
-		for _, arg := range dd.Args {
-			if _, ok := d.Args.Get(arg.Name.Name); !ok {
-				d.Args = append(d.Args, common.Argument{Name: arg.Name, Value: arg.Default})
+		for _, arg := range dd.Arguments {
+			if _, ok := d.Arguments.Get(arg.Name.Name); !ok {
+				d.Arguments = append(d.Arguments, &types.Argument{Name: arg.Name, Value: arg.Default})
 			}
 		}
+
+		if dd.Repeatable {
+			continue
+		}
+		if _, seen := alreadySeenNonRepeatable[dirName]; seen {
+			return errors.Errorf(`non repeatable directive %q can not be repeated. Consider adding "repeatable".`, dirName)
+		}
+		alreadySeenNonRepeatable[dirName] = struct{}{}
 	}
 	return nil
 }
 
-func resolveInputObject(s *Schema, values common.InputValueList) error {
+func resolveInputObject(s *types.Schema, values types.ArgumentsDefinition) error {
 	for _, v := range values {
 		t, err := common.ResolveType(v.Type, s.Resolve)
 		if err != nil {
@@ -492,7 +339,7 @@ func resolveInputObject(s *Schema, values common.InputValueList) error {
 	return nil
 }
 
-func parseSchema(s *Schema, l *common.Lexer) {
+func parseSchema(s *types.Schema, l *common.Lexer) {
 	l.ConsumeWhitespace()
 
 	for l.Peek() != scanner.EOF {
@@ -502,10 +349,11 @@ func parseSchema(s *Schema, l *common.Lexer) {
 		case "schema":
 			l.ConsumeToken('{')
 			for l.Peek() != '}' {
+
 				name := l.ConsumeIdent()
 				l.ConsumeToken(':')
 				typ := l.ConsumeIdent()
-				s.entryPointNames[name] = typ
+				s.EntryPointNames[name] = typ
 			}
 			l.ConsumeToken('}')
 
@@ -513,7 +361,7 @@ func parseSchema(s *Schema, l *common.Lexer) {
 			obj := parseObjectDef(l)
 			obj.Desc = desc
 			s.Types[obj.Name] = obj
-			s.objects = append(s.objects, obj)
+			s.Objects = append(s.Objects, obj)
 
 		case "interface":
 			iface := parseInterfaceDef(l)
@@ -524,13 +372,13 @@ func parseSchema(s *Schema, l *common.Lexer) {
 			union := parseUnionDef(l)
 			union.Desc = desc
 			s.Types[union.Name] = union
-			s.unions = append(s.unions, union)
+			s.Unions = append(s.Unions, union)
 
 		case "enum":
 			enum := parseEnumDef(l)
 			enum.Desc = desc
 			s.Types[enum.Name] = enum
-			s.enums = append(s.enums, enum)
+			s.Enums = append(s.Enums, enum)
 
 		case "input":
 			input := parseInputDef(l)
@@ -538,8 +386,10 @@ func parseSchema(s *Schema, l *common.Lexer) {
 			s.Types[input.Name] = input
 
 		case "scalar":
+			loc := l.Location()
 			name := l.ConsumeIdent()
-			s.Types[name] = &Scalar{Name: name, Desc: desc}
+			directives := common.ParseDirectives(l)
+			s.Types[name] = &types.ScalarTypeDefinition{Name: name, Desc: desc, Directives: directives, Loc: loc}
 
 		case "directive":
 			directive := parseDirectiveDef(l)
@@ -556,30 +406,55 @@ func parseSchema(s *Schema, l *common.Lexer) {
 	}
 }
 
-func parseObjectDef(l *common.Lexer) *Object {
-	object := &Object{Name: l.ConsumeIdent()}
+func parseObjectDef(l *common.Lexer) *types.ObjectTypeDefinition {
+	object := &types.ObjectTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
 
-	if l.Peek() == scanner.Ident {
+	for {
+		if l.Peek() == '{' {
+			break
+		}
+
+		if l.Peek() == '@' {
+			object.Directives = common.ParseDirectives(l)
+			continue
+		}
+
+		if l.Peek() != scanner.Ident {
+			break
+		}
+
 		l.ConsumeKeyword("implements")
 
-		for l.Peek() != '{' {
+		for l.Peek() != '{' && l.Peek() != '@' {
 			if l.Peek() == '&' {
 				l.ConsumeToken('&')
 			}
 
-			object.interfaceNames = append(object.interfaceNames, l.ConsumeIdent())
+			object.InterfaceNames = append(object.InterfaceNames, l.ConsumeIdent())
 		}
 	}
-
 	l.ConsumeToken('{')
 	object.Fields = parseFieldsDef(l)
 	l.ConsumeToken('}')
 
 	return object
+
 }
 
-func parseInterfaceDef(l *common.Lexer) *Interface {
-	i := &Interface{Name: l.ConsumeIdent()}
+func parseInterfaceDef(l *common.Lexer) *types.InterfaceTypeDefinition {
+	i := &types.InterfaceTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
+
+	if l.Peek() == scanner.Ident {
+		l.ConsumeKeyword("implements")
+		i.Interfaces = append(i.Interfaces, &types.InterfaceTypeDefinition{Name: l.ConsumeIdent()})
+
+		for l.Peek() == '&' {
+			l.ConsumeToken('&')
+			i.Interfaces = append(i.Interfaces, &types.InterfaceTypeDefinition{Name: l.ConsumeIdent()})
+		}
+	}
+
+	i.Directives = common.ParseDirectives(l)
 
 	l.ConsumeToken('{')
 	i.Fields = parseFieldsDef(l)
@@ -588,22 +463,25 @@ func parseInterfaceDef(l *common.Lexer) *Interface {
 	return i
 }
 
-func parseUnionDef(l *common.Lexer) *Union {
-	union := &Union{Name: l.ConsumeIdent()}
+func parseUnionDef(l *common.Lexer) *types.Union {
+	union := &types.Union{Loc: l.Location(), Name: l.ConsumeIdent()}
 
+	union.Directives = common.ParseDirectives(l)
 	l.ConsumeToken('=')
-	union.typeNames = []string{l.ConsumeIdent()}
+	union.TypeNames = []string{l.ConsumeIdent()}
 	for l.Peek() == '|' {
 		l.ConsumeToken('|')
-		union.typeNames = append(union.typeNames, l.ConsumeIdent())
+		union.TypeNames = append(union.TypeNames, l.ConsumeIdent())
 	}
 
 	return union
 }
 
-func parseInputDef(l *common.Lexer) *InputObject {
-	i := &InputObject{}
+func parseInputDef(l *common.Lexer) *types.InputObject {
+	i := &types.InputObject{}
+	i.Loc = l.Location()
 	i.Name = l.ConsumeIdent()
+	i.Directives = common.ParseDirectives(l)
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
 		i.Values = append(i.Values, common.ParseInputValue(l))
@@ -612,41 +490,54 @@ func parseInputDef(l *common.Lexer) *InputObject {
 	return i
 }
 
-func parseEnumDef(l *common.Lexer) *Enum {
-	enum := &Enum{Name: l.ConsumeIdent()}
+func parseEnumDef(l *common.Lexer) *types.EnumTypeDefinition {
+	enum := &types.EnumTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
 
+	enum.Directives = common.ParseDirectives(l)
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
-		v := &EnumValue{
+		v := &types.EnumValueDefinition{
 			Desc:       l.DescComment(),
-			Name:       l.ConsumeIdent(),
+			Loc:        l.Location(),
+			EnumValue:  l.ConsumeIdent(),
 			Directives: common.ParseDirectives(l),
 		}
 
-		enum.Values = append(enum.Values, v)
+		enum.EnumValuesDefinition = append(enum.EnumValuesDefinition, v)
 	}
 	l.ConsumeToken('}')
 	return enum
 }
-
-func parseDirectiveDef(l *common.Lexer) *DirectiveDecl {
+func parseDirectiveDef(l *common.Lexer) *types.DirectiveDefinition {
 	l.ConsumeToken('@')
-	d := &DirectiveDecl{Name: l.ConsumeIdent()}
+	loc := l.Location()
+	d := &types.DirectiveDefinition{Name: l.ConsumeIdent(), Loc: loc}
 
 	if l.Peek() == '(' {
 		l.ConsumeToken('(')
 		for l.Peek() != ')' {
 			v := common.ParseInputValue(l)
-			d.Args = append(d.Args, v)
+			d.Arguments = append(d.Arguments, v)
 		}
 		l.ConsumeToken(')')
 	}
 
-	l.ConsumeKeyword("on")
+	switch x := l.ConsumeIdent(); x {
+	case "on":
+		// no-op; Go doesn't fallthrough by default
+	case "repeatable":
+		d.Repeatable = true
+		l.ConsumeKeyword("on")
+	default:
+		l.SyntaxError(fmt.Sprintf(`unexpected %q, expecting "on" or "repeatable"`, x))
+	}
 
 	for {
 		loc := l.ConsumeIdent()
-		d.Locs = append(d.Locs, loc)
+		if _, ok := legalDirectiveLocationNames[loc]; !ok {
+			l.SyntaxError(fmt.Sprintf("%q is not a legal directive location (options: %v)", loc, legalDirectiveLocationNames))
+		}
+		d.Locations = append(d.Locations, loc)
 		if l.Peek() != '|' {
 			break
 		}
@@ -655,7 +546,8 @@ func parseDirectiveDef(l *common.Lexer) *DirectiveDecl {
 	return d
 }
 
-func parseExtension(s *Schema, l *common.Lexer) {
+func parseExtension(s *types.Schema, l *common.Lexer) {
+	loc := l.Location()
 	switch x := l.ConsumeIdent(); x {
 	case "schema":
 		l.ConsumeToken('{')
@@ -663,46 +555,47 @@ func parseExtension(s *Schema, l *common.Lexer) {
 			name := l.ConsumeIdent()
 			l.ConsumeToken(':')
 			typ := l.ConsumeIdent()
-			s.entryPointNames[name] = typ
+			s.EntryPointNames[name] = typ
 		}
 		l.ConsumeToken('}')
 
 	case "type":
 		obj := parseObjectDef(l)
-		s.extensions = append(s.extensions, &Extension{Type: obj})
+		s.Extensions = append(s.Extensions, &types.Extension{Type: obj, Loc: loc})
 
 	case "interface":
 		iface := parseInterfaceDef(l)
-		s.extensions = append(s.extensions, &Extension{Type: iface})
+		s.Extensions = append(s.Extensions, &types.Extension{Type: iface, Loc: loc})
 
 	case "union":
 		union := parseUnionDef(l)
-		s.extensions = append(s.extensions, &Extension{Type: union})
+		s.Extensions = append(s.Extensions, &types.Extension{Type: union, Loc: loc})
 
 	case "enum":
 		enum := parseEnumDef(l)
-		s.extensions = append(s.extensions, &Extension{Type: enum})
+		s.Extensions = append(s.Extensions, &types.Extension{Type: enum, Loc: loc})
 
 	case "input":
 		input := parseInputDef(l)
-		s.extensions = append(s.extensions, &Extension{Type: input})
+		s.Extensions = append(s.Extensions, &types.Extension{Type: input, Loc: loc})
 
 	default:
-		// TODO: Add Scalar when adding directives
+		// TODO: Add ScalarTypeDefinition when adding directives
 		l.SyntaxError(fmt.Sprintf(`unexpected %q, expecting "schema", "type", "enum", "interface", "union" or "input"`, x))
 	}
 }
 
-func parseFieldsDef(l *common.Lexer) FieldList {
-	var fields FieldList
+func parseFieldsDef(l *common.Lexer) types.FieldsDefinition {
+	var fields types.FieldsDefinition
 	for l.Peek() != '}' {
-		f := &Field{}
+		f := &types.FieldDefinition{}
 		f.Desc = l.DescComment()
+		f.Loc = l.Location()
 		f.Name = l.ConsumeIdent()
 		if l.Peek() == '(' {
 			l.ConsumeToken('(')
 			for l.Peek() != ')' {
-				f.Args = append(f.Args, common.ParseInputValue(l))
+				f.Arguments = append(f.Arguments, common.ParseInputValue(l))
 			}
 			l.ConsumeToken(')')
 		}
@@ -712,4 +605,26 @@ func parseFieldsDef(l *common.Lexer) FieldList {
 		fields = append(fields, f)
 	}
 	return fields
+}
+
+var legalDirectiveLocationNames = map[string]struct{}{
+	"SCHEMA":                 {},
+	"SCALAR":                 {},
+	"OBJECT":                 {},
+	"FIELD_DEFINITION":       {},
+	"ARGUMENT_DEFINITION":    {},
+	"INTERFACE":              {},
+	"UNION":                  {},
+	"ENUM":                   {},
+	"ENUM_VALUE":             {},
+	"INPUT_OBJECT":           {},
+	"INPUT_FIELD_DEFINITION": {},
+	"QUERY":                  {},
+	"MUTATION":               {},
+	"SUBSCRIPTION":           {},
+	"FIELD":                  {},
+	"FRAGMENT_DEFINITION":    {},
+	"FRAGMENT_SPREAD":        {},
+	"INLINE_FRAGMENT":        {},
+	"VARIABLE_DEFINITION":    {},
 }

@@ -27,9 +27,13 @@ const Schema = `
 		role: Role!
 	}
 
+	interface Person {
+		name: String!
+	}
+
 	scalar Time	
 
-	type User implements Admin {
+	type User implements Admin & Person {
 		id: ID!
 		name: String!
 		email: String!
@@ -64,6 +68,15 @@ type admin interface {
 	Role() string
 }
 
+type adminResolver struct {
+	admin
+}
+
+func (r *adminResolver) ToUser() (*user, bool) {
+	n, ok := r.admin.(user)
+	return &n, ok
+}
+
 type searchResult struct {
 	result interface{}
 }
@@ -73,15 +86,19 @@ func (r *searchResult) ToUser() (*user, bool) {
 	return res, ok
 }
 
+type contact struct {
+	Email string
+	Phone string
+}
+
 type user struct {
-	IDField   string
-	NameField string
-	RoleField string
-	Email     string
-	Phone     string
-	Address   *[]string
-	Friends   *[]*user
-	CreatedAt graphql.Time
+	IDField      string
+	NameField    string
+	RoleField    string
+	Address      *[]string
+	FriendsField *[]*user
+	CreatedAt    graphql.Time
+	contact
 }
 
 func (u user) ID() graphql.ID {
@@ -96,9 +113,9 @@ func (u user) Role() string {
 	return u.RoleField
 }
 
-func (u user) FriendsResolver(args struct{ Page *page }) (*[]*user, error) {
+func (u user) Friends(args struct{ Page *page }) (*[]*user, error) {
 	var from int
-	numFriends := len(*u.Friends)
+	numFriends := len(*u.FriendsField)
 	to := numFriends
 
 	if args.Page != nil {
@@ -116,7 +133,7 @@ func (u user) FriendsResolver(args struct{ Page *page }) (*[]*user, error) {
 		}
 	}
 
-	friends := (*u.Friends)[from:to]
+	friends := (*u.FriendsField)[from:to]
 
 	return &friends, nil
 }
@@ -126,47 +143,55 @@ var users = []*user{
 		IDField:   "0x01",
 		NameField: "Albus Dumbledore",
 		RoleField: "ADMIN",
-		Email:     "Albus@hogwarts.com",
-		Phone:     "000-000-0000",
 		Address:   &[]string{"Office @ Hogwarts", "where Horcruxes are"},
 		CreatedAt: graphql.Time{Time: time.Now()},
+		contact: contact{
+			Email: "Albus@hogwarts.com",
+			Phone: "000-000-0000",
+		},
 	},
 	{
 		IDField:   "0x02",
 		NameField: "Harry Potter",
 		RoleField: "USER",
-		Email:     "harry@hogwarts.com",
-		Phone:     "000-000-0001",
 		Address:   &[]string{"123 dorm room @ Hogwarts", "456 random place"},
 		CreatedAt: graphql.Time{Time: time.Now()},
+		contact: contact{
+			Email: "harry@hogwarts.com",
+			Phone: "000-000-0001",
+		},
 	},
 	{
 		IDField:   "0x03",
 		NameField: "Hermione Granger",
 		RoleField: "USER",
-		Email:     "hermione@hogwarts.com",
-		Phone:     "000-000-0011",
 		Address:   &[]string{"233 dorm room @ Hogwarts", "786 @ random place"},
 		CreatedAt: graphql.Time{Time: time.Now()},
+		contact: contact{
+			Email: "hermione@hogwarts.com",
+			Phone: "000-000-0011",
+		},
 	},
 	{
 		IDField:   "0x04",
 		NameField: "Ronald Weasley",
 		RoleField: "USER",
-		Email:     "ronald@hogwarts.com",
-		Phone:     "000-000-0111",
 		Address:   &[]string{"411 dorm room @ Hogwarts", "981 @ random place"},
 		CreatedAt: graphql.Time{Time: time.Now()},
+		contact: contact{
+			Email: "ronald@hogwarts.com",
+			Phone: "000-000-0111",
+		},
 	},
 }
 
 var usersMap = make(map[string]*user)
 
 func init() {
-	users[0].Friends = &[]*user{users[1]}
-	users[1].Friends = &[]*user{users[0], users[2], users[3]}
-	users[2].Friends = &[]*user{users[1], users[3]}
-	users[3].Friends = &[]*user{users[1], users[2]}
+	users[0].FriendsField = &[]*user{users[1]}
+	users[1].FriendsField = &[]*user{users[0], users[2], users[3]}
+	users[2].FriendsField = &[]*user{users[1], users[3]}
+	users[3].FriendsField = &[]*user{users[1], users[2]}
 	for _, usr := range users {
 		usersMap[usr.IDField] = usr
 	}
@@ -177,14 +202,14 @@ type Resolver struct{}
 func (r *Resolver) Admin(ctx context.Context, args struct {
 	ID   string
 	Role string
-}) (admin, error) {
+}) (*adminResolver, error) {
 	if usr, ok := usersMap[args.ID]; ok {
 		if usr.RoleField == args.Role {
-			return *usr, nil
+			return &adminResolver{*usr}, nil
 		}
 	}
 	err := fmt.Errorf("user with id=%s and role=%s does not exist", args.ID, args.Role)
-	return user{}, err
+	return nil, err
 }
 
 func (r *Resolver) User(ctx context.Context, args struct{ Id string }) (user, error) {

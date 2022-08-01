@@ -9,10 +9,9 @@ import (
 	"time"
 
 	"github.com/tokopedia/graphql-go/errors"
-	"github.com/tokopedia/graphql-go/internal/common"
 	"github.com/tokopedia/graphql-go/internal/exec/resolvable"
 	"github.com/tokopedia/graphql-go/internal/exec/selected"
-	"github.com/tokopedia/graphql-go/internal/query"
+	"github.com/tokopedia/graphql-go/types"
 )
 
 type Response struct {
@@ -20,7 +19,7 @@ type Response struct {
 	Errors []*errors.QueryError
 }
 
-func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query.Operation) <-chan *Response {
+func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *types.OperationDefinition) <-chan *Response {
 	var result reflect.Value
 	var f *fieldToExec
 	var err *errors.QueryError
@@ -49,14 +48,29 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 		result = callOut[0]
 
 		if f.field.HasError && !callOut[1].IsNil() {
-			resolverErr := callOut[1].Interface().(error)
-			err = errors.Errorf("%s", resolverErr)
-			err.ResolverError = resolverErr
+			switch resolverErr := callOut[1].Interface().(type) {
+			case *errors.QueryError:
+				err = resolverErr
+			case error:
+				err = errors.Errorf("%s", resolverErr)
+				err.ResolverError = resolverErr
+			default:
+				panic(fmt.Errorf("can only deal with *QueryError and error types, got %T", resolverErr))
+			}
 		}
 	}()
 
+	// Handles the case where the locally executed func above panicked
+	if len(r.Request.Errs) > 0 {
+		return sendAndReturnClosed(&Response{Errors: r.Request.Errs})
+	}
+
+	if f == nil {
+		return sendAndReturnClosed(&Response{Errors: []*errors.QueryError{err}})
+	}
+
 	if err != nil {
-		if _, nonNullChild := f.field.Type.(*common.NonNull); nonNullChild {
+		if _, nonNullChild := f.field.Type.(*types.NonNull); nonNullChild {
 			return sendAndReturnClosed(&Response{Errors: []*errors.QueryError{err}})
 		}
 		return sendAndReturnClosed(&Response{Data: []byte(fmt.Sprintf(`{"%s":null}`, f.field.Alias)), Errors: []*errors.QueryError{err}})
@@ -68,7 +82,7 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 
 	c := make(chan *Response)
 	// TODO: handle resolver nil channel better?
-	if result == reflect.Zero(result.Type()) {
+	if result.IsZero() {
 		close(c)
 		return c
 	}
@@ -111,8 +125,12 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 				}
 				var out bytes.Buffer
 				func() {
-					// TODO: configurable timeout
-					subCtx, cancel := context.WithTimeout(ctx, time.Second)
+					timeout := r.SubscribeResolverTimeout
+					if timeout == 0 {
+						timeout = time.Second
+					}
+
+					subCtx, cancel := context.WithTimeout(ctx, timeout)
 					defer cancel()
 
 					// resolve response
@@ -123,7 +141,7 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *query
 						subR.execSelectionSet(subCtx, f.sels, f.field.Type, &pathSegment{nil, f.field.Alias}, s, resp, &buf)
 
 						propagateChildError := false
-						if _, nonNullChild := f.field.Type.(*common.NonNull); nonNullChild && resolvedToNull(&buf) {
+						if _, nonNullChild := f.field.Type.(*types.NonNull); nonNullChild && resolvedToNull(&buf) {
 							propagateChildError = true
 						}
 

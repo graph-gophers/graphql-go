@@ -6,15 +6,14 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/tokopedia/graphql-go/errors"
-	"github.com/tokopedia/graphql-go/internal/common"
+	"github.com/tokopedia/graphql-go/decode"
 	"github.com/tokopedia/graphql-go/internal/exec/packer"
-	"github.com/tokopedia/graphql-go/internal/schema"
+	"github.com/tokopedia/graphql-go/types"
 )
 
 type Schema struct {
 	*Meta
-	schema.Schema
+	types.Schema
 	Query        Resolvable
 	Mutation     Resolvable
 	Subscription Resolvable
@@ -32,10 +31,10 @@ type Object struct {
 }
 
 type Field struct {
-	schema.Field
+	types.FieldDefinition
 	TypeName    string
 	MethodIndex int
-	FieldIndex  int
+	FieldIndex  []int
 	HasContext  bool
 	HasError    bool
 	ArgsPacker  *packer.StructPacker
@@ -44,7 +43,7 @@ type Field struct {
 }
 
 func (f *Field) UseMethodResolver() bool {
-	return f.FieldIndex == -1
+	return len(f.FieldIndex) == 0
 }
 
 type TypeAssertion struct {
@@ -62,7 +61,7 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
+func ApplyResolver(s *types.Schema, resolver interface{}) (*Schema, error) {
 	if resolver == nil {
 		return &Schema{Meta: newMeta(s), Schema: *s}, nil
 	}
@@ -104,13 +103,13 @@ func ApplyResolver(s *schema.Schema, resolver interface{}) (*Schema, error) {
 }
 
 type execBuilder struct {
-	schema        *schema.Schema
+	schema        *types.Schema
 	resMap        map[typePair]*resMapEntry
 	packerBuilder *packer.Builder
 }
 
 type typePair struct {
-	graphQLType  common.Type
+	graphQLType  types.Type
 	resolverType reflect.Type
 }
 
@@ -119,7 +118,7 @@ type resMapEntry struct {
 	targets []*Resolvable
 }
 
-func newBuilder(s *schema.Schema) *execBuilder {
+func newBuilder(s *types.Schema) *execBuilder {
 	return &execBuilder{
 		schema:        s,
 		resMap:        make(map[typePair]*resMapEntry),
@@ -137,7 +136,7 @@ func (b *execBuilder) finish() error {
 	return b.packerBuilder.Finish()
 }
 
-func (b *execBuilder) assignExec(target *Resolvable, t common.Type, resolverType reflect.Type) error {
+func (b *execBuilder) assignExec(target *Resolvable, t types.Type, resolverType reflect.Type) error {
 	k := typePair{t, resolverType}
 	ref, ok := b.resMap[k]
 	if !ok {
@@ -153,19 +152,19 @@ func (b *execBuilder) assignExec(target *Resolvable, t common.Type, resolverType
 	return nil
 }
 
-func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type) (Resolvable, error) {
+func (b *execBuilder) makeExec(t types.Type, resolverType reflect.Type) (Resolvable, error) {
 	var nonNull bool
 	t, nonNull = unwrapNonNull(t)
 
 	switch t := t.(type) {
-	case *schema.Object:
+	case *types.ObjectTypeDefinition:
 		return b.makeObjectExec(t.Name, t.Fields, nil, nonNull, resolverType)
 
-	case *schema.Interface:
+	case *types.InterfaceTypeDefinition:
 		return b.makeObjectExec(t.Name, t.Fields, t.PossibleTypes, nonNull, resolverType)
 
-	case *schema.Union:
-		return b.makeObjectExec(t.Name, nil, t.PossibleTypes, nonNull, resolverType)
+	case *types.Union:
+		return b.makeObjectExec(t.Name, nil, t.UnionMemberTypes, nonNull, resolverType)
 	}
 
 	if !nonNull {
@@ -176,13 +175,13 @@ func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type) (Resolv
 	}
 
 	switch t := t.(type) {
-	case *schema.Scalar:
+	case *types.ScalarTypeDefinition:
 		return makeScalarExec(t, resolverType)
 
-	case *schema.Enum:
+	case *types.EnumTypeDefinition:
 		return &Scalar{}, nil
 
-	case *common.List:
+	case *types.List:
 		if resolverType.Kind() != reflect.Slice {
 			return nil, fmt.Errorf("%s is not a slice", resolverType)
 		}
@@ -197,7 +196,7 @@ func (b *execBuilder) makeExec(t common.Type, resolverType reflect.Type) (Resolv
 	}
 }
 
-func makeScalarExec(t *schema.Scalar, resolverType reflect.Type) (Resolvable, error) {
+func makeScalarExec(t *types.ScalarTypeDefinition, resolverType reflect.Type) (Resolvable, error) {
 	implementsType := false
 	switch r := reflect.New(resolverType).Interface().(type) {
 	case *int32:
@@ -208,16 +207,17 @@ func makeScalarExec(t *schema.Scalar, resolverType reflect.Type) (Resolvable, er
 		implementsType = t.Name == "String"
 	case *bool:
 		implementsType = t.Name == "Boolean"
-	case packer.Unmarshaler:
+	case decode.Unmarshaler:
 		implementsType = r.ImplementsGraphQLType(t.Name)
 	}
+
 	if !implementsType {
 		return nil, fmt.Errorf("can not use %s as %s", resolverType, t.Name)
 	}
 	return &Scalar{}, nil
 }
 
-func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, possibleTypes []*schema.Object,
+func (b *execBuilder) makeObjectExec(typeName string, fields types.FieldsDefinition, possibleTypes []*types.ObjectTypeDefinition,
 	nonNull bool, resolverType reflect.Type) (*Object, error) {
 	if !nonNull {
 		if resolverType.Kind() != reflect.Ptr && resolverType.Kind() != reflect.Interface {
@@ -229,13 +229,17 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 
 	Fields := make(map[string]*Field)
 	rt := unwrapPtr(resolverType)
+	fieldsCount := fieldCount(rt, map[string]int{})
 	for _, f := range fields {
-		fieldIndex := -1
+		var fieldIndex []int
 		methodIndex := findMethod(resolverType, f.Name)
 		if b.schema.UseFieldResolvers && methodIndex == -1 {
-			fieldIndex = findField(rt, f.Name)
+			if fieldsCount[strings.ToLower(stripUnderscore(f.Name))] > 1 {
+				return nil, fmt.Errorf("%s does not resolve %q: ambiguous field %q", resolverType, typeName, f.Name)
+			}
+			fieldIndex = findField(rt, f.Name, []int{})
 		}
-		if methodIndex == -1 && fieldIndex == -1 {
+		if methodIndex == -1 && len(fieldIndex) == 0 {
 			hint := ""
 			if findMethod(reflect.PtrTo(resolverType), f.Name) != -1 {
 				hint = " (hint: the method exists on the pointer type)"
@@ -248,11 +252,17 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 		if methodIndex != -1 {
 			m = resolverType.Method(methodIndex)
 		} else {
-			sf = rt.Field(fieldIndex)
+			sf = rt.FieldByIndex(fieldIndex)
 		}
 		fe, err := b.makeFieldExec(typeName, f, m, sf, methodIndex, fieldIndex, methodHasReceiver)
 		if err != nil {
-			return nil, fmt.Errorf("%s\n\treturned by (%s).%s", err, resolverType, m.Name)
+			var resolverName string
+			if methodIndex != -1 {
+				resolverName = m.Name
+			} else {
+				resolverName = sf.Name
+			}
+			return nil, fmt.Errorf("%s\n\tused by (%s).%s", err, resolverType, resolverName)
 		}
 		Fields[f.Name] = fe
 	}
@@ -267,7 +277,15 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 			if methodIndex == -1 {
 				return nil, fmt.Errorf("%s does not resolve %q: missing method %q to convert to %q", resolverType, typeName, "To"+impl.Name, impl.Name)
 			}
-			if resolverType.Method(methodIndex).Type.NumOut() != 2 {
+			m := resolverType.Method(methodIndex)
+			expectedIn := 0
+			if methodHasReceiver {
+				expectedIn = 1
+			}
+			if m.Type.NumIn() != expectedIn {
+				return nil, fmt.Errorf("%s does not resolve %q: method %q should't have any arguments", resolverType, typeName, "To"+impl.Name)
+			}
+			if m.Type.NumOut() != 2 {
 				return nil, fmt.Errorf("%s does not resolve %q: method %q should return a value and a bool indicating success", resolverType, typeName, "To"+impl.Name)
 			}
 			a := &TypeAssertion{
@@ -289,10 +307,9 @@ func (b *execBuilder) makeObjectExec(typeName string, fields schema.FieldList, p
 
 var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
-var extnErrorInterfaceType = reflect.TypeOf((*errors.GraphQLError)(nil)).Elem()
 
-func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.Method, sf reflect.StructField,
-	methodIndex, fieldIndex int, methodHasReceiver bool) (*Field, error) {
+func (b *execBuilder) makeFieldExec(typeName string, f *types.FieldDefinition, m reflect.Method, sf reflect.StructField,
+	methodIndex int, fieldIndex []int, methodHasReceiver bool) (*Field, error) {
 
 	var argsPacker *packer.StructPacker
 	var hasError bool
@@ -313,20 +330,20 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 			in = in[1:]
 		}
 
-		if len(f.Args) > 0 {
+		if len(f.Arguments) > 0 {
 			if len(in) == 0 {
-				return nil, fmt.Errorf("must have parameter for field arguments")
+				return nil, fmt.Errorf("must have `args struct { ... }` argument for field arguments")
 			}
 			var err error
-			argsPacker, err = b.packerBuilder.MakeStructPacker(f.Args, in[0])
+			argsPacker, err = b.packerBuilder.MakeStructPacker(f.Arguments, in[0])
 			if err != nil {
 				return nil, err
 			}
 			in = in[1:]
 		}
 
-        if len(in) > 0 {
-			return nil, fmt.Errorf("too many parameters")
+		if len(in) > 0 {
+			return nil, fmt.Errorf("too many arguments")
 		}
 
 		maxNumOfReturns := 2
@@ -340,27 +357,28 @@ func (b *execBuilder) makeFieldExec(typeName string, f *schema.Field, m reflect.
 
 		hasError = m.Type.NumOut() == maxNumOfReturns
 		if hasError {
-			if m.Type.Out(1) != errorType && !m.Type.Out(1).Implements(extnErrorInterfaceType) {
-				return nil, fmt.Errorf(`must have "error" or implements errors.GraphQLError interface as its second return value but the type is %v`, m.Type.Out(1))
+			if m.Type.Out(maxNumOfReturns-1) != errorType {
+				return nil, fmt.Errorf(`must have "error" as its last return value`)
 			}
 		}
 	}
 
 	fe := &Field{
-		Field:       *f,
-		TypeName:    typeName,
-		MethodIndex: methodIndex,
-		FieldIndex:  fieldIndex,
-		HasContext:  hasContext,
-		ArgsPacker:  argsPacker,
-		HasError:    hasError,
-		TraceLabel:  fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name),
+		FieldDefinition: *f,
+		TypeName:        typeName,
+		MethodIndex:     methodIndex,
+		FieldIndex:      fieldIndex,
+		HasContext:      hasContext,
+		ArgsPacker:      argsPacker,
+		HasError:        hasError,
+		TraceLabel:      fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name),
 	}
 
 	var out reflect.Type
 	if methodIndex != -1 {
 		out = m.Type.Out(0)
-		if typeName == "Subscription" && out.Kind() == reflect.Chan {
+		sub, ok := b.schema.EntryPoints["subscription"]
+		if ok && typeName == sub.TypeName() && out.Kind() == reflect.Chan {
 			out = m.Type.Out(0).Elem()
 		}
 	} else {
@@ -382,17 +400,50 @@ func findMethod(t reflect.Type, name string) int {
 	return -1
 }
 
-func findField(t reflect.Type, name string) int {
+func findField(t reflect.Type, name string, index []int) []int {
 	for i := 0; i < t.NumField(); i++ {
-		if strings.EqualFold(stripUnderscore(name), stripUnderscore(t.Field(i).Name)) {
-			return i
+		field := t.Field(i)
+
+		if field.Type.Kind() == reflect.Struct && field.Anonymous {
+			newIndex := findField(field.Type, name, []int{i})
+			if len(newIndex) > 1 {
+				return append(index, newIndex...)
+			}
+		}
+
+		if strings.EqualFold(stripUnderscore(name), stripUnderscore(field.Name)) {
+			return append(index, i)
 		}
 	}
-	return -1
+
+	return index
 }
 
-func unwrapNonNull(t common.Type) (common.Type, bool) {
-	if nn, ok := t.(*common.NonNull); ok {
+// fieldCount helps resolve ambiguity when more than one embedded struct contains fields with the same name.
+func fieldCount(t reflect.Type, count map[string]int) map[string]int {
+	if t.Kind() != reflect.Struct {
+		return nil
+	}
+
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		fieldName := strings.ToLower(stripUnderscore(field.Name))
+
+		if field.Type.Kind() == reflect.Struct && field.Anonymous {
+			count = fieldCount(field.Type, count)
+		} else {
+			if _, ok := count[fieldName]; !ok {
+				count[fieldName] = 0
+			}
+			count[fieldName]++
+		}
+	}
+
+	return count
+}
+
+func unwrapNonNull(t types.Type) (types.Type, bool) {
+	if nn, ok := t.(*types.NonNull); ok {
 		return nn.OfType, true
 	}
 	return t, false

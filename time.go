@@ -31,14 +31,27 @@ func (t *Time) UnmarshalGraphQL(input interface{}) error {
 		var err error
 		t.Time, err = time.Parse(time.RFC3339, input)
 		return err
-	case int:
+	case []byte:
+		var err error
+		t.Time, err = time.Parse(time.RFC3339, string(input))
+		return err
+	case int32:
 		t.Time = time.Unix(int64(input), 0)
+		return nil
+	case int64:
+		if input >= 1e10 {
+			sec := input / 1e9
+			nsec := input - (sec * 1e9)
+			t.Time = time.Unix(sec, nsec)
+		} else {
+			t.Time = time.Unix(input, 0)
+		}
 		return nil
 	case float64:
 		t.Time = time.Unix(int64(input), 0)
 		return nil
 	default:
-		return fmt.Errorf("wrong type")
+		return fmt.Errorf("wrong type for Time: %T", input)
 	}
 }
 

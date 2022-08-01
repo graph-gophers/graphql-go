@@ -8,6 +8,7 @@ import (
 	"text/scanner"
 
 	"github.com/tokopedia/graphql-go/errors"
+	"github.com/tokopedia/graphql-go/types"
 )
 
 type syntaxError string
@@ -30,7 +31,10 @@ func NewLexer(s string, useStringDescriptions bool) *Lexer {
 	}
 	sc.Init(strings.NewReader(s))
 
-	return &Lexer{sc: sc, useStringDescriptions: useStringDescriptions}
+	l := Lexer{sc: sc, useStringDescriptions: useStringDescriptions}
+	l.sc.Error = l.CatchScannerError
+
+	return &l
 }
 
 func (l *Lexer) CatchSyntaxError(f func()) (errRes *errors.QueryError) {
@@ -115,11 +119,11 @@ func (l *Lexer) ConsumeIdent() string {
 	return name
 }
 
-func (l *Lexer) ConsumeIdentWithLoc() Ident {
+func (l *Lexer) ConsumeIdentWithLoc() types.Ident {
 	loc := l.Location()
 	name := l.sc.TokenText()
 	l.ConsumeToken(scanner.Ident)
-	return Ident{name, loc}
+	return types.Ident{Name: name, Loc: loc}
 }
 
 func (l *Lexer) ConsumeKeyword(keyword string) {
@@ -129,8 +133,8 @@ func (l *Lexer) ConsumeKeyword(keyword string) {
 	l.ConsumeWhitespace()
 }
 
-func (l *Lexer) ConsumeLiteral() *BasicLit {
-	lit := &BasicLit{Type: l.next, Text: l.sc.TokenText()}
+func (l *Lexer) ConsumeLiteral() *types.PrimitiveValue {
+	lit := &types.PrimitiveValue{Type: l.next, Text: l.sc.TokenText()}
 	l.ConsumeWhitespace()
 	return lit
 }
@@ -184,8 +188,7 @@ func (l *Lexer) consumeTripleQuoteComment() string {
 	}
 	val := buf.String()
 	val = val[:len(val)-numQuotes]
-	val = strings.TrimSpace(val)
-	return val
+	return blockString(val)
 }
 
 func (l *Lexer) consumeStringComment() string {
@@ -219,4 +222,8 @@ func (l *Lexer) consumeComment() {
 		}
 		l.comment.WriteRune(next)
 	}
+}
+
+func (l *Lexer) CatchScannerError(s *scanner.Scanner, msg string) {
+	l.SyntaxError(msg)
 }

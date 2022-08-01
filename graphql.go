@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
+	"time"
 
 	"github.com/tokopedia/graphql-go/errors"
 	"github.com/tokopedia/graphql-go/internal/common"
@@ -16,7 +16,9 @@ import (
 	"github.com/tokopedia/graphql-go/internal/validation"
 	"github.com/tokopedia/graphql-go/introspection"
 	"github.com/tokopedia/graphql-go/log"
-	"github.com/tokopedia/graphql-go/trace"
+	"github.com/tokopedia/graphql-go/trace/noop"
+	"github.com/tokopedia/graphql-go/trace/tracer"
+	"github.com/tokopedia/graphql-go/types"
 )
 
 // ParseSchema parses a GraphQL schema and attaches the given root resolver. It returns an error if
@@ -24,17 +26,28 @@ import (
 // resolver, then the schema can not be executed, but it may be inspected (e.g. with ToJSON).
 func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (*Schema, error) {
 	s := &Schema{
-		schema:           schema.New(),
-		maxParallelism:   10,
-		tracer:           trace.OpenTracingTracer{},
-		validationTracer: trace.NoopValidationTracer{},
-		logger:           &log.DefaultLogger{},
+		schema:         schema.New(),
+		maxParallelism: 10,
+		tracer:         noop.Tracer{},
+		logger:         &log.DefaultLogger{},
+		panicHandler:   &errors.DefaultPanicHandler{},
 	}
 	for _, opt := range opts {
 		opt(s)
 	}
 
-	if err := s.schema.Parse(schemaString, s.useStringDescriptions); err != nil {
+	if s.validationTracer == nil {
+		if t, ok := s.tracer.(tracer.ValidationTracer); ok {
+			s.validationTracer = t
+		} else {
+			s.validationTracer = &validationBridgingTracer{tracer: tracer.LegacyNoopValidationTracer{}} //nolint:staticcheck
+		}
+	}
+
+	if err := schema.Parse(s.schema, schemaString, s.useStringDescriptions); err != nil {
+		return nil, err
+	}
+	if err := s.validateSchema(); err != nil {
 		return nil, err
 	}
 
@@ -58,16 +71,22 @@ func MustParseSchema(schemaString string, resolver interface{}, opts ...SchemaOp
 
 // Schema represents a GraphQL schema with an optional resolver.
 type Schema struct {
-	schema *schema.Schema
+	schema *types.Schema
 	res    *resolvable.Schema
 
-	maxDepth              int
-	maxParallelism        int
-	tracer                trace.Tracer
-	validationTracer      trace.ValidationTracer
-	logger                log.Logger
-	useStringDescriptions bool
-	disableIntrospection  bool
+	maxDepth                 int
+	maxParallelism           int
+	tracer                   tracer.Tracer
+	validationTracer         tracer.ValidationTracer
+	logger                   log.Logger
+	panicHandler             errors.PanicHandler
+	useStringDescriptions    bool
+	disableIntrospection     bool
+	subscribeResolverTimeout time.Duration
+}
+
+func (s *Schema) ASTSchema() *types.Schema {
+	return s.schema
 }
 
 // SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
@@ -104,17 +123,18 @@ func MaxParallelism(n int) SchemaOpt {
 	}
 }
 
-// Tracer is used to trace queries and fields. It defaults to trace.OpenTracingTracer.
-func Tracer(tracer trace.Tracer) SchemaOpt {
+// Tracer is used to trace queries and fields. It defaults to tracer.Noop.
+func Tracer(t tracer.Tracer) SchemaOpt {
 	return func(s *Schema) {
-		s.tracer = tracer
+		s.tracer = t
 	}
 }
 
-// ValidationTracer is used to trace validation errors. It defaults to trace.NoopValidationTracer.
-func ValidationTracer(tracer trace.ValidationTracer) SchemaOpt {
+// ValidationTracer is used to trace validation errors. It defaults to tracer.LegacyNoopValidationTracer.
+// Deprecated: context is needed to support tracing correctly. Use a Tracer which implements tracer.ValidationTracer.
+func ValidationTracer(tracer tracer.LegacyValidationTracer) SchemaOpt { //nolint:staticcheck
 	return func(s *Schema) {
-		s.validationTracer = tracer
+		s.validationTracer = &validationBridgingTracer{tracer: tracer}
 	}
 }
 
@@ -125,10 +145,27 @@ func Logger(logger log.Logger) SchemaOpt {
 	}
 }
 
+// PanicHandler is used to customize the panic errors during query execution.
+// It defaults to errors.DefaultPanicHandler.
+func PanicHandler(panicHandler errors.PanicHandler) SchemaOpt {
+	return func(s *Schema) {
+		s.panicHandler = panicHandler
+	}
+}
+
 // DisableIntrospection disables introspection queries.
 func DisableIntrospection() SchemaOpt {
 	return func(s *Schema) {
 		s.disableIntrospection = true
+	}
+}
+
+// SubscribeResolverTimeout is an option to control the amount of time
+// we allow for a single subscribe message resolver to complete it's job
+// before it times out and returns an error to the subscriber.
+func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
+	return func(s *Schema) {
+		s.subscribeResolverTimeout = timeout
 	}
 }
 
@@ -142,54 +179,41 @@ type Response struct {
 }
 
 // Validate validates the given query with the schema.
-func (s *Schema) Validate(queryString string, variables map[string]interface{}) ([]string, bool, []*errors.QueryError) {
-	var queries []string	
+func (s *Schema) Validate(queryString string) []*errors.QueryError {
+	return s.ValidateWithVariables(queryString, nil)
+}
+
+// ValidateWithVariables validates the given query with the schema and the input variables.
+func (s *Schema) ValidateWithVariables(queryString string, variables map[string]interface{}) []*errors.QueryError {
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
-		return queries, true, []*errors.QueryError{qErr}
+		return []*errors.QueryError{qErr}
 	}
-	for _, op := range doc.Operations{
-		for _, sel := range op.Selections{
-			query, ok := sel.(*query.Field)
-			if ok {
-				queries = append(queries, query.Name.Name)
-			}
-		}
-	}
-	return queries, false, validation.Validate(s.schema, doc, variables, s.maxDepth)
+
+	return validation.Validate(s.schema, doc, variables, s.maxDepth)
 }
 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
 // without a resolver. If the context get cancelled, no further resolvers will be called and a
 // the context error will be returned as soon as possible (not immediately).
 func (s *Schema) Exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}) *Response {
-	if s.res.Resolver == (reflect.Value{}) {
+	if !s.res.Resolver.IsValid() {
 		panic("schema created without resolver, can not exec")
 	}
 	return s.exec(ctx, queryString, operationName, variables, s.res)
 }
 
 func (s *Schema) exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, res *resolvable.Schema) *Response {
-	var anyOtherValidationError bool
-
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
 		return &Response{Errors: []*errors.QueryError{qErr}}
 	}
 
-	validationFinish := s.validationTracer.TraceValidation()
+	validationFinish := s.validationTracer.TraceValidation(ctx)
 	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
 	validationFinish(errs)
 	if len(errs) != 0 {
-
-		for _, err := range errs {
-			if err.Rule != "VariablesOfCorrectType" && err.Rule != "" {
-				anyOtherValidationError = true
-			}
-		}
-		if anyOtherValidationError {
-			return &Response{Errors: errs}
-		}
+		return &Response{Errors: errs}
 	}
 
 	op, err := getOperation(doc, operationName)
@@ -197,9 +221,20 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		return &Response{Errors: []*errors.QueryError{errors.Errorf("%s", err)}}
 	}
 
+	// If the optional "operationName" POST parameter is not provided then
+	// use the query's operation name for improved tracing.
+	if operationName == "" {
+		operationName = op.Name.Name
+	}
+
 	// Subscriptions are not valid in Exec. Use schema.Subscribe() instead.
 	if op.Type == query.Subscription {
-		return &Response{Errors: []*errors.QueryError{&errors.QueryError{Message: "graphql-ws protocol header is missing"}}}
+		return &Response{Errors: []*errors.QueryError{{Message: "graphql-ws protocol header is missing"}}}
+	}
+	if op.Type == query.Mutation {
+		if _, ok := s.schema.EntryPoints["mutation"]; !ok {
+			return &Response{Errors: []*errors.QueryError{{Message: "no mutations are offered by the schema"}}}
+		}
 	}
 
 	// Fill in variables with the defaults from the operation
@@ -208,7 +243,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	}
 	for _, v := range op.Vars {
 		if _, ok := variables[v.Name.Name]; !ok && v.Default != nil {
-			variables[v.Name.Name] = v.Default.Value(nil)
+			variables[v.Name.Name] = v.Default.Deserialize(nil)
 		}
 	}
 
@@ -219,9 +254,10 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 			Schema:               s.schema,
 			DisableIntrospection: s.disableIntrospection,
 		},
-		Limiter: make(chan struct{}, s.maxParallelism),
-		Tracer:  s.tracer,
-		Logger:  s.logger,
+		Limiter:      make(chan struct{}, s.maxParallelism),
+		Tracer:       s.tracer,
+		Logger:       s.logger,
+		PanicHandler: s.panicHandler,
 	}
 	varTypes := make(map[string]*introspection.Type)
 	for _, v := range op.Vars {
@@ -241,7 +277,48 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	}
 }
 
-func getOperation(document *query.Document, operationName string) (*query.Operation, error) {
+func (s *Schema) validateSchema() error {
+	// https://graphql.github.io/graphql-spec/June2018/#sec-Root-Operation-Types
+	// > The query root operation type must be provided and must be an Object type.
+	if err := validateRootOp(s.schema, "query", true); err != nil {
+		return err
+	}
+	// > The mutation root operation type is optional; if it is not provided, the service does not support mutations.
+	// > If it is provided, it must be an Object type.
+	if err := validateRootOp(s.schema, "mutation", false); err != nil {
+		return err
+	}
+	// > Similarly, the subscription root operation type is also optional; if it is not provided, the service does not
+	// > support subscriptions. If it is provided, it must be an Object type.
+	if err := validateRootOp(s.schema, "subscription", false); err != nil {
+		return err
+	}
+	return nil
+}
+
+type validationBridgingTracer struct {
+	tracer tracer.LegacyValidationTracer //nolint:staticcheck
+}
+
+func (t *validationBridgingTracer) TraceValidation(context.Context) func([]*errors.QueryError) {
+	return t.tracer.TraceValidation()
+}
+
+func validateRootOp(s *types.Schema, name string, mandatory bool) error {
+	t, ok := s.EntryPoints[name]
+	if !ok {
+		if mandatory {
+			return fmt.Errorf("root operation %q must be defined", name)
+		}
+		return nil
+	}
+	if t.Kind() != "OBJECT" {
+		return fmt.Errorf("root operation %q must be an OBJECT", name)
+	}
+	return nil
+}
+
+func getOperation(document *types.ExecutableDefinition, operationName string) (*types.OperationDefinition, error) {
 	if len(document.Operations) == 0 {
 		return nil, fmt.Errorf("no operations in query document")
 	}

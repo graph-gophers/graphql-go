@@ -5,6 +5,7 @@ import (
 
 	"github.com/tokopedia/graphql-go/internal/query"
 	"github.com/tokopedia/graphql-go/internal/schema"
+	"github.com/tokopedia/graphql-go/types"
 )
 
 const (
@@ -33,6 +34,7 @@ const (
 		id: ID!
 		name: String!
 		friends: [Character]
+		enemies: [Character]
 		appearsIn: [Episode]!
 	}
 
@@ -42,12 +44,15 @@ const (
 		JEDI
 	}
 
-	type Starship {}
+	type Starship {
+		id: ID!
+	}
 
 	type Human implements Character {
 		id: ID!
 		name: String!
 		friends: [Character]
+		enemies: [Character]
 		appearsIn: [Episode]!
 		starships: [Starship]
 		totalCredits: Int
@@ -57,6 +62,7 @@ const (
 		id: ID!
 		name: String!
 		friends: [Character]
+		enemies: [Character]
 		appearsIn: [Episode]!
 		primaryFunction: String
 	}`
@@ -70,7 +76,7 @@ type maxDepthTestCase struct {
 	expectedErrors []string
 }
 
-func (tc maxDepthTestCase) Run(t *testing.T, s *schema.Schema) {
+func (tc maxDepthTestCase) Run(t *testing.T, s *types.Schema) {
 	t.Run(tc.name, func(t *testing.T) {
 		doc, qErr := query.Parse(tc.query)
 		if qErr != nil {
@@ -103,9 +109,7 @@ func (tc maxDepthTestCase) Run(t *testing.T, s *schema.Schema) {
 }
 
 func TestMaxDepth(t *testing.T) {
-	s := schema.New()
-
-	err := s.Parse(simpleSchema, false)
+	s, err := schema.ParseSchema(simpleSchema, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,9 +183,7 @@ func TestMaxDepth(t *testing.T) {
 }
 
 func TestMaxDepthInlineFragments(t *testing.T) {
-	s := schema.New()
-
-	err := s.Parse(interfaceSimple, false)
+	s, err := schema.ParseSchema(interfaceSimple, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,9 +230,7 @@ func TestMaxDepthInlineFragments(t *testing.T) {
 }
 
 func TestMaxDepthFragmentSpreads(t *testing.T) {
-	s := schema.New()
-
-	err := s.Parse(interfaceSimple, false)
+	s, err := schema.ParseSchema(interfaceSimple, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,15 +309,71 @@ func TestMaxDepthFragmentSpreads(t *testing.T) {
 			depth:   6,
 			failure: true,
 		},
+		{
+			name: "spreadAtDifferentDepths",
+			query: `
+			fragment character on Character {
+				name # depth + 0
+				friends { # depth + 0
+					name # depth + 1
+				}
+			}
+
+			query laterDepthValidated {
+				...character # depth 1 (+1)
+				enemies { # depth 1
+					friends { # depth 2
+						...character # depth 2 (+1), should error!
+					}
+				}
+			}
+			`,
+			depth:   2,
+			failure: true,
+		},
+		{
+			name: "spreadAtSameDepth",
+			query: `
+			fragment character on Character {
+				name # depth + 0
+				friends { # depth + 0
+					name # depth + 1
+				}
+			}
+			query {
+				characters { # depth 1
+					friends { # depth 2
+						...character # depth 3 (+1)
+					}
+					enemies { # depth 2
+						...character # depth 3 (+1)
+					}
+				}
+			}
+			`,
+			depth: 4,
+		},
+		{
+			name: "fragmentCycle",
+			query: `
+			fragment X on Query { ...Y }
+			fragment Y on Query { ...Z }
+			fragment Z on Query { ...X }
+
+			query {
+				...X
+			}
+			`,
+			depth:   10,
+			failure: true,
+		},
 	} {
 		tc.Run(t, s)
 	}
 }
 
 func TestMaxDepthUnknownFragmentSpreads(t *testing.T) {
-	s := schema.New()
-
-	err := s.Parse(interfaceSimple, false)
+	s, err := schema.ParseSchema(interfaceSimple, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,9 +406,7 @@ func TestMaxDepthUnknownFragmentSpreads(t *testing.T) {
 }
 
 func TestMaxDepthValidation(t *testing.T) {
-	s := schema.New()
-
-	err := s.Parse(interfaceSimple, false)
+	s, err := schema.ParseSchema(interfaceSimple, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +494,7 @@ func TestMaxDepthValidation(t *testing.T) {
 
 			opc := &opContext{context: context, ops: doc.Operations}
 
-			actual := validateMaxDepth(opc, op.Selections, 1)
+			actual := validateMaxDepth(opc, op.Selections, nil, 1)
 			if actual != tc.expected {
 				t.Errorf("expected %t, actual %t", tc.expected, actual)
 			}
