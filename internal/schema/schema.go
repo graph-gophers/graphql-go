@@ -268,8 +268,18 @@ func resolveNamedType(s *types.Schema, t types.NamedType) error {
 				return err
 			}
 		}
+		if err := resolveDirectives(s, t.Directives, "INTERFACE"); err != nil {
+			return err
+		}
 	case *types.InputObject:
 		if err := resolveInputObject(s, t.Values); err != nil {
+			return err
+		}
+		if err := resolveDirectives(s, t.Directives, "INPUT_OBJECT"); err != nil {
+			return err
+		}
+	case *types.ScalarTypeDefinition:
+		if err := resolveDirectives(s, t.Directives, "SCALAR"); err != nil {
 			return err
 		}
 	}
@@ -335,6 +345,11 @@ func resolveInputObject(s *types.Schema, values types.ArgumentsDefinition) error
 			return err
 		}
 		v.Type = t
+
+		if err := resolveDirectives(s, v.Directives, "ARGUMENT_DEFINITION"); err != nil {
+			return err
+		}
+
 	}
 	return nil
 }
