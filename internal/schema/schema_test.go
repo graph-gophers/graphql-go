@@ -936,6 +936,60 @@ Second line of the description.
 				return nil
 			},
 		},
+		{
+			name: "Decorating scalar with an undeclared directive should return an error",
+			sdl: `
+			scalar S @undeclareddirective
+			`,
+			validateError: func(err error) error {
+				prefix := `graphql: directive "undeclareddirective" not found`
+				if err == nil || !strings.HasPrefix(err.Error(), prefix) {
+					return fmt.Errorf("expected error starting with %q, but got %q", prefix, err)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Decorating argument with an undeclared directive should return an error",
+			sdl: `
+			type Query {
+				hello(name: String! @undeclareddirective): String!
+			}
+			`,
+			validateError: func(err error) error {
+				prefix := `graphql: directive "undeclareddirective" not found`
+				if err == nil || !strings.HasPrefix(err.Error(), prefix) {
+					return fmt.Errorf("expected error starting with %q, but got %q", prefix, err)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Decorating input object with an undeclared directive should return an error",
+			sdl: `
+			input InputObject @undeclareddirective{}
+			`,
+			validateError: func(err error) error {
+				prefix := `graphql: directive "undeclareddirective" not found`
+				if err == nil || !strings.HasPrefix(err.Error(), prefix) {
+					return fmt.Errorf("expected error starting with %q, but got %q", prefix, err)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Decorating interface with an undeclared directive should return an error",
+			sdl: `
+			interface I @undeclareddirective {}
+			`,
+			validateError: func(err error) error {
+				prefix := `graphql: directive "undeclareddirective" not found`
+				if err == nil || !strings.HasPrefix(err.Error(), prefix) {
+					return fmt.Errorf("expected error starting with %q, but got %q", prefix, err)
+				}
+				return nil
+			},
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			s, err := schema.ParseSchema(test.sdl, test.useStringDescriptions)
