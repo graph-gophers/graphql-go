@@ -51,8 +51,7 @@ func RunTest(t *testing.T, test *Test) {
 
 	if test.ExpectedResult == "" {
 		if result.Data != nil {
-			t.Fatalf("got: %s", result.Data)
-			t.Fatalf("want: null")
+			t.Fatalf("got: %s, want: null", result.Data)
 		}
 		return
 	}
