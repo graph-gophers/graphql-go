@@ -1,4 +1,4 @@
-# graphql-go [![Sourcegraph](https://sourcegraph.com/github.com/graph-gophers/graphql-go/-/badge.svg)](https://sourcegraph.com/github.com/graph-gophers/graphql-go?badge) [![Build Status](https://semaphoreci.com/api/v1/graph-gophers/graphql-go/branches/master/badge.svg)](https://semaphoreci.com/graph-gophers/graphql-go) [![GoDoc](https://godoc.org/github.com/graph-gophers/graphql-go?status.svg)](https://godoc.org/github.com/graph-gophers/graphql-go)
+# graphql-go [![Sourcegraph](https://sourcegraph.com/github.com/tribunadigital/graphql-go/-/badge.svg)](https://sourcegraph.com/github.com/tribunadigital/graphql-go?badge) [![Build Status](https://semaphoreci.com/api/v1/tribunadigital/graphql-go/branches/master/badge.svg)](https://semaphoreci.com/tribunadigital/graphql-go) [![GoDoc](https://godoc.org/github.com/tribunadigital/graphql-go?status.svg)](https://godoc.org/github.com/tribunadigital/graphql-go)
 
 <p align="center"><img src="docs/img/logo.png" width="300"></p>
 
@@ -21,7 +21,7 @@ safe for production use.
 
 ## Roadmap
 
-We're trying out the GitHub Project feature to manage `graphql-go`'s [development roadmap](https://github.com/graph-gophers/graphql-go/projects/1).
+We're trying out the GitHub Project feature to manage `graphql-go`'s [development roadmap](https://github.com/tribunadigital/graphql-go/projects/1).
 Feedback is welcome and appreciated.
 
 ## (Some) Documentation
@@ -35,8 +35,8 @@ import (
         "log"
         "net/http"
 
-        graphql "github.com/graph-gophers/graphql-go"
-        "github.com/graph-gophers/graphql-go/relay"
+        graphql "github.com/tribunadigital/graphql-go"
+        "github.com/tribunadigital/graphql-go/relay"
 )
 
 type query struct{}
@@ -67,7 +67,7 @@ You can use struct fields as resolvers by using `SchemaOpt: UseFieldResolvers()`
 ```
 opts := []graphql.SchemaOpt{graphql.UseFieldResolvers()}
 schema := graphql.MustParseSchema(s, &query{}, opts...)
-```   
+```
 
 When using `UseFieldResolvers` schema option, a struct field will be used *only* when:
 - there is no method for a struct field
@@ -162,6 +162,6 @@ Which could produce a GraphQL error such as:
 }
 ```
 
-### [Examples](https://github.com/graph-gophers/graphql-go/wiki/Examples)
+### [Examples](https://github.com/tribunadigital/graphql-go/wiki/Examples)
 
-### [Companies that use this library](https://github.com/graph-gophers/graphql-go/wiki/Users)
+### [Companies that use this library](https://github.com/tribunadigital/graphql-go/wiki/Users)

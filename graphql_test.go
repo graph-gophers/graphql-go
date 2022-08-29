@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/graph-gophers/graphql-go"
-	gqlerrors "github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/example/starwars"
-	"github.com/graph-gophers/graphql-go/gqltesting"
+	"github.com/tribunadigital/graphql-go"
+	gqlerrors "github.com/tribunadigital/graphql-go/errors"
+	"github.com/tribunadigital/graphql-go/example/starwars"
+	"github.com/tribunadigital/graphql-go/gqltesting"
 )
 
 type helloWorldResolver1 struct{}
@@ -623,7 +623,7 @@ func TestEmbeddedStruct(t *testing.T) {
 				type Query {
 					course: Course!
 				}
-				
+
 				type Course {
 					name: String!
 					createdAt: String!
@@ -1851,11 +1851,11 @@ func TestTypeName(t *testing.T) {
 						}
 					}
 				}
-				
+
 				fragment Droid on Droid {
 					name
 					__typename
-				}			  
+				}
 			`,
 			RawResponse:    true,
 			ExpectedResult: `{"hero":{"__typename":"Droid","name":"R2-D2"}}`,
@@ -3670,7 +3670,7 @@ func TestPanicAmbiguity(t *testing.T) {
 			name: String!
 			university: University!
 		}
-		
+
 		type University {
 			name: String!
 		}

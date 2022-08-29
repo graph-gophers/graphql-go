@@ -7,7 +7,7 @@ import (
 	"strings"
 	"text/scanner"
 
-	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/tribunadigital/graphql-go/errors"
 )
 
 type syntaxError string
@@ -29,7 +29,6 @@ func NewLexer(s string, useStringDescriptions bool) *Lexer {
 		Mode: scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats | scanner.ScanStrings,
 	}
 	sc.Init(strings.NewReader(s))
-
 
 	l := Lexer{sc: sc, useStringDescriptions: useStringDescriptions}
 	l.sc.Error = l.CatchScannerError

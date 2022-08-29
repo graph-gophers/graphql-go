@@ -3,7 +3,7 @@ package common_test
 import (
 	"testing"
 
-	"github.com/graph-gophers/graphql-go/internal/common"
+	"github.com/tribunadigital/graphql-go/internal/common"
 )
 
 type consumeTestCase struct {
@@ -100,7 +100,7 @@ var multilineStringTests = []consumeTestCase {
 		definition: `"Hello World"`,
 		expected: "",
 		failureExpected: false,
-		useStringDescriptions: true,		
+		useStringDescriptions: true,
 	},
 	{
 		description: "Multiline strings are not allowed",
@@ -108,7 +108,7 @@ var multilineStringTests = []consumeTestCase {
 				 World"`,
 		expected: `graphql: syntax error: literal not terminated (line 1, column 1)`,
 		failureExpected: true,
-		useStringDescriptions: true,		
+		useStringDescriptions: true,
 	},
 }
 
@@ -130,5 +130,5 @@ func TestMultilineString(t *testing.T) {
 				t.Fatalf("Test '%s' failed with error: '%s'", test.description, err.Error())
 			}
 		})
-	}	
+	}
 }

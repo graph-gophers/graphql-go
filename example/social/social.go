@@ -7,20 +7,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/graph-gophers/graphql-go"
+	"github.com/tribunadigital/graphql-go"
 )
 
 const Schema = `
 	schema {
 		query: Query
 	}
-	
+
 	type Query {
 		admin(id: ID!, role: Role = ADMIN): Admin!
 		user(id: ID!): User!
 		search(text: String!): [SearchResult]!
 	}
-	
+
 	interface Admin {
 		id: ID!
 		name: String!
@@ -31,7 +31,7 @@ const Schema = `
 		name: String!
 	}
 
-	scalar Time	
+	scalar Time
 
 	type User implements Admin & Person {
 		id: ID!
@@ -48,7 +48,7 @@ const Schema = `
 	  	first: Int
 	  	last: Int
 	}
-	
+
 	enum Role {
 		ADMIN
 		USER
