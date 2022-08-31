@@ -627,7 +627,7 @@ func TestEmbeddedStruct(t *testing.T) {
 				type Query {
 					course: Course!
 				}
-				
+
 				type Course {
 					name: String!
 					createdAt: String!
@@ -1495,6 +1495,40 @@ func TestDeprecatedDirective(t *testing.T) {
 	})
 }
 
+func TestSpecifiedByDirective(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+			schema {
+				query: Query
+			}
+			type Query {
+			}
+			scalar UUID @specifiedBy(
+				url: "https://tools.ietf.org/html/rfc4122"
+			)
+			`, &struct{}{}),
+			Query: `
+				query {
+					__type(name: "UUID") {
+						name
+						specifiedByURL
+					}
+				}
+			`,
+			Variables: map[string]interface{}{},
+			ExpectedResult: `
+				{
+					"__type": {
+						"name": "UUID",
+						"specifiedByURL": "https://tools.ietf.org/html/rfc4122"
+					}
+				}
+			`,
+		},
+	})
+}
+
 type testBadEnumResolver struct{}
 
 func (r *testBadEnumResolver) Hero() *testBadEnumCharacterResolver {
@@ -1855,11 +1889,11 @@ func TestTypeName(t *testing.T) {
 						}
 					}
 				}
-				
+
 				fragment Droid on Droid {
 					name
 					__typename
-				}			  
+				}
 			`,
 			RawResponse:    true,
 			ExpectedResult: `{"hero":{"__typename":"Droid","name":"R2-D2"}}`,
@@ -2475,6 +2509,26 @@ func TestIntrospection(t *testing.T) {
 												"ofType": {
 													"kind": "SCALAR",
 													"name": "Boolean"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "specifiedBy",
+									"description": "Provides a scalar specification URL for specifying the behavior of custom scalar types.",
+									"locations": [
+										"SCALAR"
+									],
+									"args": [
+										{
+											"name": "url",
+											"description": "The URL should point to a human-readable specification of the data format, serialization, and coercion rules.",
+											"type": {
+												"kind": "NON_NULL",
+												"ofType": {
+													"kind": "SCALAR",
+													"name": "String"
 												}
 											}
 										}
@@ -3801,7 +3855,7 @@ func TestPanicAmbiguity(t *testing.T) {
 			name: String!
 			university: University!
 		}
-		
+
 		type University {
 			name: String!
 		}
@@ -4347,11 +4401,11 @@ func TestQueryVariablesValidation(t *testing.T) {
 			  	required: String!
 			  	optional: String
 			}
-			
+
 			type SearchResults {
 				match: String
 			}
-			
+
 			type Query {
 				search(filter: SearchFilter!): [SearchResults!]!
 			}`, &queryVarResolver{}, graphql.UseFieldResolvers()),
@@ -4372,11 +4426,11 @@ func TestQueryVariablesValidation(t *testing.T) {
 				required: String!
 				optional: String
 			}
-			
+
 			type SearchResults {
 				match: String
 			}
-			
+
 			type Query {
 				search(filter: SearchFilter!): [SearchResults!]!
 			}`, &queryVarResolver{}, graphql.UseFieldResolvers()),

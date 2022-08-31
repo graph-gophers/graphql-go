@@ -59,6 +59,12 @@ var metaSrc = `
 		reason: String = "No longer supported"
 	) on FIELD_DEFINITION | ENUM_VALUE
 
+	# Provides a scalar specification URL for specifying the behavior of custom scalar types.
+	directive @specifiedBy(
+		# The URL should point to a human-readable specification of the data format, serialization, and coercion rules.
+		url: String!
+	) on SCALAR
+
 	# A Directive provides a way to describe alternate runtime execution and type validation behavior in a GraphQL document.
 	#
 	# In some cases, you need to provide options to alter GraphQL's execution behavior
@@ -179,6 +185,7 @@ var metaSrc = `
 		enumValues(includeDeprecated: Boolean = false): [__EnumValue!]
 		inputFields: [__InputValue!]
 		ofType: __Type
+		specifiedByURL: String
 	}
 
 	# An enum describing what kind of type a given ` + "`" + `__Type` + "`" + ` is.
