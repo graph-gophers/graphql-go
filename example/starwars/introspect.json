@@ -70,6 +70,29 @@
           "INLINE_FRAGMENT"
         ],
         "name": "skip"
+      },
+      {
+        "args": [
+          {
+            "defaultValue": null,
+            "description": "The URL should point to a human-readable specification of the data format, serialization, and coercion rules.",
+            "name": "url",
+            "type": {
+              "kind": "NON_NULL",
+              "name": null,
+              "ofType": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              }
+            }
+          }
+        ],
+        "description": "Provides a scalar specification URL for specifying the behavior of custom scalar types.",
+        "locations": [
+          "SCALAR"
+        ],
+        "name": "specifiedBy"
       }
     ],
     "mutationType": {
@@ -1979,6 +2002,18 @@
             "type": {
               "kind": "OBJECT",
               "name": "__Type",
+              "ofType": null
+            }
+          },
+          {
+            "args": [],
+            "deprecationReason": null,
+            "description": null,
+            "isDeprecated": false,
+            "name": "specifiedByURL",
+            "type": {
+              "kind": "SCALAR",
+              "name": "String",
               "ofType": null
             }
           }

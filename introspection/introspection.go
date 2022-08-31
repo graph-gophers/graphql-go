@@ -189,6 +189,20 @@ func (r *Type) OfType() *Type {
 	}
 }
 
+func (r *Type) SpecifiedByURL() *string {
+	switch t := r.typ.(type) {
+	case *types.ScalarTypeDefinition:
+		if d := t.Directives.Get("specifiedBy"); d != nil {
+			arg := d.Arguments.MustGet("url")
+			url := arg.Deserialize(nil).(string)
+			return &url
+		}
+	default:
+		return nil
+	}
+	return nil
+}
+
 type Field struct {
 	field *types.FieldDefinition
 }
