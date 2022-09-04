@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/tribunadigital/graphql-go/errors"
@@ -21,9 +22,10 @@ import (
 
 type Request struct {
 	selected.Request
-	Limiter chan struct{}
-	Tracer  trace.Tracer
-	Logger  log.Logger
+	Limiter                  chan struct{}
+	Tracer                   trace.Tracer
+	Logger                   log.Logger
+	SubscribeResolverTimeout time.Duration
 }
 
 func (r *Request) handlePanic(ctx context.Context) {
@@ -38,7 +40,7 @@ type extensionser interface {
 }
 
 func makePanicError(value interface{}) *errors.QueryError {
-	return errors.Errorf("graphql: panic occurred: %v", value)
+	return errors.Errorf("panic occurred: %v", value)
 }
 
 func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *query.Operation) ([]byte, []*errors.QueryError) {
@@ -128,12 +130,17 @@ func collectFieldsToResolve(sels []selected.Selection, s *resolvable.Schema, res
 			field.sels = append(field.sels, sel.Sels...)
 
 		case *selected.TypenameField:
-			sf := &selected.SchemaField{
-				Field:       s.Meta.FieldTypename,
-				Alias:       sel.Alias,
-				FixedResult: reflect.ValueOf(typeOf(sel, resolver)),
+			_, ok := fieldByAlias[sel.Alias]
+			if !ok {
+				sf := &selected.SchemaField{
+					Field:       s.Meta.FieldTypename,
+					Alias:       sel.Alias,
+					FixedResult: reflect.ValueOf(typeOf(sel, resolver)),
+				}
+				field := &fieldToExec{field: sf, resolver: resolver}
+				*fields = append(*fields, field)
+				fieldByAlias[sel.Alias] = field
 			}
-			*fields = append(*fields, &fieldToExec{field: sf, resolver: resolver})
 
 		case *selected.TypeAssertion:
 			out := resolver.Method(sel.MethodIndex).Call(nil)
@@ -248,22 +255,23 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 
 func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selection, typ common.Type, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *bytes.Buffer) {
 	t, nonNull := unwrapNonNull(typ)
-	switch t := t.(type) {
-	case *schema.Object, *schema.Interface, *schema.Union:
-		// a reflect.Value of a nil interface will show up as an Invalid value
-		if resolver.Kind() == reflect.Invalid || ((resolver.Kind() == reflect.Ptr || resolver.Kind() == reflect.Interface) && resolver.IsNil()) {
-			// If a field of a non-null type resolves to null (either because the
-			// function to resolve the field returned null or because an error occurred),
-			// add an error to the "errors" list in the response.
-			if nonNull {
-				err := errors.Errorf("graphql: got nil for non-null %q", t)
-				err.Path = path.toSlice()
-				r.AddError(err)
-			}
-			out.WriteString("null")
-			return
-		}
 
+	// a reflect.Value of a nil interface will show up as an Invalid value
+	if resolver.Kind() == reflect.Invalid || ((resolver.Kind() == reflect.Ptr || resolver.Kind() == reflect.Interface) && resolver.IsNil()) {
+		// If a field of a non-null type resolves to null (either because the
+		// function to resolve the field returned null or because an error occurred),
+		// add an error to the "errors" list in the response.
+		if nonNull {
+			err := errors.Errorf("graphql: got nil for non-null %q", t)
+			err.Path = path.toSlice()
+			r.AddError(err)
+		}
+		out.WriteString("null")
+		return
+	}
+
+	switch t.(type) {
+	case *schema.Object, *schema.Interface, *schema.Union:
 		if s.ExtResolver != nil {
 			if v, ok := s.ExtResolver[t.String()]; ok {
 				if resolver.Kind() == reflect.Struct {
@@ -278,11 +286,9 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 		return
 	}
 
-	if !nonNull {
-		if resolver.IsNil() {
-			out.WriteString("null")
-			return
-		}
+	// Any pointers or interfaces at this point should be non-nil, so we can get the actual value of them
+	// for serialization
+	if resolver.Kind() == reflect.Ptr || resolver.Kind() == reflect.Interface {
 		resolver = resolver.Elem()
 	}
 
@@ -332,16 +338,21 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 	entryouts := make([]bytes.Buffer, l)
 
 	if selected.HasAsyncSel(sels) {
-		var wg sync.WaitGroup
-		wg.Add(l)
+		// Limit the number of concurrent goroutines spawned as it can lead to large
+		// memory spikes for large lists.
+		concurrency := cap(r.Limiter)
+		sem := make(chan struct{}, concurrency)
 		for i := 0; i < l; i++ {
+			sem <- struct{}{}
 			go func(i int) {
-				defer wg.Done()
+				defer func() { <-sem }()
 				defer r.handlePanic(ctx)
 				r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), &entryouts[i])
 			}(i)
 		}
-		wg.Wait()
+		for i := 0; i < concurrency; i++ {
+			sem <- struct{}{}
+		}
 	} else {
 		for i := 0; i < l; i++ {
 			r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), &entryouts[i])

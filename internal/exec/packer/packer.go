@@ -78,24 +78,37 @@ func (b *Builder) assignPacker(target *packer, schemaType common.Type, reflectTy
 func (b *Builder) makePacker(schemaType common.Type, reflectType reflect.Type) (packer, error) {
 	t, nonNull := unwrapNonNull(schemaType)
 	if !nonNull {
-		if reflectType.Kind() != reflect.Ptr {
-			return nil, fmt.Errorf("%s is not a pointer", reflectType)
+		if reflectType.Kind() == reflect.Ptr {
+			elemType := reflectType.Elem()
+			addPtr := true
+			if _, ok := t.(*schema.InputObject); ok {
+				elemType = reflectType // keep pointer for input objects
+				addPtr = false
+			}
+			elem, err := b.makeNonNullPacker(t, elemType)
+			if err != nil {
+				return nil, err
+			}
+			return &nullPacker{
+				elemPacker: elem,
+				valueType:  reflectType,
+				addPtr:     addPtr,
+			}, nil
+		} else if isNullable(reflectType) {
+			elemType := reflectType
+			addPtr := false
+			elem, err := b.makeNonNullPacker(t, elemType)
+			if err != nil {
+				return nil, err
+			}
+			return &nullPacker{
+				elemPacker: elem,
+				valueType:  reflectType,
+				addPtr:     addPtr,
+			}, nil
+		} else {
+			return nil, fmt.Errorf("%s is not a pointer or a nullable type", reflectType)
 		}
-		elemType := reflectType.Elem()
-		addPtr := true
-		if _, ok := t.(*schema.InputObject); ok {
-			elemType = reflectType // keep pointer for input objects
-			addPtr = false
-		}
-		elem, err := b.makeNonNullPacker(t, elemType)
-		if err != nil {
-			return nil, err
-		}
-		return &nullPacker{
-			elemPacker: elem,
-			valueType:  reflectType,
-			addPtr:     addPtr,
-		}, nil
 	}
 
 	return b.makeNonNullPacker(t, reflectType)
@@ -266,7 +279,7 @@ type nullPacker struct {
 }
 
 func (p *nullPacker) Pack(value interface{}) (reflect.Value, error) {
-	if value == nil {
+	if value == nil && !isNullable(p.valueType) {
 		return reflect.Zero(p.valueType), nil
 	}
 
@@ -305,7 +318,7 @@ type unmarshalerPacker struct {
 }
 
 func (p *unmarshalerPacker) Pack(value interface{}) (reflect.Value, error) {
-	if value == nil {
+	if value == nil && !isNullable(p.ValueType) {
 		return reflect.Value{}, errors.Errorf("got null for non-null")
 	}
 
@@ -368,4 +381,15 @@ func unwrapNonNull(t common.Type) (common.Type, bool) {
 
 func stripUnderscore(s string) string {
 	return strings.Replace(s, "_", "", -1)
+}
+
+// NullUnmarshaller is an unmarshaller that can handle a nil input
+type NullUnmarshaller interface {
+	Unmarshaler
+	Nullable()
+}
+
+func isNullable(t reflect.Type) bool {
+	_, ok := reflect.New(t).Interface().(NullUnmarshaller)
+	return ok
 }

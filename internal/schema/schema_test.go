@@ -37,9 +37,9 @@ func TestParse(t *testing.T) {
 		{
 			name: "Parses implementing type without providing required fields",
 			sdl: `
-			interface Greeting { 
+			interface Greeting {
 				message: String!
-			} 
+			}
 			type Welcome implements Greeting {
 			}`,
 			validateError: func(err error) error {
@@ -56,7 +56,7 @@ func TestParse(t *testing.T) {
 			name: "Parses type with description string",
 			sdl: `
 			"Single line description."
-			type Type { 
+			type Type {
 				field: String
 			}`,
 			useStringDescriptions: true,
@@ -234,8 +234,8 @@ Second line of the description.
 			name: "Description is correctly parsed for non-described types",
 			sdl: `
 			"Some description."
-			scalar MyInt 
-			type Type { 
+			scalar MyInt
+			type Type {
 				field: String
 			}`,
 			useStringDescriptions: true,
@@ -256,8 +256,8 @@ Second line of the description.
 			# Multi-line
 			# comment.
 			" This description should be ignored. "
-			scalar MyInt 
-			type Type { 
+			scalar MyInt
+			type Type {
 				field: String
 			}`,
 			validateSchema: func(s *schema.Schema) error {
@@ -591,7 +591,7 @@ Second line of the description.
 			type Coloured {
 				Colour: String!
 			}
-			
+
 			extend union Item = Coloured
 			`,
 			validateSchema: func(s *schema.Schema) error {
