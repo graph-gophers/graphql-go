@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"math"
 	"reflect"
 
 	"github.com/tokopedia/graphql-go/errors"
@@ -143,13 +145,13 @@ type Response struct {
 
 // Validate validates the given query with the schema.
 func (s *Schema) Validate(queryString string, variables map[string]interface{}) ([]string, bool, []*errors.QueryError) {
-	var queries []string	
+	var queries []string
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
 		return queries, true, []*errors.QueryError{qErr}
 	}
-	for _, op := range doc.Operations{
-		for _, sel := range op.Selections{
+	for _, op := range doc.Operations {
+		for _, sel := range op.Selections {
 			query, ok := sel.(*query.Field)
 			if ok {
 				queries = append(queries, query.Name.Name)
@@ -177,6 +179,31 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		return &Response{Errors: []*errors.QueryError{qErr}}
 	}
 
+	//object type will have resolver complexity as 2 and field type will have resolver complexity as 1
+	resolverComplexity := 0
+
+	for _, op := range doc.Operations {
+		var queue = make([][]query.Selection, 0)
+		queue = enqueue(queue, op.Selections)
+		for len(queue) > 0 {
+			selections, queue := dequeue(queue)
+			if selections != nil {
+				resolverComplexity += 2
+				for _, sel := range selections {
+					Query, _ := sel.(*query.Field)
+					queue = enqueue(queue, Query.Selections)
+
+				}
+
+			} else {
+				resolverComplexity++
+			}
+
+		}
+	}
+
+	QueryNestingDepth := CalculateNestingDepth(queryString)
+	println("Resolver Complexity of Query : %d\n and Nesting Depth of Query : %d\n", resolverComplexity, QueryNestingDepth)
 	validationFinish := s.validationTracer.TraceValidation()
 	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
 	validationFinish(errs)
@@ -260,4 +287,34 @@ func getOperation(document *query.Document, operationName string) (*query.Operat
 		return nil, fmt.Errorf("no operation with name %q", operationName)
 	}
 	return op, nil
+}
+
+func CalculateNestingDepth(queryString string) int {
+	depth := 0
+	max := math.MinInt32
+	for _, ch := range queryString {
+		if ch == '{' {
+			depth++
+		} else if ch == '}' {
+			depth--
+		}
+		max = int(math.Max(float64(max), float64(depth)))
+	}
+	return max
+}
+
+func enqueue(queue [][]query.Selection, element []query.Selection) [][]query.Selection {
+	queue = append(queue, element)
+	return queue
+}
+
+func dequeue(queue [][]query.Selection) ([]query.Selection, [][]query.Selection) {
+	element := queue[0]
+	if len(queue) == 1 {
+		var tmp [][]query.Selection
+		return element, tmp
+
+	}
+
+	return element, queue[1:]
 }
