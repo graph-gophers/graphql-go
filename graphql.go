@@ -35,6 +35,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		tracer:         noop.Tracer{},
 		logger:         &log.DefaultLogger{},
 		panicHandler:   &errors.DefaultPanicHandler{},
+		middlewares:    []Middleware{},
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -88,6 +89,7 @@ type Schema struct {
 	useStringDescriptions    bool
 	disableIntrospection     bool
 	subscribeResolverTimeout time.Duration
+	middlewares              []Middleware
 }
 
 func (s *Schema) ASTSchema() *types.Schema {
@@ -172,6 +174,16 @@ func DisableIntrospection() SchemaOpt {
 	}
 }
 
+// WithMiddlewares assigns middlewares to Schema.
+// Middlewares will be assigned using a for loop.
+// If we provide a slice of 2 middlewares [m1, m2], the resulting function will be
+// m2(m1(exec())), where exec() is the original call to the resolver.
+func WithMiddlewares(middlewares ...Middleware) SchemaOpt {
+	return func(s *Schema) {
+		s.middlewares = middlewares
+	}
+}
+
 // SubscribeResolverTimeout is an option to control the amount of time
 // we allow for a single subscribe message resolver to complete it's job
 // before it times out and returns an error to the subscriber.
@@ -214,7 +226,11 @@ func (s *Schema) Exec(ctx context.Context, queryString string, operationName str
 	if !s.res.Resolver.IsValid() {
 		panic("schema created without resolver, can not exec")
 	}
-	return s.exec(ctx, queryString, operationName, variables, s.res)
+	execF := s.exec
+	for _, m := range s.middlewares {
+		execF = m(execF)
+	}
+	return execF(ctx, queryString, operationName, variables, s.res)
 }
 
 func (s *Schema) exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, res *resolvable.Schema) *Response {
