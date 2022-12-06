@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"strings"
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"sync"

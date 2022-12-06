@@ -92,6 +92,7 @@ type Schema struct {
 	panicHandler             errors.PanicHandler
 	useStringDescriptions    bool
 	subscribeResolverTimeout time.Duration
+	middlewares              []Middleware
 	useFieldResolvers        bool
 	visitors                 map[string]directives.Visitor
 	middlewares              []Middleware
