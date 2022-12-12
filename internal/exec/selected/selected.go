@@ -108,8 +108,9 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 					}
 
 					t, ok := r.Schema.Types[v.String()]
-					if !ok {
-						return nil
+					var resolvedType *introspection.Type
+					if ok {
+						resolvedType = introspection.WrapType(t)
 					}
 
 					flattenedSels = append(flattenedSels, &SchemaField{
@@ -117,7 +118,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 						Alias:       field.Alias.Name,
 						Sels:        applySelectionSet(r, s, s.Meta.Type, field.SelectionSet),
 						Async:       true,
-						FixedResult: reflect.ValueOf(introspection.WrapType(t)),
+						FixedResult: reflect.ValueOf(resolvedType),
 					})
 				}
 
