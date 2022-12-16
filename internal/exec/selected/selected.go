@@ -107,7 +107,9 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 						return nil
 					}
 
+					var resolvedType *introspection.Type
 					t, ok := r.Schema.Types[v.String()]
+
 					var resolvedType *introspection.Type
 					if ok {
 						resolvedType = introspection.WrapType(t)
