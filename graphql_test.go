@@ -1544,6 +1544,24 @@ func (r *testBadEnumCharacterResolver) AppearsIn() []string {
 	return []string{"STAR_TREK"}
 }
 
+func TestUnknownType(t *testing.T) {
+	gqltesting.RunTest(t, &gqltesting.Test{
+		Schema: starwarsSchema,
+		Query: `
+			query TypeInfo {
+				__type(name: "unknown-type") {
+					name
+				}
+			}
+		`,
+		ExpectedResult: `
+			{
+				"__type": null
+			}
+		`,
+	})
+}
+
 func TestEnums(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		// Valid input enum supplied in query text
