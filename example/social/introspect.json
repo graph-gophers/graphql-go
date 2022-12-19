@@ -17,7 +17,8 @@
         "description": "Marks an element of a GraphQL schema as no longer supported.",
         "locations": [
           "FIELD_DEFINITION",
-          "ENUM_VALUE"
+          "ENUM_VALUE",
+          "ARGUMENT_DEFINITION"
         ],
         "name": "deprecated"
       },
