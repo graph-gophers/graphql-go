@@ -44,7 +44,7 @@ func (r *Schema) Directives() []*Directive {
 }
 
 func (r *Schema) QueryType() *Type {
-	t, ok := r.schema.EntryPoints["query"]
+	t, ok := r.schema.RootOperationTypes["query"]
 	if !ok {
 		return nil
 	}
@@ -52,7 +52,7 @@ func (r *Schema) QueryType() *Type {
 }
 
 func (r *Schema) MutationType() *Type {
-	t, ok := r.schema.EntryPoints["mutation"]
+	t, ok := r.schema.RootOperationTypes["mutation"]
 	if !ok {
 		return nil
 	}
@@ -60,7 +60,7 @@ func (r *Schema) MutationType() *Type {
 }
 
 func (r *Schema) SubscriptionType() *Type {
-	t, ok := r.schema.EntryPoints["subscription"]
+	t, ok := r.schema.RootOperationTypes["subscription"]
 	if !ok {
 		return nil
 	}
