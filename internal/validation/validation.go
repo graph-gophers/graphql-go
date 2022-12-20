@@ -117,11 +117,11 @@ func Validate(s *types.Schema, doc *types.ExecutableDefinition, variables map[st
 		var entryPoint types.NamedType
 		switch op.Type {
 		case query.Query:
-			entryPoint = s.EntryPoints["query"]
+			entryPoint = s.RootOperationTypes["query"]
 		case query.Mutation:
-			entryPoint = s.EntryPoints["mutation"]
+			entryPoint = s.RootOperationTypes["mutation"]
 		case query.Subscription:
-			entryPoint = s.EntryPoints["subscription"]
+			entryPoint = s.RootOperationTypes["subscription"]
 		default:
 			panic("unreachable")
 		}
