@@ -67,13 +67,13 @@ func Parse(s *types.Schema, schemaString string, useStringDescriptions bool) err
 			s.EntryPointNames["subscription"] = "Subscription"
 		}
 	}
-	s.EntryPoints = make(map[string]types.NamedType)
+	s.RootOperationTypes = make(map[string]types.NamedType)
 	for key, name := range s.EntryPointNames {
 		t, ok := s.Types[name]
 		if !ok {
 			return errors.Errorf("type %q not found", name)
 		}
-		s.EntryPoints[key] = t
+		s.RootOperationTypes[key] = t
 	}
 
 	// Interface types need validation: https://spec.graphql.org/draft/#sec-Interfaces.Interfaces-Implementing-Interfaces
