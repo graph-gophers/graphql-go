@@ -241,6 +241,8 @@ func TestHelloWorld(t *testing.T) {
 }
 
 func TestHelloWorldStructFieldResolver(t *testing.T) {
+	t.Parallel()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
