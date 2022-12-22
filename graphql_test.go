@@ -333,6 +333,8 @@ func TestCustomDirective(t *testing.T) {
 }
 
 func TestCustomDirectiveStructFieldResolver(t *testing.T) {
+	t.Parallel()
+
 	schemaOpt := []graphql.SchemaOpt{
 		graphql.DirectiveVisitors(map[string]types.DirectiveVisitor{
 			"customDirective": &customDirectiveVisitor{},
