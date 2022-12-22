@@ -238,14 +238,14 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			if !f.field.HasError && len(f.field.Directives) > 0 {
 				for _, directive := range f.field.Directives {
 					if visitor, ok := r.Visitors[directive.Name.Name]; ok {
-						returned, visitorErr := visitor.After(ctx, directive, result.Interface())
+						modified, visitorErr := visitor.After(ctx, directive, result.Interface())
 						if visitorErr != nil {
 							err := errors.Errorf("%s", visitorErr)
 							err.Path = path.toSlice()
 							err.ResolverError = visitorErr
 							return err
 						} else {
-							result = reflect.ValueOf(returned)
+							result = reflect.ValueOf(modified)
 						}
 					}
 				}
@@ -286,14 +286,14 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			if !f.field.HasError && len(f.field.Directives) > 0 {
 				for _, directive := range f.field.Directives {
 					if visitor, ok := r.Visitors[directive.Name.Name]; ok {
-						returned, visitorErr := visitor.After(ctx, directive, result.Interface())
+						modified, visitorErr := visitor.After(ctx, directive, result.Interface())
 						if visitorErr != nil {
 							err := errors.Errorf("%s", visitorErr)
 							err.Path = path.toSlice()
 							err.ResolverError = visitorErr
 							return err
 						} else {
-							result = reflect.ValueOf(returned)
+							result = reflect.ValueOf(modified)
 						}
 					}
 				}
