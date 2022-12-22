@@ -49,6 +49,10 @@ func (r *helloSnakeResolver2) SayHello(ctx context.Context, args struct{ FullNam
 	return "Hello " + args.FullName + "!", nil
 }
 
+type structFieldResolver struct {
+	Hello string
+}
+
 type customDirectiveVisitor struct {
 	beforeWasCalled bool
 }
@@ -65,9 +69,8 @@ func (v *customDirectiveVisitor) After(ctx context.Context, directive *types.Dir
 
 	if value, ok := directive.Arguments.Get("customAttribute"); ok {
 		return fmt.Sprintf("Directive '%s' (with arg '%s') modified result: %s", directive.Name.Name, value.String(), output.(string)), nil
-	} else {
-		return fmt.Sprintf("Directive '%s' modified result: %s", directive.Name.Name, output.(string)), nil
 	}
+	return fmt.Sprintf("Directive '%s' modified result: %s", directive.Name.Name, output.(string)), nil
 }
 
 type theNumberResolver struct {
@@ -237,6 +240,34 @@ func TestHelloWorld(t *testing.T) {
 	})
 }
 
+func TestHelloWorldStructFieldResolver(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String!
+				}
+			`,
+				&structFieldResolver{Hello: "Hello world!"},
+				graphql.UseFieldResolvers()),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!"
+				}
+			`,
+		},
+	})
+}
+
 func TestCustomDirective(t *testing.T) {
 	t.Parallel()
 
@@ -292,6 +323,69 @@ func TestCustomDirective(t *testing.T) {
 			ExpectedResult: `
 				{
 					"say_hello": "Directive 'customDirective' (with arg 'hi') modified result: Hello Johnny!"
+				}
+			`,
+		},
+
+		// tests for struct field resolvers
+
+	})
+}
+
+func TestCustomDirectiveStructFieldResolver(t *testing.T) {
+	schemaOpt := []graphql.SchemaOpt{
+		graphql.DirectiveVisitors(map[string]types.DirectiveVisitor{
+			"customDirective": &customDirectiveVisitor{},
+		}),
+		graphql.UseFieldResolvers(),
+	}
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @customDirective on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String! @customDirective
+				}
+			`, &structFieldResolver{Hello: "Hello world!"}, schemaOpt...),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Directive 'customDirective' modified result: Hello world!"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @customDirective(
+					customAttribute: String!
+			    ) on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String! @customDirective(customAttribute: hi)
+				}
+			`, &structFieldResolver{Hello: "Hello world!"}, schemaOpt...),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Directive 'customDirective' (with arg 'hi') modified result: Hello world!"
 				}
 			`,
 		},
@@ -4631,70 +4725,4 @@ func TestQueryService(t *testing.T) {
 			`,
 		},
 	})
-}
-
-type StructFieldResolver struct {
-	Hello string
-}
-
-func TestStructFieldResolver(t *testing.T) {
-	gqltesting.RunTests(t, []*gqltesting.Test{
-		{
-			Schema: graphql.MustParseSchema(`
-				schema {
-					query: Query
-				}
-
-				type Query {
-					hello: String!
-				}
-			`, &StructFieldResolver{Hello: "Hello world!"}, graphql.UseFieldResolvers()),
-			Query: `
-				{
-					hello
-				}
-			`,
-			ExpectedResult: `
-				{
-					"hello": "Hello world!"
-				}
-			`,
-		},
-	})
-}
-
-func TestDirectiveStructFieldResolver(t *testing.T) {
-	schemaOpt := []graphql.SchemaOpt{
-		graphql.DirectiveVisitors(map[string]types.DirectiveVisitor{
-			"customDirective": &customDirectiveVisitor{},
-		}),
-		graphql.UseFieldResolvers(),
-	}
-
-	gqltesting.RunTests(t, []*gqltesting.Test{
-
-		{
-			Schema: graphql.MustParseSchema(`
-				directive @customDirective on FIELD_DEFINITION
-
-				schema {
-					query: Query
-				}
-
-				type Query {
-					hello: String! @customDirective
-				}
-			`, &StructFieldResolver{Hello: "Hello world!"}, schemaOpt...),
-			Query: `
-				{
-					hello
-				}
-			`,
-			ExpectedResult: `
-				{
-					"hello": "Directive 'customDirective' modified result: Hello world!"
-				}
-			`,
-		}})
-
 }
