@@ -326,9 +326,6 @@ func TestCustomDirective(t *testing.T) {
 				}
 			`,
 		},
-
-		// tests for struct field resolvers
-
 	})
 }
 
