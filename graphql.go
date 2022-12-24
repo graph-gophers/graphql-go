@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec"
@@ -83,7 +84,7 @@ type Schema struct {
 	useStringDescriptions    bool
 	disableIntrospection     bool
 	subscribeResolverTimeout time.Duration
-	visitors                 map[string]types.DirectiveVisitor
+	visitors                 map[string]directives.Visitor
 }
 
 func (s *Schema) ASTSchema() *types.Schema {
@@ -172,7 +173,7 @@ func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
 
 // DirectiveVisitors allows to pass custom directive visitors that will be able to handle
 // your GraphQL schema directives.
-func DirectiveVisitors(visitors map[string]types.DirectiveVisitor) SchemaOpt {
+func DirectiveVisitors(visitors map[string]directives.Visitor) SchemaOpt {
 	return func(s *Schema) {
 		s.visitors = visitors
 	}

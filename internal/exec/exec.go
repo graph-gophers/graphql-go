@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"github.com/graph-gophers/graphql-go/internal/exec/selected"
@@ -25,7 +26,7 @@ type Request struct {
 	Logger                   log.Logger
 	PanicHandler             errors.PanicHandler
 	SubscribeResolverTimeout time.Duration
-	Visitors                 map[string]types.DirectiveVisitor
+	Visitors                 map[string]directives.Visitor
 }
 
 func (r *Request) handlePanic(ctx context.Context) {

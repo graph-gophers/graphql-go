@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/directives"
 	gqlerrors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/example/starwars"
 	"github.com/graph-gophers/graphql-go/gqltesting"
@@ -286,7 +287,7 @@ func TestCustomDirective(t *testing.T) {
 					hello_html: String! @customDirective
 				}
 			`, &helloSnakeResolver1{},
-				graphql.DirectiveVisitors(map[string]types.DirectiveVisitor{
+				graphql.DirectiveVisitors(map[string]directives.Visitor{
 					"customDirective": &customDirectiveVisitor{},
 				})),
 			Query: `
@@ -314,7 +315,7 @@ func TestCustomDirective(t *testing.T) {
 					say_hello(full_name: String!): String! @customDirective(customAttribute: hi)
 				}
 			`, &helloSnakeResolver1{},
-				graphql.DirectiveVisitors(map[string]types.DirectiveVisitor{
+				graphql.DirectiveVisitors(map[string]directives.Visitor{
 					"customDirective": &customDirectiveVisitor{},
 				})),
 			Query: `
@@ -335,7 +336,7 @@ func TestCustomDirectiveStructFieldResolver(t *testing.T) {
 	t.Parallel()
 
 	schemaOpt := []graphql.SchemaOpt{
-		graphql.DirectiveVisitors(map[string]types.DirectiveVisitor{
+		graphql.DirectiveVisitors(map[string]directives.Visitor{
 			"customDirective": &customDirectiveVisitor{},
 		}),
 		graphql.UseFieldResolvers(),

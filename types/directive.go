@@ -1,8 +1,6 @@
 package types
 
 import (
-	"context"
-
 	"github.com/graph-gophers/graphql-go/errors"
 )
 
@@ -27,11 +25,6 @@ type DirectiveDefinition struct {
 }
 
 type DirectiveList []*Directive
-
-type DirectiveVisitor interface {
-	Before(ctx context.Context, directive *Directive, input interface{}) error
-	After(ctx context.Context, directive *Directive, output interface{}) (interface{}, error)
-}
 
 // Returns the Directive in the DirectiveList by name or nil if not found.
 func (l DirectiveList) Get(name string) *Directive {
