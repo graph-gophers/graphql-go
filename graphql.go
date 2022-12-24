@@ -171,8 +171,8 @@ func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
 	}
 }
 
-// DirectiveVisitors allows to pass custom directive visitors that will be able to handle
-// your GraphQL schema directives.
+// DirectiveVisitors defines the implementation for each directive.
+// Per the GraphQL specification, each Field Directive in the schema must have an implementation here.
 func DirectiveVisitors(visitors map[string]directives.Visitor) SchemaOpt {
 	return func(s *Schema) {
 		s.visitors = visitors
