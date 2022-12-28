@@ -203,7 +203,13 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 
 		res := f.resolver
 		if f.field.UseMethodResolver() {
-			var in []reflect.Value
+			var (
+				skipResolver bool
+				in           []reflect.Value
+				callOut      []reflect.Value
+				visitorErr   error
+				modified     interface{}
+			)
 			if f.field.HasContext {
 				in = append(in, reflect.ValueOf(traceCtx))
 			}
@@ -219,8 +225,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 						for _, inValue := range in {
 							values = append(values, inValue.Interface())
 						}
-
-						visitorErr := visitor.Before(ctx, directive, values)
+						skipResolver, visitorErr = visitor.Before(ctx, directive, values)
 						if visitorErr != nil {
 							err := errors.Errorf("%s", visitorErr)
 							err.Path = path.toSlice()
@@ -231,27 +236,36 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 				}
 			}
 
-			// Call method
-			callOut := res.Method(f.field.MethodIndex).Call(in)
-			result = callOut[0]
+			// Call method unless the Before visitor tells us not to
+			if !skipResolver {
+				callOut = res.Method(f.field.MethodIndex).Call(in)
+				result = callOut[0]
+			}
 
 			// After hook directive visitor (when no error is returned from resolver)
 			if !f.field.HasError && len(f.field.Directives) > 0 {
 				for _, directive := range f.field.Directives {
 					if visitor, ok := r.Visitors[directive.Name.Name]; ok {
-						modified, visitorErr := visitor.After(ctx, directive, result.Interface())
+						if (result.IsValid() && !result.IsZero()) && result.CanInterface() {
+							modified, visitorErr = visitor.After(ctx, directive, result.Interface())
+						} else {
+							modified, visitorErr = visitor.After(ctx, directive, nil)
+						}
+
 						if visitorErr != nil {
 							err := errors.Errorf("%s", visitorErr)
 							err.Path = path.toSlice()
 							err.ResolverError = visitorErr
 							return err
-						} else {
-							result = reflect.ValueOf(modified)
 						}
+						result = reflect.ValueOf(modified)
 					}
 				}
 			}
 
+			if skipResolver {
+				return nil
+			}
 			if f.field.HasError && !callOut[1].IsNil() {
 				resolverErr := callOut[1].Interface().(error)
 				err := errors.Errorf("%s", resolverErr)
@@ -263,6 +277,11 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 				return err
 			}
 		} else {
+			var (
+				skipResolver bool
+				visitorErr   error
+				modified     interface{}
+			)
 			// TODO extract out unwrapping ptr logic to a common place
 			if res.Kind() == reflect.Ptr {
 				res = res.Elem()
@@ -271,8 +290,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			if len(f.field.Directives) > 0 {
 				for _, directive := range f.field.Directives {
 					if visitor, ok := r.Visitors[directive.Name.Name]; ok {
-						// TODO check that directive arity == 0-that should be an error at schema init time
-						visitorErr := visitor.Before(ctx, directive, nil)
+						skipResolver, visitorErr = visitor.Before(ctx, directive, nil)
 						if visitorErr != nil {
 							err := errors.Errorf("%s", visitorErr)
 							err.Path = path.toSlice()
@@ -282,20 +300,25 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 					}
 				}
 			}
-			result = res.FieldByIndex(f.field.FieldIndex)
+			if !skipResolver {
+				result = res.FieldByIndex(f.field.FieldIndex)
+			}
 			// After hook directive visitor (when no error is returned from resolver)
 			if !f.field.HasError && len(f.field.Directives) > 0 {
 				for _, directive := range f.field.Directives {
 					if visitor, ok := r.Visitors[directive.Name.Name]; ok {
-						modified, visitorErr := visitor.After(ctx, directive, result.Interface())
+						if (result.IsValid() && !result.IsZero()) && result.CanInterface() {
+							modified, visitorErr = visitor.After(ctx, directive, result.Interface())
+						} else {
+							modified, visitorErr = visitor.After(ctx, directive, nil)
+						}
 						if visitorErr != nil {
 							err := errors.Errorf("%s", visitorErr)
 							err.Path = path.toSlice()
 							err.ResolverError = visitorErr
 							return err
-						} else {
-							result = reflect.ValueOf(modified)
 						}
+						result = reflect.ValueOf(modified)
 					}
 				}
 			}

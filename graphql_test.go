@@ -58,9 +58,9 @@ type customDirectiveVisitor struct {
 	beforeWasCalled bool
 }
 
-func (v *customDirectiveVisitor) Before(ctx context.Context, directive *types.Directive, input interface{}) error {
+func (v *customDirectiveVisitor) Before(ctx context.Context, directive *types.Directive, input interface{}) (bool, error) {
 	v.beforeWasCalled = true
-	return nil
+	return false, nil
 }
 
 func (v *customDirectiveVisitor) After(ctx context.Context, directive *types.Directive, output interface{}) (interface{}, error) {
@@ -72,6 +72,30 @@ func (v *customDirectiveVisitor) After(ctx context.Context, directive *types.Dir
 		return fmt.Sprintf("Directive '%s' (with arg '%s') modified result: %s", directive.Name.Name, value.String(), output.(string)), nil
 	}
 	return fmt.Sprintf("Directive '%s' modified result: %s", directive.Name.Name, output.(string)), nil
+}
+
+type cachedDirectiveVisitor struct {
+	cachedValue interface{}
+}
+
+func (v *cachedDirectiveVisitor) Before(ctx context.Context, directive *types.Directive, input interface{}) (bool, error) {
+	s := "valueFromCache"
+	v.cachedValue = s
+	return true, nil
+}
+
+func (v *cachedDirectiveVisitor) After(ctx context.Context, directive *types.Directive, output interface{}) (interface{}, error) {
+	return v.cachedValue, nil
+}
+
+type cachedDirectiveResolver struct {
+	t *testing.T
+}
+
+func (r *cachedDirectiveResolver) Hello(ctx context.Context, args struct{ FullName string }) string {
+	r.t.Error("expected cached resolver to not be called, but it was")
+
+	return ""
 }
 
 type theNumberResolver struct {
@@ -326,6 +350,34 @@ func TestCustomDirective(t *testing.T) {
 			ExpectedResult: `
 				{
 					"say_hello": "Directive 'customDirective' (with arg 'hi') modified result: Hello Johnny!"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @cached(
+					key: String!
+			    ) on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello(full_name: String!): String! @cached(key: "notcheckedintest")
+				}
+			`, &cachedDirectiveResolver{t: t},
+				graphql.DirectiveVisitors(map[string]directives.Visitor{
+					"cached": &cachedDirectiveVisitor{},
+				})),
+			Query: `
+				{
+					hello(full_name: "Full Name")
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "valueFromCache"
 				}
 			`,
 		},
