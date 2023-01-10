@@ -895,7 +895,7 @@ func validateBuiltInScalar(v string, n string) bool {
 		return f >= math.MinInt32 && f <= math.MaxInt32
 	case "Float":
 		f, fe := strconv.ParseFloat(v, 64)
-		return fe == nil && f >= math.SmallestNonzeroFloat64 && f <= math.MaxFloat64
+		return fe == nil && f <= math.MaxFloat64
 	case "String":
 		vl := len(v)
 		return vl >= 2 && v[0] == '"' && v[vl-1] == '"'
