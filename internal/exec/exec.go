@@ -14,14 +14,14 @@ import (
 	"github.com/graph-gophers/graphql-go/internal/exec/selected"
 	"github.com/graph-gophers/graphql-go/internal/query"
 	"github.com/graph-gophers/graphql-go/log"
-	"github.com/graph-gophers/graphql-go/trace"
+	"github.com/graph-gophers/graphql-go/trace/tracer"
 	"github.com/graph-gophers/graphql-go/types"
 )
 
 type Request struct {
 	selected.Request
 	Limiter                  chan struct{}
-	Tracer                   trace.Tracer
+	Tracer                   tracer.Tracer
 	Logger                   log.Logger
 	PanicHandler             errors.PanicHandler
 	SubscribeResolverTimeout time.Duration

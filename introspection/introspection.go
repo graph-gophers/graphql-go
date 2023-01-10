@@ -44,7 +44,7 @@ func (r *Schema) Directives() []*Directive {
 }
 
 func (r *Schema) QueryType() *Type {
-	t, ok := r.schema.EntryPoints["query"]
+	t, ok := r.schema.RootOperationTypes["query"]
 	if !ok {
 		return nil
 	}
@@ -52,7 +52,7 @@ func (r *Schema) QueryType() *Type {
 }
 
 func (r *Schema) MutationType() *Type {
-	t, ok := r.schema.EntryPoints["mutation"]
+	t, ok := r.schema.RootOperationTypes["mutation"]
 	if !ok {
 		return nil
 	}
@@ -60,7 +60,7 @@ func (r *Schema) MutationType() *Type {
 }
 
 func (r *Schema) SubscriptionType() *Type {
-	t, ok := r.schema.EntryPoints["subscription"]
+	t, ok := r.schema.RootOperationTypes["subscription"]
 	if !ok {
 		return nil
 	}
@@ -189,6 +189,20 @@ func (r *Type) OfType() *Type {
 	}
 }
 
+func (r *Type) SpecifiedByURL() *string {
+	switch t := r.typ.(type) {
+	case *types.ScalarTypeDefinition:
+		if d := t.Directives.Get("specifiedBy"); d != nil {
+			arg := d.Arguments.MustGet("url")
+			url := arg.Deserialize(nil).(string)
+			return &url
+		}
+	default:
+		return nil
+	}
+	return nil
+}
+
 type Field struct {
 	field *types.FieldDefinition
 }
@@ -309,4 +323,17 @@ func (r *Directive) Args() []*InputValue {
 		l[i] = &InputValue{v}
 	}
 	return l
+}
+
+type Service struct {
+	schema *types.Schema
+}
+
+// WrapService is only used internally.
+func WrapService(schema *types.Schema) *Service {
+	return &Service{schema}
+}
+
+func (r *Service) SDL() string {
+	return r.schema.SchemaString
 }

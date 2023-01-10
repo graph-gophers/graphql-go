@@ -8,12 +8,12 @@ package types
 //
 // http://spec.graphql.org/draft/#sec-Schema
 type Schema struct {
-	// EntryPoints determines the place in the type system where `query`, `mutation`, and
+	// RootOperationTypes determines the place in the type system where `query`, `mutation`, and
 	// `subscription` operations begin.
 	//
 	// http://spec.graphql.org/draft/#sec-Root-Operation-Types
 	//
-	EntryPoints map[string]NamedType
+	RootOperationTypes map[string]NamedType
 
 	// Types are the fundamental unit of any GraphQL schema.
 	// There are six kinds of named types, and two wrapping types.
@@ -35,6 +35,7 @@ type Schema struct {
 	Unions          []*Union
 	Enums           []*EnumTypeDefinition
 	Extensions      []*Extension
+	SchemaString    string
 }
 
 func (s *Schema) Resolve(name string) Type {

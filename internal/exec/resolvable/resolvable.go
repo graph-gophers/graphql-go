@@ -70,19 +70,19 @@ func ApplyResolver(s *types.Schema, resolver interface{}) (*Schema, error) {
 
 	var query, mutation, subscription Resolvable
 
-	if t, ok := s.EntryPoints["query"]; ok {
+	if t, ok := s.RootOperationTypes["query"]; ok {
 		if err := b.assignExec(&query, t, reflect.TypeOf(resolver)); err != nil {
 			return nil, err
 		}
 	}
 
-	if t, ok := s.EntryPoints["mutation"]; ok {
+	if t, ok := s.RootOperationTypes["mutation"]; ok {
 		if err := b.assignExec(&mutation, t, reflect.TypeOf(resolver)); err != nil {
 			return nil, err
 		}
 	}
 
-	if t, ok := s.EntryPoints["subscription"]; ok {
+	if t, ok := s.RootOperationTypes["subscription"]; ok {
 		if err := b.assignExec(&subscription, t, reflect.TypeOf(resolver)); err != nil {
 			return nil, err
 		}
@@ -277,7 +277,15 @@ func (b *execBuilder) makeObjectExec(typeName string, fields types.FieldsDefinit
 			if methodIndex == -1 {
 				return nil, fmt.Errorf("%s does not resolve %q: missing method %q to convert to %q", resolverType, typeName, "To"+impl.Name, impl.Name)
 			}
-			if resolverType.Method(methodIndex).Type.NumOut() != 2 {
+			m := resolverType.Method(methodIndex)
+			expectedIn := 0
+			if methodHasReceiver {
+				expectedIn = 1
+			}
+			if m.Type.NumIn() != expectedIn {
+				return nil, fmt.Errorf("%s does not resolve %q: method %q should't have any arguments", resolverType, typeName, "To"+impl.Name)
+			}
+			if m.Type.NumOut() != 2 {
 				return nil, fmt.Errorf("%s does not resolve %q: method %q should return a value and a bool indicating success", resolverType, typeName, "To"+impl.Name)
 			}
 			a := &TypeAssertion{
@@ -324,7 +332,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *types.FieldDefinition, m
 
 		if len(f.Arguments) > 0 {
 			if len(in) == 0 {
-				return nil, fmt.Errorf("must have parameter for field arguments")
+				return nil, fmt.Errorf("must have `args struct { ... }` argument for field arguments")
 			}
 			var err error
 			argsPacker, err = b.packerBuilder.MakeStructPacker(f.Arguments, in[0])
@@ -335,7 +343,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *types.FieldDefinition, m
 		}
 
 		if len(in) > 0 {
-			return nil, fmt.Errorf("too many parameters")
+			return nil, fmt.Errorf("too many arguments")
 		}
 
 		maxNumOfReturns := 2
@@ -369,7 +377,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *types.FieldDefinition, m
 	var out reflect.Type
 	if methodIndex != -1 {
 		out = m.Type.Out(0)
-		sub, ok := b.schema.EntryPoints["subscription"]
+		sub, ok := b.schema.RootOperationTypes["subscription"]
 		if ok && typeName == sub.TypeName() && out.Kind() == reflect.Chan {
 			out = m.Type.Out(0).Elem()
 		}
