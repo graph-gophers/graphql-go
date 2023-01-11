@@ -79,6 +79,7 @@ type Schema struct {
 	schema *types.Schema
 	res    *resolvable.Schema
 
+	maxQueryLength           int
 	maxDepth                 int
 	maxParallelism           int
 	rateLimiter              ratelimit.RateLimiter
@@ -134,6 +135,13 @@ func MaxParallelism(n int) SchemaOpt {
 func RateLimiter(r ratelimit.RateLimiter) SchemaOpt {
 	return func(s *Schema) {
 		s.rateLimiter = r
+	}
+}
+
+// MaxQueryLength specifies the maximum allowed query length in bytes. The default is 0 which disables max length checking.
+func MaxQueryLength(n int) SchemaOpt {
+	return func(s *Schema) {
+		s.maxQueryLength = n
 	}
 }
 
@@ -234,6 +242,9 @@ func (s *Schema) Exec(ctx context.Context, queryString string, operationName str
 }
 
 func (s *Schema) exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, res *resolvable.Schema) *Response {
+	if s.maxQueryLength > 0 && len(queryString) > s.maxQueryLength {
+		return &Response{Errors: []*errors.QueryError{errors.Errorf("query length %d exceeds the maximum allowed query length of %d bytes", len(queryString), s.maxQueryLength)}}
+	}
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
 		return &Response{Errors: []*errors.QueryError{qErr}}
