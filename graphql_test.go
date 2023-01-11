@@ -4518,6 +4518,37 @@ func TestCircularFragmentMaxDepth(t *testing.T) {
 	})
 }
 
+func TestMaxQueryLength(t *testing.T) {
+	withMaxQueryLen := graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.MaxQueryLength(75))
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: withMaxQueryLen,
+			// Query length is 69 bytes
+			Query: `
+				query {
+					hero(episode: EMPIRE) {
+						name
+					}
+				}
+			`,
+			ExpectedResult: `{"hero":{"name":"Luke Skywalker"}}`,
+		},
+		{
+			Schema: withMaxQueryLen,
+			Query: `
+				query HeroForEpisode {
+					hero(episode: WRATH_OF_KHAN) {
+						name
+					}
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{{
+				Message: `query length 91 exceeds the maximum allowed query length of 75 bytes`,
+			}},
+		},
+	})
+}
+
 func TestQueryService(t *testing.T) {
 	t.Parallel()
 
