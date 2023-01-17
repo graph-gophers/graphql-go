@@ -208,7 +208,6 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 				in           []reflect.Value
 				callOut      []reflect.Value
 				visitorErr   error
-				modified     interface{}
 			)
 			if f.field.HasContext {
 				in = append(in, reflect.ValueOf(traceCtx))
@@ -236,7 +235,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 				}
 			}
 
-			// Call method unless the Before visitor tells us not to
+			// Call resolver method unless a Before visitor tells us not to
 			if !skipResolver {
 				callOut = res.Method(f.field.MethodIndex).Call(in)
 				result = callOut[0]
@@ -244,9 +243,10 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 
 			// After hook directive visitor (when no error is returned from resolver)
 			if !f.field.HasError && len(f.field.Directives) > 0 {
+				var modified interface{}
 				for _, directive := range f.field.Directives {
 					if visitor, ok := r.Visitors[directive.Name.Name]; ok {
-						if (result.IsValid() && !result.IsZero()) && result.CanInterface() {
+						if !skipResolver {
 							modified, visitorErr = visitor.After(ctx, directive, result.Interface())
 						} else {
 							modified, visitorErr = visitor.After(ctx, directive, nil)
@@ -262,7 +262,6 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 					}
 				}
 			}
-
 			if skipResolver {
 				return nil
 			}
@@ -307,7 +306,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			if !f.field.HasError && len(f.field.Directives) > 0 {
 				for _, directive := range f.field.Directives {
 					if visitor, ok := r.Visitors[directive.Name.Name]; ok {
-						if (result.IsValid() && !result.IsZero()) && result.CanInterface() {
+						if !skipResolver {
 							modified, visitorErr = visitor.After(ctx, directive, result.Interface())
 						} else {
 							modified, visitorErr = visitor.After(ctx, directive, nil)
