@@ -224,7 +224,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 						for _, inValue := range in {
 							values = append(values, inValue.Interface())
 						}
-						skipResolver, visitorErr = visitor.Before(ctx, directive, values)
+						skipResolver, visitorErr = visitor.Before(traceCtx, directive, values)
 						if visitorErr != nil {
 							err := errors.Errorf("%s", visitorErr)
 							err.Path = path.toSlice()
@@ -247,9 +247,9 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 				for _, directive := range f.field.Directives {
 					if visitor, ok := r.Visitors[directive.Name.Name]; ok {
 						if !skipResolver {
-							modified, visitorErr = visitor.After(ctx, directive, result.Interface())
+							modified, visitorErr = visitor.After(traceCtx, directive, result.Interface())
 						} else {
-							modified, visitorErr = visitor.After(ctx, directive, nil)
+							modified, visitorErr = visitor.After(traceCtx, directive, nil)
 						}
 
 						if visitorErr != nil {
@@ -289,7 +289,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			if len(f.field.Directives) > 0 {
 				for _, directive := range f.field.Directives {
 					if visitor, ok := r.Visitors[directive.Name.Name]; ok {
-						skipResolver, visitorErr = visitor.Before(ctx, directive, nil)
+						skipResolver, visitorErr = visitor.Before(traceCtx, directive, nil)
 						if visitorErr != nil {
 							err := errors.Errorf("%s", visitorErr)
 							err.Path = path.toSlice()
@@ -307,9 +307,9 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 				for _, directive := range f.field.Directives {
 					if visitor, ok := r.Visitors[directive.Name.Name]; ok {
 						if !skipResolver {
-							modified, visitorErr = visitor.After(ctx, directive, result.Interface())
+							modified, visitorErr = visitor.After(traceCtx, directive, result.Interface())
 						} else {
-							modified, visitorErr = visitor.After(ctx, directive, nil)
+							modified, visitorErr = visitor.After(traceCtx, directive, nil)
 						}
 						if visitorErr != nil {
 							err := errors.Errorf("%s", visitorErr)
