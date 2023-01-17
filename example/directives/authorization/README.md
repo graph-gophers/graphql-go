@@ -1,7 +1,7 @@
 # @hasRole directive
 
 ## Overview
-A simple example of naive authorization directive which returns an error if the user in the context doesn't have the required role. Make sure that in production applications you use thread-safe maps for roles as an instance of the user struct might be accessed from multiple goroutines. In this naive example we use a simeple map which is not thread-safe. The required role to access a resolver is passed as an argument to the role, for example, `@hasRole(role: ADMIN)`.
+A simple example of naive authorization directive which returns an error if the user in the context doesn't have the required role. Make sure that in production applications you use thread-safe maps for roles as an instance of the user struct might be accessed from multiple goroutines. In this naive example we use a simeple map which is not thread-safe. The required role to access a resolver is passed as an argument to the directive, for example, `@hasRole(role: ADMIN)`.
 
 ## Getting started
 To run this server
