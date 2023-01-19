@@ -4,8 +4,7 @@
 
 The goal of this project is to provide full support of the [GraphQL draft specification](https://facebook.github.io/graphql/draft) with a set of idiomatic, easy to use Go packages.
 
-While still under heavy development (`internal` APIs are almost certainly subject to change), this library is
-safe for production use.
+While still under development (`internal` and `directives` APIs are almost certainly subject to change), this library is safe for production use.
 
 ## Features
 
@@ -17,14 +16,15 @@ safe for production use.
 - handles panics in resolvers
 - parallel execution of resolvers
 - subscriptions
-   - [sample WS transport](https://github.com/graph-gophers/graphql-transport-ws)
+  - [sample WS transport](https://github.com/graph-gophers/graphql-transport-ws)
+- directive visitors on fields (the API is subject to change in future versions)
 
 ## Roadmap
 
 We're trying out the GitHub Project feature to manage `graphql-go`'s [development roadmap](https://github.com/graph-gophers/graphql-go/projects/1).
 Feedback is welcome and appreciated.
 
-## (Some) Documentation
+## (Some) Documentation [![GoDoc](https://godoc.org/github.com/graph-gophers/graphql-go?status.svg)](https://godoc.org/github.com/graph-gophers/graphql-go)
 
 ### Getting started
 
