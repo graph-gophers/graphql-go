@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec"
@@ -84,6 +85,7 @@ type Schema struct {
 	useStringDescriptions    bool
 	disableIntrospection     bool
 	subscribeResolverTimeout time.Duration
+	visitors                 map[string]directives.Visitor
 }
 
 func (s *Schema) ASTSchema() *types.Schema {
@@ -174,6 +176,14 @@ func DisableIntrospection() SchemaOpt {
 func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
 	return func(s *Schema) {
 		s.subscribeResolverTimeout = timeout
+	}
+}
+
+// DirectiveVisitors defines the implementation for each directive.
+// Per the GraphQL specification, each Field Directive in the schema must have an implementation here.
+func DirectiveVisitors(visitors map[string]directives.Visitor) SchemaOpt {
+	return func(s *Schema) {
+		s.visitors = visitors
 	}
 }
 
@@ -269,6 +279,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		Tracer:       s.tracer,
 		Logger:       s.logger,
 		PanicHandler: s.panicHandler,
+		Visitors:     s.visitors,
 	}
 	varTypes := make(map[string]*introspection.Type)
 	for _, v := range op.Vars {
