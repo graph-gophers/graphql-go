@@ -112,6 +112,7 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 - `Logger(logger log.Logger)` is used to log panics during query execution. It defaults to `exec.DefaultLogger`.
 - `PanicHandler(panicHandler errors.PanicHandler)` is used to transform panics into errors during query execution. It defaults to `errors.DefaultPanicHandler`.
 - `DisableIntrospection()` disables introspection queries.
+- `DirectiveVisitors()` adds directive visitor implementations to the schema. See examples/directives/authorization for an example.
 
 ### Custom Errors
 
