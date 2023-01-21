@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/graph-gophers/graphql-go/decode"
+	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 	"github.com/graph-gophers/graphql-go/types"
 )
@@ -40,14 +41,15 @@ type Object struct {
 
 type Field struct {
 	types.FieldDefinition
-	TypeName    string
-	MethodIndex int
-	FieldIndex  []int
-	HasContext  bool
-	HasError    bool
-	ArgsPacker  *packer.StructPacker
-	ValueExec   Resolvable
-	TraceLabel  string
+	TypeName          string
+	MethodIndex       int
+	FieldIndex        []int
+	HasContext        bool
+	HasError          bool
+	ArgsPacker        *packer.StructPacker
+	DirectivesPackers map[string]*packer.StructPacker
+	ValueExec         Resolvable
+	TraceLabel        string
 }
 
 func (f *Field) UseMethodResolver() bool {
@@ -69,12 +71,12 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *types.Schema, resolver interface{}) (*Schema, error) {
+func ApplyResolver(s *types.Schema, resolver interface{}, directives map[string]directives.ResolverVisitor) (*Schema, error) {
 	if resolver == nil {
 		return &Schema{Meta: newMeta(s), Schema: *s}, nil
 	}
 
-	b := newBuilder(s)
+	b := newBuilder(s, directives)
 
 	var query, mutation, subscription Resolvable
 
@@ -154,6 +156,7 @@ func ApplyResolver(s *types.Schema, resolver interface{}) (*Schema, error) {
 type execBuilder struct {
 	schema        *types.Schema
 	resMap        map[typePair]*resMapEntry
+	directives    map[string]directives.ResolverVisitor
 	packerBuilder *packer.Builder
 }
 
@@ -167,10 +170,11 @@ type resMapEntry struct {
 	targets []*Resolvable
 }
 
-func newBuilder(s *types.Schema) *execBuilder {
+func newBuilder(s *types.Schema, directives map[string]directives.ResolverVisitor) *execBuilder {
 	return &execBuilder{
 		schema:        s,
 		resMap:        make(map[typePair]*resMapEntry),
+		directives:    directives,
 		packerBuilder: packer.NewBuilder(),
 	}
 }
@@ -412,15 +416,46 @@ func (b *execBuilder) makeFieldExec(typeName string, f *types.FieldDefinition, m
 		}
 	}
 
+	directivesPackers := map[string]*packer.StructPacker{}
+	for _, d := range f.Directives {
+		n := d.Name.Name
+
+		// skip special directives without packers
+		if n == "deprecated" {
+			continue
+		}
+
+		v, ok := b.directives[n]
+		if !ok {
+			return nil, fmt.Errorf("directive %q on field %q does not have a visitor registered with the schema", n, f.Name)
+		}
+
+		r := reflect.TypeOf(v)
+
+		// The directive definition is needed here in order to get the arguments definition list.
+		// d.Arguments wouldn't work in this case because it does not contain args type information.
+		dd, ok := b.schema.Directives[n]
+		if !ok {
+			return nil, fmt.Errorf("directive definition %q is not defined in the schema", n)
+		}
+		p, err := b.packerBuilder.MakeStructPacker(dd.Arguments, r)
+		if err != nil {
+			return nil, err
+		}
+
+		directivesPackers[n] = p
+	}
+
 	fe := &Field{
-		FieldDefinition: *f,
-		TypeName:        typeName,
-		MethodIndex:     methodIndex,
-		FieldIndex:      fieldIndex,
-		HasContext:      hasContext,
-		ArgsPacker:      argsPacker,
-		HasError:        hasError,
-		TraceLabel:      fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name),
+		FieldDefinition:   *f,
+		TypeName:          typeName,
+		MethodIndex:       methodIndex,
+		FieldIndex:        fieldIndex,
+		HasContext:        hasContext,
+		ArgsPacker:        argsPacker,
+		DirectivesPackers: directivesPackers,
+		HasError:          hasError,
+		TraceLabel:        fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name),
 	}
 
 	var out reflect.Type

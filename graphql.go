@@ -32,6 +32,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		tracer:         noop.Tracer{},
 		logger:         &log.DefaultLogger{},
 		panicHandler:   &errors.DefaultPanicHandler{},
+		directives:     map[string]directives.ResolverVisitor{},
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -52,7 +53,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		return nil, err
 	}
 
-	r, err := resolvable.ApplyResolver(s.schema, resolver)
+	r, err := resolvable.ApplyResolver(s.schema, resolver, s.directives)
 	if err != nil {
 		return nil, err
 	}
@@ -75,6 +76,9 @@ type Schema struct {
 	schema *types.Schema
 	res    *resolvable.Schema
 
+	// TODO: don't necessarily want to force directives.ResolverVisitor?
+	// May be acceptable to implement _one_ of the directive interfaces (e.g. add one for the parse/validate step)?
+	directives               map[string]directives.ResolverVisitor
 	maxQueryLength           int
 	maxDepth                 int
 	maxParallelism           int
@@ -85,7 +89,6 @@ type Schema struct {
 	useStringDescriptions    bool
 	disableIntrospection     bool
 	subscribeResolverTimeout time.Duration
-	visitors                 map[string]directives.Visitor
 }
 
 // ASTSchema returns the abstract syntax tree of the GraphQL schema definition.
@@ -182,12 +185,11 @@ func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
 	}
 }
 
-// DirectiveVisitors defines the implementation for each directive.
+// Directives defines the implementation for each directive.
 // Per the GraphQL specification, each Field Directive in the schema must have an implementation here.
-// The @deprecated directive is an exception and does not need to be registered here.
-func DirectiveVisitors(visitors map[string]directives.Visitor) SchemaOpt {
+func Directives(directives map[string]directives.ResolverVisitor) SchemaOpt {
 	return func(s *Schema) {
-		s.visitors = visitors
+		s.directives = directives
 	}
 }
 
@@ -285,7 +287,6 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		Tracer:       s.tracer,
 		Logger:       s.logger,
 		PanicHandler: s.panicHandler,
-		Visitors:     s.visitors,
 	}
 	varTypes := make(map[string]*introspection.Type)
 	for _, v := range op.Vars {

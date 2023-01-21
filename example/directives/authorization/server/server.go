@@ -14,7 +14,7 @@ import (
 
 func main() {
 	opts := []graphql.SchemaOpt{
-		graphql.DirectiveVisitors(map[string]directives.Visitor{
+		graphql.Directives(map[string]directives.ResolverVisitor{
 			"hasRole": &authorization.HasRoleDirective{},
 		}),
 		// other options go here
