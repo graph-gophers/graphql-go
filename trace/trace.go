@@ -9,17 +9,17 @@ import (
 	"github.com/graph-gophers/graphql-go/trace/tracer"
 )
 
-// Deprecated: this type has been deprecated. Use tracer.QueryFinishFunc instead.
+// Deprecated: this type has been deprecated. Use [tracer.QueryFinishFunc] instead.
 type TraceQueryFinishFunc = func([]*errors.QueryError)
 
-// Deprecated: this type has been deprecated. Use tarcer.FieldFinishFunc instead.
+// Deprecated: this type has been deprecated. Use [tarcer.FieldFinishFunc] instead.
 type TraceFieldFinishFunc = func(*errors.QueryError)
 
-// Deprecated: this interface has been deprecated. Use tracer.Tracer instead.
+// Deprecated: this interface has been deprecated. Use [tracer.Tracer] instead.
 type Tracer = tracer.Tracer
 
-// Deprecated: this type has been deprecated. Use opentracing.Tracer instead.
+// Deprecated: this type has been deprecated. Use [opentracing.Tracer] instead.
 type OpenTracingTracer = opentracing.Tracer
 
-// Deprecated: this type has been deprecated. Use noop.Tracer instead.
+// Deprecated: this type has been deprecated. Use [noop.Tracer] instead.
 type NoopTracer = noop.Tracer
