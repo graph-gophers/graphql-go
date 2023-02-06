@@ -1,3 +1,4 @@
+// The opentracing package provides tracing functionality using OpenTracing.
 package opentracing
 
 import (

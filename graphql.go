@@ -24,7 +24,7 @@ import (
 
 // ParseSchema parses a GraphQL schema and attaches the given root resolver. It returns an error if
 // the Go type signature of the resolvers does not match the schema. If nil is passed as the
-// resolver, then the schema can not be executed, but it may be inspected (e.g. with ToJSON).
+// resolver, then the schema can not be executed, but it may be inspected (e.g. with [Schema.ToJSON] or [Schema.ASTSchema]).
 func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (*Schema, error) {
 	s := &Schema{
 		schema:         schema.New(),
@@ -88,24 +88,27 @@ type Schema struct {
 	visitors                 map[string]directives.Visitor
 }
 
+// ASTSchema returns the abstract syntax tree of the GraphQL schema definition.
+// It in turn can be used by other tools such as validators or generators.
 func (s *Schema) ASTSchema() *types.Schema {
 	return s.schema
 }
 
-// SchemaOpt is an option to pass to ParseSchema or MustParseSchema.
+// SchemaOpt is an option to pass to [ParseSchema] or [MustParseSchema].
 type SchemaOpt func(*Schema)
 
 // UseStringDescriptions enables the usage of double quoted and triple quoted
-// strings as descriptions as per the June 2018 spec
-// https://facebook.github.io/graphql/June2018/. When this is not enabled,
+// strings as descriptions as per the [June 2018 spec]. When this is not enabled,
 // comments are parsed as descriptions instead.
+//
+// [June 2018 spec]: https://facebook.github.io/graphql/June2018/
 func UseStringDescriptions() SchemaOpt {
 	return func(s *Schema) {
 		s.useStringDescriptions = true
 	}
 }
 
-// UseFieldResolvers specifies whether to use struct field resolvers
+// UseFieldResolvers specifies whether to use struct fields as resolvers.
 func UseFieldResolvers() SchemaOpt {
 	return func(s *Schema) {
 		s.schema.UseFieldResolvers = true
@@ -133,22 +136,22 @@ func MaxQueryLength(n int) SchemaOpt {
 	}
 }
 
-// Tracer is used to trace queries and fields. It defaults to tracer.Noop.
+// Tracer is used to trace queries and fields. It defaults to [noop.Tracer].
 func Tracer(t tracer.Tracer) SchemaOpt {
 	return func(s *Schema) {
 		s.tracer = t
 	}
 }
 
-// ValidationTracer is used to trace validation errors. It defaults to tracer.LegacyNoopValidationTracer.
-// Deprecated: context is needed to support tracing correctly. Use a Tracer which implements tracer.ValidationTracer.
+// ValidationTracer is used to trace validation errors. It defaults to [tracer.LegacyNoopValidationTracer].
+// Deprecated: context is needed to support tracing correctly. Use a tracer which implements [tracer.ValidationTracer].
 func ValidationTracer(tracer tracer.LegacyValidationTracer) SchemaOpt { //nolint:staticcheck
 	return func(s *Schema) {
 		s.validationTracer = &validationBridgingTracer{tracer: tracer}
 	}
 }
 
-// Logger is used to log panics during query execution. It defaults to exec.DefaultLogger.
+// Logger is used to log panics during query execution. It defaults to [log.DefaultLogger].
 func Logger(logger log.Logger) SchemaOpt {
 	return func(s *Schema) {
 		s.logger = logger
@@ -156,7 +159,7 @@ func Logger(logger log.Logger) SchemaOpt {
 }
 
 // PanicHandler is used to customize the panic errors during query execution.
-// It defaults to errors.DefaultPanicHandler.
+// It defaults to [errors.DefaultPanicHandler].
 func PanicHandler(panicHandler errors.PanicHandler) SchemaOpt {
 	return func(s *Schema) {
 		s.panicHandler = panicHandler
@@ -181,6 +184,7 @@ func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
 
 // DirectiveVisitors defines the implementation for each directive.
 // Per the GraphQL specification, each Field Directive in the schema must have an implementation here.
+// The @deprecated directive is an exception and does not need to be registered here.
 func DirectiveVisitors(visitors map[string]directives.Visitor) SchemaOpt {
 	return func(s *Schema) {
 		s.visitors = visitors
@@ -189,7 +193,9 @@ func DirectiveVisitors(visitors map[string]directives.Visitor) SchemaOpt {
 
 // Response represents a typical response of a GraphQL server. It may be encoded to JSON directly or
 // it may be further processed to a custom response type, for example to include custom error data.
-// Errors are intentionally serialized first based on the advice in https://github.com/facebook/graphql/commit/7b40390d48680b15cb93e02d46ac5eb249689876#diff-757cea6edf0288677a9eea4cfc801d87R107
+// Errors are intentionally serialized first based on the advice in the [spec].
+//
+// [spec]: https://github.com/facebook/graphql/commit/7b40390d48680b15cb93e02d46ac5eb249689876#diff-757cea6edf0288677a9eea4cfc801d87R107
 type Response struct {
 	Errors     []*errors.QueryError   `json:"errors,omitempty"`
 	Data       json.RawMessage        `json:"data,omitempty"`
