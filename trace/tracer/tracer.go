@@ -1,3 +1,4 @@
+// The tracer package provides tracing functionality.
 package tracer
 
 import (
@@ -20,15 +21,15 @@ type ValidationTracer interface {
 	TraceValidation(ctx context.Context) ValidationFinishFunc
 }
 
-// Deprecated: use ValidationTracerContext instead.
+// Deprecated: use [ValidationTracer] instead.
 type LegacyValidationTracer interface {
 	TraceValidation() func([]*errors.QueryError)
 }
 
-// Deprecated: use a Tracer which implements ValidationTracerContext.
+// Deprecated: use a Tracer which implements [ValidationTracer].
 type LegacyNoopValidationTracer struct{}
 
-// Deprecated: use a Tracer which implements ValidationTracerContext.
+// Deprecated: use a Tracer which implements [ValidationTracer].
 func (LegacyNoopValidationTracer) TraceValidation() func([]*errors.QueryError) {
 	return func(errs []*errors.QueryError) {}
 }

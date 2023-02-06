@@ -1,6 +1,8 @@
 # Apollo Federation
 
-A simple example of integration with apollo federation as subgraph. Tested with Go v1.18, Node.js v16.14.2 and yarn 1.22.18.
+**NOTE: This library doesn't support the full Apollo Federation subgraph spec!**
+
+A basic example of integration with apollo federation as subgraph. Tested with Go v1.18, Node.js v16.14.2 and yarn 1.22.18.
 
 To run this server
 
