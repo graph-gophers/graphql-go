@@ -11,13 +11,21 @@ import (
 	"github.com/graph-gophers/graphql-go/types"
 )
 
+const (
+	Query        = "Query"
+	Mutation     = "Mutation"
+	Subscription = "Subscription"
+)
+
 type Schema struct {
 	*Meta
 	types.Schema
-	Query        Resolvable
-	Mutation     Resolvable
-	Subscription Resolvable
-	Resolver     reflect.Value
+	Query                Resolvable
+	Mutation             Resolvable
+	Subscription         Resolvable
+	QueryResolver        reflect.Value
+	MutationResolver     reflect.Value
+	SubscriptionResolver reflect.Value
 }
 
 type Resolvable interface {
@@ -70,20 +78,59 @@ func ApplyResolver(s *types.Schema, resolver interface{}) (*Schema, error) {
 
 	var query, mutation, subscription Resolvable
 
+	resolvers := map[string]interface{}{}
+
+	rv := reflect.ValueOf(resolver)
+	// use separate resolvers in case Query, Mutation and/or Subscription methods are defined
+	for _, op := range [...]string{Query, Mutation, Subscription} {
+		m := rv.MethodByName(op) // operation method
+		if m.IsValid() {
+			mt := m.Type()
+			if mt.NumIn() != 0 {
+				return nil, fmt.Errorf("method %q of %v must not accept any arguments, got %d", op, rv.Type(), mt.NumIn())
+			}
+			if mt.NumOut() != 1 {
+				return nil, fmt.Errorf("method %q of %v must have 1 return value, got %d", op, rv.Type(), mt.NumOut())
+			}
+			ot := mt.Out(0)
+			if ot.Kind() != reflect.Pointer && ot.Kind() != reflect.Interface {
+				return nil, fmt.Errorf("method %q of %v must return an interface or a pointer, got %+v", op, rv.Type(), ot)
+			}
+			out := m.Call(nil)
+			res := out[0]
+			if res.IsNil() {
+				return nil, fmt.Errorf("method %q of %v must return a non-nil result, got %v", op, rv.Type(), res)
+			}
+			switch res.Kind() {
+			case reflect.Pointer:
+				resolvers[op] = res.Elem().Addr().Interface()
+			case reflect.Interface:
+				resolvers[op] = res.Elem().Interface()
+			default:
+				panic("ureachable")
+			}
+		}
+		// If a method/field for the given operation is not defined in the root resolver, then share the
+		// root resolver for all the operations in order to ensure backwards compatibility.
+		if resolvers[op] == nil {
+			resolvers[op] = resolver
+		}
+	}
+
 	if t, ok := s.RootOperationTypes["query"]; ok {
-		if err := b.assignExec(&query, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&query, t, reflect.TypeOf(resolvers[Query])); err != nil {
 			return nil, err
 		}
 	}
 
 	if t, ok := s.RootOperationTypes["mutation"]; ok {
-		if err := b.assignExec(&mutation, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&mutation, t, reflect.TypeOf(resolvers[Mutation])); err != nil {
 			return nil, err
 		}
 	}
 
 	if t, ok := s.RootOperationTypes["subscription"]; ok {
-		if err := b.assignExec(&subscription, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&subscription, t, reflect.TypeOf(resolvers[Subscription])); err != nil {
 			return nil, err
 		}
 	}
@@ -93,12 +140,14 @@ func ApplyResolver(s *types.Schema, resolver interface{}) (*Schema, error) {
 	}
 
 	return &Schema{
-		Meta:         newMeta(s),
-		Schema:       *s,
-		Resolver:     reflect.ValueOf(resolver),
-		Query:        query,
-		Mutation:     mutation,
-		Subscription: subscription,
+		Meta:                 newMeta(s),
+		Schema:               *s,
+		QueryResolver:        reflect.ValueOf(resolvers[Query]),
+		MutationResolver:     reflect.ValueOf(resolvers[Mutation]),
+		SubscriptionResolver: reflect.ValueOf(resolvers[Subscription]),
+		Query:                query,
+		Mutation:             mutation,
+		Subscription:         subscription,
 	}, nil
 }
 
