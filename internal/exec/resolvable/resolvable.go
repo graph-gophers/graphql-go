@@ -11,13 +11,22 @@ import (
 	"github.com/graph-gophers/graphql-go/types"
 )
 
+// Operation method names.
+const (
+	Query        = "Query"
+	Mutation     = "Mutation"
+	Subscription = "Subscription"
+)
+
 type Schema struct {
 	*Meta
 	types.Schema
-	Query        Resolvable
-	Mutation     Resolvable
-	Subscription Resolvable
-	Resolver     reflect.Value
+	Query                Resolvable
+	Mutation             Resolvable
+	Subscription         Resolvable
+	QueryResolver        reflect.Value
+	MutationResolver     reflect.Value
+	SubscriptionResolver reflect.Value
 }
 
 type Resolvable interface {
@@ -70,20 +79,39 @@ func ApplyResolver(s *types.Schema, resolver interface{}) (*Schema, error) {
 
 	var query, mutation, subscription Resolvable
 
+	// resolvers for each of the possible opeartions
+	res := map[string]interface{}{}
+
+	rv := reflect.ValueOf(resolver)
+	// Use separate resolvers in case Query, Mutation and/or Subscription methods/fields are defined.
+	for _, op := range [...]string{Query, Mutation, Subscription} {
+		qr := rv.MethodByName(op)
+		if qr.IsValid() {
+			out := qr.Call([]reflect.Value{})
+			res[op] = out[0].Elem().Addr().Interface()
+			fmt.Printf("%s: %v %T\n", op, res[op], res[op])
+		}
+		// If a method/field for the given operation is not defined in the root resolver, then share the
+		// root resolver for all the operations in order to ensure backwards compatibility.
+		if res[op] == nil {
+			res[op] = resolver
+		}
+	}
+
 	if t, ok := s.RootOperationTypes["query"]; ok {
-		if err := b.assignExec(&query, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&query, t, reflect.TypeOf(res[Query])); err != nil {
 			return nil, err
 		}
 	}
 
 	if t, ok := s.RootOperationTypes["mutation"]; ok {
-		if err := b.assignExec(&mutation, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&mutation, t, reflect.TypeOf(res[Mutation])); err != nil {
 			return nil, err
 		}
 	}
 
 	if t, ok := s.RootOperationTypes["subscription"]; ok {
-		if err := b.assignExec(&subscription, t, reflect.TypeOf(resolver)); err != nil {
+		if err := b.assignExec(&subscription, t, reflect.TypeOf(res[Subscription])); err != nil {
 			return nil, err
 		}
 	}
@@ -93,13 +121,22 @@ func ApplyResolver(s *types.Schema, resolver interface{}) (*Schema, error) {
 	}
 
 	return &Schema{
-		Meta:         newMeta(s),
-		Schema:       *s,
-		Resolver:     reflect.ValueOf(resolver),
-		Query:        query,
-		Mutation:     mutation,
-		Subscription: subscription,
+		Meta:                 newMeta(s),
+		Schema:               *s,
+		QueryResolver:        reflect.ValueOf(res[Query]),
+		MutationResolver:     reflect.ValueOf(res[Mutation]),
+		SubscriptionResolver: reflect.ValueOf(res[Subscription]),
+		Query:                query,
+		Mutation:             mutation,
+		Subscription:         subscription,
 	}, nil
+}
+
+func unptr(v reflect.Value) reflect.Value {
+	if v.Kind() == reflect.Pointer {
+		return v.Elem()
+	}
+	return v
 }
 
 type execBuilder struct {
