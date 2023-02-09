@@ -28,7 +28,7 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *types
 
 		sels := selected.ApplyOperation(&r.Request, s, op)
 		var fields []*fieldToExec
-		collectFieldsToResolve(sels, s, s.Resolver, &fields, make(map[string]*fieldToExec))
+		collectFieldsToResolve(sels, s, s.SubscriptionResolver, &fields, make(map[string]*fieldToExec))
 
 		// TODO: move this check into validation.Validate
 		if len(fields) != 1 {
