@@ -2,6 +2,7 @@ package graphql_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -4808,6 +4809,176 @@ func TestQueryService(t *testing.T) {
 					}
 				}
 			`,
+		},
+	})
+}
+
+type RootResolver struct{}
+type QueryResolver struct{}
+type MutationResolver struct{}
+type SubscriptionResolver struct {
+	err      error
+	upstream <-chan *helloEventResolver
+}
+
+func (r *RootResolver) Query() *QueryResolver {
+	return &QueryResolver{}
+}
+
+func (r *RootResolver) Mutation() *MutationResolver {
+	return &MutationResolver{}
+}
+
+type helloEventResolver struct {
+	msg string
+	err error
+}
+
+func (r *helloEventResolver) Msg() (string, error) {
+	return r.msg, r.err
+}
+
+func closedHelloEventUpstream(rr ...*helloEventResolver) <-chan *helloEventResolver {
+	c := make(chan *helloEventResolver, len(rr))
+	for _, r := range rr {
+		c <- r
+	}
+	close(c)
+	return c
+}
+
+func (r *RootResolver) Subscription() *SubscriptionResolver {
+	return &SubscriptionResolver{
+		upstream: closedHelloEventUpstream(
+			&helloEventResolver{msg: "Hello world!"},
+			&helloEventResolver{err: errors.New("resolver error")},
+			&helloEventResolver{msg: "Hello again!"},
+		),
+	}
+}
+
+func (qr *QueryResolver) Hello() string {
+	return "Hello world!"
+}
+
+func (mr *MutationResolver) Hello() string {
+	return "Hello world!"
+}
+
+func (sr *SubscriptionResolver) Hello(ctx context.Context) (chan *helloEventResolver, error) {
+	if sr.err != nil {
+		return nil, sr.err
+	}
+
+	c := make(chan *helloEventResolver)
+	go func() {
+		for r := range sr.upstream {
+			select {
+			case <-ctx.Done():
+				close(c)
+				return
+			case c <- r:
+			}
+		}
+		close(c)
+	}()
+
+	return c, nil
+}
+
+func TestSeparateResolvers(t *testing.T) {
+	// Ensure that a field with the same name is allowed in different operations
+	helloEverywhere := `
+		schema {
+			query: Query
+			mutation: Mutation
+			subscription: Subscription
+		}
+
+		type Query {
+			hello: String!
+		}
+
+		type Mutation {
+			hello: String!
+		}
+
+		type Subscription {
+			hello: HelloEvent!
+		}
+
+		type HelloEvent {
+			msg: String!
+		}
+	`
+
+	separateSchema := graphql.MustParseSchema(helloEverywhere, &RootResolver{})
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: separateSchema,
+			Query: `
+				query {
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!"
+				}
+			`,
+		},
+		{
+			Schema: separateSchema,
+			Query: `
+				mutation {
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!"
+				}
+			`,
+		},
+	})
+
+	gqltesting.RunSubscribes(t, []*gqltesting.TestSubscription{
+		{
+			Name:   "ok",
+			Schema: separateSchema,
+			Query: `
+				subscription {
+					hello {
+						msg
+					}
+				}
+			`,
+			ExpectedResults: []gqltesting.TestResponse{
+				{
+					Data: json.RawMessage(`
+						{
+							"hello": {
+								"msg": "Hello world!"
+							}
+						}
+					`),
+				},
+				{
+					// null propagates all the way up because msg is non-null
+					Data:   json.RawMessage(`null`),
+					Errors: []*gqlerrors.QueryError{gqlerrors.Errorf("%s", resolverErr)},
+				},
+				{
+					Data: json.RawMessage(`
+						{
+							"hello": {
+								"msg": "Hello again!"
+							}
+						}
+					`),
+				},
+			},
 		},
 	})
 }
