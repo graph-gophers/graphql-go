@@ -45,7 +45,18 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *types.O
 	func() {
 		defer r.handlePanic(ctx)
 		sels := selected.ApplyOperation(&r.Request, s, op)
-		r.execSelections(ctx, sels, nil, s, s.Resolver, &out, op.Type == query.Mutation)
+		var resolver reflect.Value
+		switch op.Type {
+		case query.Query:
+			resolver = s.QueryResolver
+		case query.Mutation:
+			resolver = s.MutationResolver
+		case query.Subscription:
+			resolver = s.SubscriptionResolver
+		default:
+			panic("unknown query operation")
+		}
+		r.execSelections(ctx, sels, nil, s, resolver, &out, op.Type == query.Mutation)
 	}()
 
 	if err := ctx.Err(); err != nil {
