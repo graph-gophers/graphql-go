@@ -19,11 +19,6 @@ While still under development (`internal` and `directives` APIs are almost certa
   - [sample WS transport](https://github.com/graph-gophers/graphql-transport-ws)
 - directive visitors on fields (the API is subject to change in future versions)
 
-## Roadmap
-
-We're trying out the GitHub Project feature to manage `graphql-go`'s [development roadmap](https://github.com/graph-gophers/graphql-go/projects/1).
-Feedback is welcome and appreciated.
-
 ## (Some) Documentation [![GoDoc](https://godoc.org/github.com/graph-gophers/graphql-go?status.svg)](https://godoc.org/github.com/graph-gophers/graphql-go)
 
 ### Getting started
