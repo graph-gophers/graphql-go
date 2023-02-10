@@ -12,7 +12,7 @@ blocks:
           commands:
             - sem-version go 1.17
             - checkout
-            - ./scripts/golangci_install.sh -b $(go env GOPATH)/bin v1.42.1
+            - ./scripts/golangci_install.sh -b $(go env GOPATH)/bin v1.49.0
             - export PATH=$(go env GOPATH)/bin:$PATH
             - golangci-lint run ./...
 
