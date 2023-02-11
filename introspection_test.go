@@ -3,7 +3,7 @@ package graphql_test
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/graph-gophers/graphql-go"
@@ -83,7 +83,7 @@ func formatJSON(data []byte) ([]byte, error) {
 }
 
 func mustReadFile(filename string) []byte {
-	b, err := ioutil.ReadFile(filename)
+	b, err := os.ReadFile(filename)
 	if err != nil {
 		panic(err)
 	}

@@ -33,9 +33,9 @@ type Resolver func(name string) types.Type
 // In the example below, ResolveType would be used to check if the resolving function
 // returns a valid type for Dimension:
 //
-// type Profile {
-//    picture(dimensions: Dimension): Url
-// }
+//	type Profile {
+//	   picture(dimensions: Dimension): Url
+//	}
 //
 // ResolveType recursively unwraps List and NonNull types until a NamedType is reached.
 func ResolveType(t types.Type, resolver Resolver) (types.Type, *errors.QueryError) {
