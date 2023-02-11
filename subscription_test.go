@@ -24,8 +24,8 @@ func (r *helloResolver) Hello() string {
 	return "Hello world!"
 }
 
-var resolverErr = errors.New("resolver error")
-var resolverQueryErr = &qerrors.QueryError{Message: "query", ResolverError: resolverErr}
+var errResolver = errors.New("resolver error")
+var resolverQueryErr = &qerrors.QueryError{Message: "query", ResolverError: errResolver}
 
 type helloSaidResolver struct {
 	err      error
@@ -127,7 +127,7 @@ func TestSchemaSubscribe(t *testing.T) {
 				helloSaidResolver: &helloSaidResolver{
 					upstream: closedUpstream(
 						&helloSaidEventResolver{msg: "Hello world!"},
-						&helloSaidEventResolver{err: resolverErr},
+						&helloSaidEventResolver{err: errResolver},
 						&helloSaidEventResolver{msg: "Hello again!"},
 					),
 				},
@@ -153,7 +153,7 @@ func TestSchemaSubscribe(t *testing.T) {
 					Data: json.RawMessage(`
 						null
 					`),
-					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", resolverErr)},
+					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", errResolver)},
 				},
 				{
 					Data: json.RawMessage(`
@@ -197,7 +197,7 @@ func TestSchemaSubscribe(t *testing.T) {
 		{
 			Name: "subscription_resolver_can_error",
 			Schema: graphql.MustParseSchema(schema, &rootResolver{
-				helloSaidResolver: &helloSaidResolver{err: resolverErr},
+				helloSaidResolver: &helloSaidResolver{err: errResolver},
 			}),
 			Query: `
 				subscription onHelloSaid {
@@ -211,7 +211,7 @@ func TestSchemaSubscribe(t *testing.T) {
 					Data: json.RawMessage(`
 						null
 					`),
-					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", resolverErr)},
+					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", errResolver)},
 				},
 			},
 		},
@@ -220,7 +220,7 @@ func TestSchemaSubscribe(t *testing.T) {
 			Schema: graphql.MustParseSchema(schema, &rootResolver{
 				helloSaidNullableResolver: &helloSaidNullableResolver{
 					upstream: closedUpstreamNullable(
-						&helloSaidNullableEventResolver{err: resolverErr},
+						&helloSaidNullableEventResolver{err: errResolver},
 					),
 				},
 			}),
@@ -240,14 +240,14 @@ func TestSchemaSubscribe(t *testing.T) {
 							}
 						}
 					`),
-					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", resolverErr)},
+					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", errResolver)},
 				},
 			},
 		},
 		{
 			Name: "subscription_resolver_can_error_optional_event",
 			Schema: graphql.MustParseSchema(schema, &rootResolver{
-				helloSaidNullableResolver: &helloSaidNullableResolver{err: resolverErr},
+				helloSaidNullableResolver: &helloSaidNullableResolver{err: errResolver},
 			}),
 			Query: `
 				subscription onHelloSaid {
@@ -263,7 +263,7 @@ func TestSchemaSubscribe(t *testing.T) {
 							"helloSaidNullable": null
 						}
 					`),
-					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", resolverErr)},
+					Errors: []*qerrors.QueryError{qerrors.Errorf("%s", errResolver)},
 				},
 			},
 		},
