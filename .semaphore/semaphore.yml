@@ -10,9 +10,9 @@ blocks:
       jobs:
         - name: fmt
           commands:
-            - sem-version go 1.17
+            - sem-version go 1.20
             - checkout
-            - ./scripts/golangci_install.sh -b $(go env GOPATH)/bin v1.49.0
+            - ./scripts/golangci_install.sh -b $(go env GOPATH)/bin v1.51.0
             - export PATH=$(go env GOPATH)/bin:$PATH
             - golangci-lint run ./...
 
@@ -20,7 +20,7 @@ blocks:
     task:
       prologue:
         commands:
-          - sem-version go 1.17
+          - sem-version go 1.20
           - export PATH=$(go env GOPATH)/bin:$PATH
           - checkout
           - go version
