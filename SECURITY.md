@@ -14,4 +14,4 @@ If you are using the `graphql.MaxDepth` schema option, make sure that you upgrad
 
 ## Reporting a Vulnerability
 
-If you find a security vulnerability with this library, please, DO NOT submit a pull request right away. Please, report the issue to @pavelnikolov and/or @tony in the Gophers Slack in a private message.
+If you find a security vulnerability with this library, please, DO NOT submit a pull request right away. Please, report the issue to @pavelnikolov in the Gophers Slack in a private message.
