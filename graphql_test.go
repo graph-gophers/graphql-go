@@ -2,6 +2,7 @@ package graphql_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -4810,4 +4811,307 @@ func TestQueryService(t *testing.T) {
 			`,
 		},
 	})
+}
+
+type RootResolver struct{}
+type QueryResolver struct{}
+type MutationResolver struct{}
+type SubscriptionResolver struct {
+	err      error
+	upstream <-chan *helloEventResolver
+}
+
+func (r *RootResolver) Query() *QueryResolver {
+	return &QueryResolver{}
+}
+
+func (r *RootResolver) Mutation() *MutationResolver {
+	return &MutationResolver{}
+}
+
+type helloEventResolver struct {
+	msg string
+	err error
+}
+
+func (r *helloEventResolver) Msg() (string, error) {
+	return r.msg, r.err
+}
+
+func closedHelloEventUpstream(rr ...*helloEventResolver) <-chan *helloEventResolver {
+	c := make(chan *helloEventResolver, len(rr))
+	for _, r := range rr {
+		c <- r
+	}
+	close(c)
+	return c
+}
+
+func (r *RootResolver) Subscription() *SubscriptionResolver {
+	return &SubscriptionResolver{
+		upstream: closedHelloEventUpstream(
+			&helloEventResolver{msg: "Hello subscription!"},
+			&helloEventResolver{err: errors.New("resolver error")},
+			&helloEventResolver{msg: "Hello again!"},
+		),
+	}
+}
+
+func (qr *QueryResolver) Hello() string {
+	return "Hello query!"
+}
+
+func (mr *MutationResolver) Hello() string {
+	return "Hello mutation!"
+}
+
+func (sr *SubscriptionResolver) Hello(ctx context.Context) (chan *helloEventResolver, error) {
+	if sr.err != nil {
+		return nil, sr.err
+	}
+
+	c := make(chan *helloEventResolver)
+	go func() {
+		for r := range sr.upstream {
+			select {
+			case <-ctx.Done():
+				close(c)
+				return
+			case c <- r:
+			}
+		}
+		close(c)
+	}()
+
+	return c, nil
+}
+
+type errRootResolver1 struct {
+	RootResolver
+}
+
+// Query is invalid because it doesn't have a return value.
+func (*errRootResolver1) Query() {}
+
+type errRootResolver2 struct {
+	RootResolver
+}
+
+// Query is invalid because it has more than 1 return value
+func (*errRootResolver2) Query() (*QueryResolver, error) {
+	return nil, nil
+}
+
+type errRootResolver3 struct {
+	RootResolver
+}
+
+// Mutation is invalid because it returns nil
+func (*errRootResolver3) Mutation() *MutationResolver {
+	return nil
+}
+
+type errRootResolver4 struct {
+	RootResolver
+}
+
+// Query is invalid because it doesn't return a pointer.
+func (*errRootResolver4) Query() MutationResolver {
+	return MutationResolver{}
+}
+
+type errRootResolver5 struct {
+	RootResolver
+}
+
+// Query is invalid because it returns *[]int instead of a resolver.
+func (*errRootResolver5) Query() *[]int {
+	return &[]int{1, 2}
+}
+
+type errRootResolver6 struct {
+	RootResolver
+}
+
+// Mutation is invalid because it returns a map[string]int instead of a resolver.
+func (*errRootResolver6) Mutation() map[string]int {
+	return map[string]int{"key": 3}
+}
+
+type errRootResolver7 struct {
+	RootResolver
+}
+
+// Subscription is invalid because it returns an invalid resolver.
+func (*errRootResolver7) Subscription() interface{} {
+	a := struct {
+		Name string
+	}{Name: "invalid"}
+	return &a
+}
+
+type errRootResolver8 struct {
+	RootResolver
+}
+
+// Query is invalid because it accepts arguments.
+func (*errRootResolver8) Query(ctx context.Context) *QueryResolver {
+	return &QueryResolver{}
+}
+
+// TestSeparateResolvers ensures that a field with the same name is allowed in different operations
+func TestSeparateResolvers(t *testing.T) {
+	helloEverywhere := `
+		schema {
+			query: Query
+			mutation: Mutation
+			subscription: Subscription
+		}
+
+		type Query {
+			hello: String!
+		}
+
+		type Mutation {
+			hello: String!
+		}
+
+		type Subscription {
+			hello: HelloEvent!
+		}
+
+		type HelloEvent {
+			msg: String!
+		}
+	`
+
+	separateSchema := graphql.MustParseSchema(helloEverywhere, &RootResolver{})
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: separateSchema,
+			Query: `
+				query {
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello query!"
+				}
+			`,
+		},
+		{
+			Schema: separateSchema,
+			Query: `
+				mutation {
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello mutation!"
+				}
+			`,
+		},
+	})
+
+	gqltesting.RunSubscribes(t, []*gqltesting.TestSubscription{
+		{
+			Name:   "ok",
+			Schema: separateSchema,
+			Query: `
+				subscription {
+					hello {
+						msg
+					}
+				}
+			`,
+			ExpectedResults: []gqltesting.TestResponse{
+				{
+					Data: json.RawMessage(`
+						{
+							"hello": {
+								"msg": "Hello subscription!"
+							}
+						}
+					`),
+				},
+				{
+					// null propagates all the way up because msg is non-null
+					Data:   json.RawMessage(`null`),
+					Errors: []*gqlerrors.QueryError{gqlerrors.Errorf("%s", resolverErr)},
+				},
+				{
+					Data: json.RawMessage(`
+						{
+							"hello": {
+								"msg": "Hello again!"
+							}
+						}
+					`),
+				},
+			},
+		},
+	})
+
+	// test errors with invalid resolvers
+	tests := []struct {
+		name     string
+		resolver interface{}
+		opts     []graphql.SchemaOpt
+		wantErr  string
+	}{
+		{
+			name:     "query_method_has_no_return_val",
+			resolver: &errRootResolver1{},
+			wantErr:  "method \"Query\" of *graphql_test.errRootResolver1 must have 1 return value, got 0",
+		},
+		{
+			name:     "query_method_returns_too_many_vals",
+			resolver: &errRootResolver2{},
+			wantErr:  "method \"Query\" of *graphql_test.errRootResolver2 must have 1 return value, got 2",
+		},
+		{
+			name:     "mutation_method_returns_nil",
+			resolver: &errRootResolver3{},
+			wantErr:  "method \"Mutation\" of *graphql_test.errRootResolver3 must return a non-nil result, got <nil>",
+		},
+		{
+			name:     "query_method_does_not_return_a_pointer",
+			resolver: &errRootResolver4{},
+			wantErr:  "method \"Query\" of *graphql_test.errRootResolver4 must return an interface or a pointer, got graphql_test.MutationResolver",
+		},
+		{
+			name:     "query_method_returns_invalid_resolver_type",
+			resolver: &errRootResolver5{},
+			wantErr:  "*[]int does not resolve \"Query\": missing method for field \"hello\"",
+		},
+		{
+			name:     "mutation_method_returns_invalid_resolver_type",
+			resolver: &errRootResolver6{},
+			wantErr:  "method \"Mutation\" of *graphql_test.errRootResolver6 must return an interface or a pointer, got map[string]int",
+		},
+		{
+			name:     "query_subscription_returns_invalid_resolver_type",
+			resolver: &errRootResolver7{},
+			wantErr:  "*struct { Name string } does not resolve \"Subscription\": missing method for field \"hello\"",
+		},
+		{
+			name:     "mutation_method_returns_invalid_resolver_type",
+			resolver: &errRootResolver8{},
+			wantErr:  "method \"Query\" of *graphql_test.errRootResolver8 must not accept any arguments, got 1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := graphql.ParseSchema(helloEverywhere, tt.resolver, tt.opts...)
+			if err == nil {
+				t.Fatalf("want err: %q, got: <nil>", tt.wantErr)
+			}
+			if err.Error() != tt.wantErr {
+				t.Fatalf("want err: %q, got: %q", tt.wantErr, err.Error())
+			}
+		})
+	}
 }
