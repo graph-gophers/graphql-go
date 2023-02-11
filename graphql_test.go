@@ -148,21 +148,12 @@ func (e resolverNotFoundError) Extensions() map[string]interface{} {
 	}
 }
 
-type findDroidResolver struct{}
-
-func (r *findDroidResolver) FindDroid(ctx context.Context) (string, error) {
-	return "", resolverNotFoundError{
-		Code:    "NotFound",
-		Message: "This is not the droid you are looking for",
-	}
-}
-
 var (
 	droidNotFoundError = resolverNotFoundError{
 		Code:    "NotFound",
 		Message: "This is not the droid you are looking for",
 	}
-	quoteError = errors.New("Bleep bloop")
+	errQuote = errors.New("bleep bloop")
 
 	r2d2          = &droidResolver{name: "R2-D2"}
 	c3po          = &droidResolver{name: "C-3PO"}
@@ -205,7 +196,7 @@ func (d *droidResolver) Name() (string, error) {
 func (d *droidResolver) Quotes() ([]string, error) {
 	switch d.name {
 	case r2d2.name:
-		return nil, quoteError
+		return nil, errQuote
 	case c3po.name:
 		return []string{"We're doomed!", "R2-D2, where are you?"}, nil
 	}
@@ -818,7 +809,7 @@ func TestBasic(t *testing.T) {
 
 type testEmbeddedStructResolver struct{}
 
-func (_ *testEmbeddedStructResolver) Course() courseResolver {
+func (*testEmbeddedStructResolver) Course() courseResolver {
 	return courseResolver{
 		CourseMeta: CourseMeta{
 			Name:       "Biology",
@@ -1139,8 +1130,8 @@ func TestErrorPropagationInLists(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:       quoteError.Error(),
-					ResolverError: quoteError,
+					Message:       errQuote.Error(),
+					ResolverError: errQuote,
 					Path:          []interface{}{"findDroids", 0, "quotes"},
 				},
 			},
@@ -1174,8 +1165,8 @@ func TestErrorPropagationInLists(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:       quoteError.Error(),
-					ResolverError: quoteError,
+					Message:       errQuote.Error(),
+					ResolverError: errQuote,
 					Path:          []interface{}{"findNilDroids", 0, "quotes"},
 				},
 				{
@@ -3091,7 +3082,7 @@ func TestTime(t *testing.T) {
 
 type resolverWithUnexportedMethod struct{}
 
-func (r *resolverWithUnexportedMethod) changeTheNumber(args struct{ NewNumber int32 }) int32 {
+func (r *resolverWithUnexportedMethod) changeTheNumber(args struct{ NewNumber int32 }) int32 { //lint:ignore U1000 ingore this for now
 	return args.NewNumber
 }
 
@@ -3641,7 +3632,7 @@ func TestComposedFragments(t *testing.T) {
 }
 
 var (
-	exampleError = fmt.Errorf("This is an error")
+	errExample = fmt.Errorf("this is an error")
 
 	nilChildErrorString = `graphql: got nil for non-null "Child"`
 )
@@ -3649,7 +3640,7 @@ var (
 type childResolver struct{}
 
 func (r *childResolver) TriggerError() (string, error) {
-	return "This will never be returned to the client", exampleError
+	return "This will never be returned to the client", errExample
 }
 func (r *childResolver) NoError() string {
 	return "no error"
@@ -3687,8 +3678,8 @@ func TestErrorPropagation(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:       exampleError.Error(),
-					ResolverError: exampleError,
+					Message:       errExample.Error(),
+					ResolverError: errExample,
 					Path:          []interface{}{"triggerError"},
 				},
 			},
@@ -3726,8 +3717,8 @@ func TestErrorPropagation(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:       exampleError.Error(),
-					ResolverError: exampleError,
+					Message:       errExample.Error(),
+					ResolverError: errExample,
 					Path:          []interface{}{"child", "triggerError"},
 				},
 			},
@@ -3769,8 +3760,8 @@ func TestErrorPropagation(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:       exampleError.Error(),
-					ResolverError: exampleError,
+					Message:       errExample.Error(),
+					ResolverError: errExample,
 					Path:          []interface{}{"child", "child", "triggerError"},
 				},
 			},
@@ -3815,8 +3806,8 @@ func TestErrorPropagation(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:       exampleError.Error(),
-					ResolverError: exampleError,
+					Message:       errExample.Error(),
+					ResolverError: errExample,
 					Path:          []interface{}{"child", "child", "triggerError"},
 				},
 			},
@@ -3940,8 +3931,8 @@ func TestErrorPropagation(t *testing.T) {
 					Path:    []interface{}{"child", "child", "child", "nilChild"},
 				},
 				{
-					Message:       exampleError.Error(),
-					ResolverError: exampleError,
+					Message:       errExample.Error(),
+					ResolverError: errExample,
 					Path:          []interface{}{"child", "child", "triggerError"},
 				},
 			},
@@ -5087,7 +5078,7 @@ func TestSeparateResolvers(t *testing.T) {
 				{
 					// null propagates all the way up because msg is non-null
 					Data:   json.RawMessage(`null`),
-					Errors: []*gqlerrors.QueryError{gqlerrors.Errorf("%s", resolverErr)},
+					Errors: []*gqlerrors.QueryError{gqlerrors.Errorf("%s", errResolver)},
 				},
 				{
 					Data: json.RawMessage(`
