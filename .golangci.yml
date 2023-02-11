@@ -14,17 +14,14 @@ linters-settings:
 linters:
   disable-all: true
   enable:
-    - deadcode
     - gofmt
     - gosimple
     - govet
     - ineffassign
     - exportloopref
-    - structcheck
     - staticcheck
     - unconvert
     - unused
-    - varcheck
     - misspell
     - goimports
 
