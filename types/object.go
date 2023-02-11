@@ -4,9 +4,9 @@ import "github.com/graph-gophers/graphql-go/errors"
 
 // ObjectTypeDefinition represents a GraphQL ObjectTypeDefinition.
 //
-// type FooObject {
-// 		foo: String
-// }
+//	type FooObject {
+//			foo: String
+//	}
 //
 // https://spec.graphql.org/draft/#sec-Objects
 type ObjectTypeDefinition struct {
