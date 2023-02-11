@@ -517,11 +517,6 @@ func (r *subscriptionsCustomTimeout) OnTimeout() <-chan *messageResolver {
 }
 
 func TestSchemaSubscribe_CustomResolverTimeout(t *testing.T) {
-	r := &struct {
-		*subscriptionsCustomTimeout
-	}{
-		subscriptionsCustomTimeout: &subscriptionsCustomTimeout{},
-	}
 	gqltesting.RunSubscribe(t, &gqltesting.TestSubscription{
 		Schema: graphql.MustParseSchema(`
 			type Query {}
@@ -532,7 +527,9 @@ func TestSchemaSubscribe_CustomResolverTimeout(t *testing.T) {
 			type Message {
 				msg: String!
 			}
-		`, r, graphql.SubscribeResolverTimeout(1*time.Millisecond)),
+		`,
+			&subscriptionsCustomTimeout{},
+			graphql.SubscribeResolverTimeout(1*time.Nanosecond)),
 		Query: `
 			subscription {
 				onTimeout { msg }
