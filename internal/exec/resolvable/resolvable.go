@@ -83,8 +83,8 @@ func ApplyResolver(s *types.Schema, resolver interface{}) (*Schema, error) {
 	rv := reflect.ValueOf(resolver)
 	// use separate resolvers in case Query, Mutation and/or Subscription methods are defined
 	for _, op := range [...]string{Query, Mutation, Subscription} {
-		m := rv.MethodByName(op) // operation method
-		if m.IsValid() {
+		m := rv.MethodByName(op)
+		if m.IsValid() { // if the root resolver has a method for the current operation
 			mt := m.Type()
 			if mt.NumIn() != 0 {
 				return nil, fmt.Errorf("method %q of %v must not accept any arguments, got %d", op, rv.Type(), mt.NumIn())
@@ -110,8 +110,8 @@ func ApplyResolver(s *types.Schema, resolver interface{}) (*Schema, error) {
 				panic("ureachable")
 			}
 		}
-		// If a method/field for the given operation is not defined in the root resolver, then share the
-		// root resolver for all the operations in order to ensure backwards compatibility.
+		// If a method for the current operation is not defined in the root resolver,
+		// then use the root resolver for the operation.
 		if resolvers[op] == nil {
 			resolvers[op] = resolver
 		}
