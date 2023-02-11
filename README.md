@@ -97,6 +97,50 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 }
 ```
 
+### Separate resolvers for different operations
+
+The GraphQL specification allows for fields with the same name defined in different query types. For example, the schema below is a valid schema definition:
+```graphql
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+type Query {
+  hello: String!
+}
+
+type Mutation {
+  hello: String!
+}
+```
+The above schema would result in name collision if we use a single resolver struct because fields from both operations correspond to methods in the root resolver (the same Go struct). In order to resolve this issue, the library allows resolvers for query, mutation and subscription operations to be separated using the `Query`, `Mutation` and `Subscription` methods of the root resolver. These special methods are optional and if defined return the resolver for each opeartion. For example, the following is a resolver corresponding to the schema definition above. Note that there is a field named `hello` in both the query and the mutation definitions:
+
+```go
+type RootResolver struct{}
+type QueryResolver struct{}
+type MutationResolver struct{}
+
+func(r *RootResolver) Query() *QueryResolver {
+  return &QueryResolver{}
+}
+
+func(r *RootResolver) Mutation() *MutationResolver {
+  return &MutationResolver{}
+}
+
+func (*QueryResolver) Hello() string {
+	return "Hello query!"
+}
+
+func (*MutationResolver) Hello() string {
+	return "Hello mutation!"
+}
+
+schema := graphql.MustParseSchema(sdl, &RootResolver{}, nil)
+...
+```
+
 ### Schema Options
 
 - `UseStringDescriptions()` enables the usage of double quoted and triple quoted. When this is not enabled, comments are parsed as descriptions instead.
