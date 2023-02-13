@@ -277,6 +277,31 @@ func TestHelloWorldStructFieldResolver(t *testing.T) {
 	})
 }
 
+type wrapDirective struct {
+	Prefix string
+	Suffix string
+}
+
+func (w *wrapDirective) Resolve(ctx context.Context, in interface{}, next directives.Resolver) (out interface{}, err error) {
+	out, err = next.Resolve(ctx, in)
+	if err != nil {
+		return out, err
+	}
+
+	// only alter output in case prefix or suffix are present
+	if w.Prefix == "" && w.Suffix == "" {
+		return out, err
+	}
+
+	// only modify string outputs
+	switch val := out.(type) {
+	case string:
+		return w.Prefix + val + w.Suffix, nil
+	default:
+		return nil, fmt.Errorf("expected string output, got %T", val)
+	}
+}
+
 func TestCustomDirective(t *testing.T) {
 	t.Parallel()
 
@@ -363,6 +388,60 @@ func TestCustomDirective(t *testing.T) {
 				}
 			`,
 		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @wrap(prefix: String!, suffix: String!) repeatable on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String! @wrap(prefix: "[", suffix: "]") @wrap(prefix: "{", suffix: "}")
+				}`,
+				&helloResolver{},
+				graphql.Directives(map[string]directives.ResolverVisitor{
+					"wrap": &wrapDirective{},
+				}),
+			),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "{[Hello world!]}"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @wrap(prefix: String!, suffix: String!) on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String! @wrap(prefix: "~*", suffix: "*~") @deprecated(reason: "Testing a custom directive together with @deprecated.")
+				}`,
+				&helloResolver{},
+				graphql.Directives(map[string]directives.ResolverVisitor{
+					"wrap": &wrapDirective{},
+				}),
+			),
+			Query: `
+				{
+					hello @skip(if: false)
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "~*Hello world!*~"
+				}
+			`,
+		},
 	})
 }
 
@@ -422,6 +501,62 @@ func TestCustomDirectiveStructFieldResolver(t *testing.T) {
 			ExpectedResult: `
 				{
 					"hello": "Directive (with arg 'hi') modified result: Hello world!"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @wrap(prefix: String!, suffix: String!) repeatable on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String! @wrap(prefix: "[", suffix: "]") @wrap(prefix: "{", suffix: "}")
+				}`,
+				&structFieldResolver{Hello: "Hello world!"},
+				graphql.Directives(map[string]directives.ResolverVisitor{
+					"wrap": &wrapDirective{},
+				}),
+				graphql.UseFieldResolvers(),
+			),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "{[Hello world!]}"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @wrap(prefix: String!, suffix: String!) on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String! @wrap(prefix: "~*", suffix: "*~") @deprecated(reason: "Testing a custom directive together with @deprecated.")
+				}`,
+				&structFieldResolver{Hello: "Hello world!"},
+				graphql.Directives(map[string]directives.ResolverVisitor{
+					"wrap": &wrapDirective{},
+				}),
+				graphql.UseFieldResolvers(),
+			),
+			Query: `
+				{
+					hello @include(if: true)
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "~*Hello world!*~"
 				}
 			`,
 		},

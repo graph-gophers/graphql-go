@@ -34,16 +34,16 @@ func (*authResolver) Greet(ctx context.Context, args struct{ Name string }) stri
 // ExampleDirectives demonstrates the use of the Directives schema option.
 func ExampleDirectives() {
 	s := `
-schema {
-query: Query
-}
+		schema {
+			query: Query
+		}
 
-directive @hasRole(role: String!) on FIELD_DEFINITION
+		directive @hasRole(role: String!) on FIELD_DEFINITION
 
-type Query {
-greet(name: String!): String! @hasRole(role: "admin")
-}
-`
+		type Query {
+			greet(name: String!): String! @hasRole(role: "admin")
+		}
+	`
 	opts := []graphql.SchemaOpt{
 		graphql.Directives(map[string]directives.ResolverVisitor{
 			"hasRole": &HasRoleDirective{},
@@ -52,10 +52,10 @@ greet(name: String!): String! @hasRole(role: "admin")
 	}
 	schema := graphql.MustParseSchema(s, &authResolver{}, opts...)
 	query := `
-query {
-greet(name: "GraphQL")
-}
-`
+		query {
+			greet(name: "GraphQL")
+		}
+	`
 	cases := []struct {
 		name string
 		ctx  context.Context
