@@ -3,7 +3,6 @@ package resolvable
 import (
 	"reflect"
 
-	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/introspection"
 	"github.com/graph-gophers/graphql-go/types"
 )
@@ -21,7 +20,7 @@ type Meta struct {
 
 func newMeta(s *types.Schema) *Meta {
 	var err error
-	b := newBuilder(s, map[string]directives.ResolverVisitor{})
+	b := newBuilder(s, map[string]interface{}{})
 
 	metaSchema := s.Types["__Schema"].(*types.ObjectTypeDefinition)
 	so, err := b.makeObjectExec(metaSchema.Name, metaSchema.Fields, nil, false, reflect.TypeOf(&introspection.Schema{}))

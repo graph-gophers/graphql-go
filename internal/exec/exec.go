@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"github.com/graph-gophers/graphql-go/internal/exec/selected"
@@ -65,6 +64,12 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *types.O
 	return out.Bytes(), r.Errs
 }
 
+type resolverFunc func(ctx context.Context, args interface{}) (output interface{}, err error)
+
+func (f resolverFunc) Resolve(ctx context.Context, args interface{}) (output interface{}, err error) {
+	return f(ctx, args)
+}
+
 type fieldToExec struct {
 	field    *selected.SchemaField
 	sels     []selected.Selection
@@ -86,7 +91,7 @@ func (f *fieldToExec) resolve(ctx context.Context) (output interface{}, err erro
 		innerResolver := currResolver
 
 		currResolver = func(ctx context.Context, args interface{}) (output interface{}, err error) {
-			return pd.Resolve(ctx, args, directives.ResolverFunc(innerResolver))
+			return pd.Resolve(ctx, args, resolverFunc(innerResolver))
 		}
 	}
 

@@ -51,7 +51,7 @@ type SchemaField struct {
 	Alias            string
 	Args             map[string]interface{}
 	PackedArgs       reflect.Value
-	PackedDirectives []directives.ResolverVisitor
+	PackedDirectives []directives.ResolverInterceptor
 	Sels             []Selection
 	Async            bool
 	FixedResult      reflect.Value
@@ -192,8 +192,8 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 	return
 }
 
-func packDirectives(fe *resolvable.Field, vars map[string]interface{}) ([]directives.ResolverVisitor, error) {
-	packed := make([]directives.ResolverVisitor, 0, len(fe.Directives))
+func packDirectives(fe *resolvable.Field, vars map[string]interface{}) ([]directives.ResolverInterceptor, error) {
+	packed := make([]directives.ResolverInterceptor, 0, len(fe.Directives))
 	for _, d := range fe.Directives {
 		dp, ok := fe.DirectivesPackers[d.Name.Name]
 		if !ok {
@@ -210,7 +210,7 @@ func packDirectives(fe *resolvable.Field, vars map[string]interface{}) ([]direct
 			return nil, err
 		}
 
-		v := p.Interface().(directives.ResolverVisitor)
+		v := p.Interface().(directives.ResolverInterceptor)
 
 		packed = append(packed, v)
 	}

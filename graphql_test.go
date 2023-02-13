@@ -54,6 +54,11 @@ type structFieldResolver struct {
 	Hello string
 }
 
+// customInvalidDirective lacks any valid directive functions.
+type customInvalidDirective struct {
+	CustomAttribute *string
+}
+
 type customDirectiveVisitor struct {
 	CustomAttribute *string
 }
@@ -318,7 +323,7 @@ func TestCustomDirective(t *testing.T) {
 					hello_html: String! @customDirective
 				}
 			`, &helloSnakeResolver1{},
-				graphql.Directives(map[string]directives.ResolverVisitor{
+				graphql.Directives(map[string]interface{}{
 					"customDirective": &customDirectiveVisitor{},
 				})),
 			Query: `
@@ -346,7 +351,7 @@ func TestCustomDirective(t *testing.T) {
 					say_hello(full_name: String!): String! @customDirective(customAttribute: "hi")
 				}
 			`, &helloSnakeResolver1{},
-				graphql.Directives(map[string]directives.ResolverVisitor{
+				graphql.Directives(map[string]interface{}{
 					"customDirective": &customDirectiveVisitor{},
 				})),
 			Query: `
@@ -374,7 +379,7 @@ func TestCustomDirective(t *testing.T) {
 					hello(full_name: String!): String! @cached(key: "notcheckedintest")
 				}
 			`, &cachedDirectiveResolver{t: t},
-				graphql.Directives(map[string]directives.ResolverVisitor{
+				graphql.Directives(map[string]interface{}{
 					"cached": &cachedDirectiveVisitor{},
 				})),
 			Query: `
@@ -400,7 +405,7 @@ func TestCustomDirective(t *testing.T) {
 					hello: String! @wrap(prefix: "[", suffix: "]") @wrap(prefix: "{", suffix: "}")
 				}`,
 				&helloResolver{},
-				graphql.Directives(map[string]directives.ResolverVisitor{
+				graphql.Directives(map[string]interface{}{
 					"wrap": &wrapDirective{},
 				}),
 			),
@@ -427,7 +432,7 @@ func TestCustomDirective(t *testing.T) {
 					hello: String! @wrap(prefix: "~*", suffix: "*~") @deprecated(reason: "Testing a custom directive together with @deprecated.")
 				}`,
 				&helloResolver{},
-				graphql.Directives(map[string]directives.ResolverVisitor{
+				graphql.Directives(map[string]interface{}{
 					"wrap": &wrapDirective{},
 				}),
 			),
@@ -449,7 +454,7 @@ func TestCustomDirectiveStructFieldResolver(t *testing.T) {
 	t.Parallel()
 
 	schemaOpt := []graphql.SchemaOpt{
-		graphql.Directives(map[string]directives.ResolverVisitor{
+		graphql.Directives(map[string]interface{}{
 			"customDirective": &customDirectiveVisitor{},
 		}),
 		graphql.UseFieldResolvers(),
@@ -516,7 +521,7 @@ func TestCustomDirectiveStructFieldResolver(t *testing.T) {
 					hello: String! @wrap(prefix: "[", suffix: "]") @wrap(prefix: "{", suffix: "}")
 				}`,
 				&structFieldResolver{Hello: "Hello world!"},
-				graphql.Directives(map[string]directives.ResolverVisitor{
+				graphql.Directives(map[string]interface{}{
 					"wrap": &wrapDirective{},
 				}),
 				graphql.UseFieldResolvers(),
@@ -544,7 +549,7 @@ func TestCustomDirectiveStructFieldResolver(t *testing.T) {
 					hello: String! @wrap(prefix: "~*", suffix: "*~") @deprecated(reason: "Testing a custom directive together with @deprecated.")
 				}`,
 				&structFieldResolver{Hello: "Hello world!"},
-				graphql.Directives(map[string]directives.ResolverVisitor{
+				graphql.Directives(map[string]interface{}{
 					"wrap": &wrapDirective{},
 				}),
 				graphql.UseFieldResolvers(),
@@ -561,6 +566,61 @@ func TestCustomDirectiveStructFieldResolver(t *testing.T) {
 			`,
 		},
 	})
+}
+
+func TestParseSchemaWithInvalidCustomDirectives(t *testing.T) {
+	t.Parallel()
+
+	type args struct {
+		Directives map[string]interface{}
+		Resolver   interface{}
+		Schema     string
+	}
+
+	type want struct {
+		Error string
+	}
+
+	testTable := map[string]struct {
+		Args args
+		Want want
+	}{
+		"Missing directive visitor function": {
+			Args: args{
+				Directives: map[string]interface{}{
+					"customDirective": &customInvalidDirective{},
+				},
+				Resolver: &helloSnakeResolver1{},
+				Schema: `
+					directive @customDirective on FIELD_DEFINITION
+	
+					schema {
+						query: Query
+					}
+	
+					type Query {
+						hello_html: String! @customDirective
+					}
+				`,
+			},
+			Want: want{Error: `directive "customDirective" (implemented by *graphql_test.customInvalidDirective) does not implement a valid directive visitor function`},
+		},
+	}
+
+	for name, tt := range testTable {
+		tt := tt
+
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := graphql.ParseSchema(tt.Args.Schema, tt.Args.Resolver, graphql.Directives(tt.Args.Directives))
+			if err == nil || err.Error() != tt.Want.Error {
+				t.Logf("got:  %v", err)
+				t.Logf("want: %s", tt.Want.Error)
+				t.Fail()
+			}
+		})
+	}
 }
 
 func TestHelloSnake(t *testing.T) {

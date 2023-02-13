@@ -92,7 +92,7 @@ $ curl 'http://localhost:8080/query' \
 5. Pay attention to the schmema options. Directive visitors are added as schema option:
     ```go
         opts := []graphql.SchemaOpt{
-            graphql.Directives(map[string]directives.DirectiveVisitor{
+            graphql.Directives(map[string]interface{}{
                 "hasRole": &authorization.HasRoleDirective{},
             }),
             // other options go here

@@ -45,7 +45,7 @@ func ExampleDirectives() {
 		}
 	`
 	opts := []graphql.SchemaOpt{
-		graphql.Directives(map[string]directives.ResolverVisitor{
+		graphql.Directives(map[string]interface{}{
 			"hasRole": &HasRoleDirective{},
 		}),
 		// other options go here

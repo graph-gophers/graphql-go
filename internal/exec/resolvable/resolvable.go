@@ -71,12 +71,20 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *types.Schema, resolver interface{}, directives map[string]directives.ResolverVisitor) (*Schema, error) {
+func ApplyResolver(s *types.Schema, resolver interface{}, registeredDirectives map[string]interface{}) (*Schema, error) {
 	if resolver == nil {
 		return &Schema{Meta: newMeta(s), Schema: *s}, nil
 	}
 
-	b := newBuilder(s, directives)
+	for name, d := range registeredDirectives {
+		if _, ok := d.(directives.ResolverInterceptor); ok {
+			continue
+		}
+
+		return nil, fmt.Errorf("directive %q (implemented by %T) does not implement a valid directive visitor function", name, d)
+	}
+
+	b := newBuilder(s, registeredDirectives)
 
 	var query, mutation, subscription Resolvable
 
@@ -156,7 +164,7 @@ func ApplyResolver(s *types.Schema, resolver interface{}, directives map[string]
 type execBuilder struct {
 	schema        *types.Schema
 	resMap        map[typePair]*resMapEntry
-	directives    map[string]directives.ResolverVisitor
+	directives    map[string]interface{}
 	packerBuilder *packer.Builder
 }
 
@@ -170,7 +178,7 @@ type resMapEntry struct {
 	targets []*Resolvable
 }
 
-func newBuilder(s *types.Schema, directives map[string]directives.ResolverVisitor) *execBuilder {
+func newBuilder(s *types.Schema, directives map[string]interface{}) *execBuilder {
 	return &execBuilder{
 		schema:        s,
 		resMap:        make(map[typePair]*resMapEntry),
@@ -428,6 +436,11 @@ func (b *execBuilder) makeFieldExec(typeName string, f *types.FieldDefinition, m
 		v, ok := b.directives[n]
 		if !ok {
 			return nil, fmt.Errorf("directive %q on field %q does not have a visitor registered with the schema", n, f.Name)
+		}
+
+		if _, ok := v.(directives.ResolverInterceptor); !ok {
+			// Directive doesn't apply at field resolution time, skip it
+			continue
 		}
 
 		r := reflect.TypeOf(v)

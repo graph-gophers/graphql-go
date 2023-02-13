@@ -187,7 +187,7 @@ func (b *Builder) MakeStructPacker(values []*types.InputValueDefinition, typ ref
 
 		sf, ok := structType.FieldByNameFunc(fx)
 		if !ok {
-			dv := reflect.TypeOf((*directives.ResolverVisitor)(nil)).Elem()
+			dv := reflect.TypeOf((*directives.ResolverInterceptor)(nil)).Elem()
 
 			// Check the original type here to compare using the pointer (if applicable)
 			if ok := typ.Implements(dv); ok {
