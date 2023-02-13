@@ -18,6 +18,10 @@ type HasRoleDirective struct {
 	Role string
 }
 
+func (h *HasRoleDirective) ImplementsDirective(name string) bool {
+	return "hasRole" == name
+}
+
 func (h *HasRoleDirective) Resolve(ctx context.Context, in interface{}, next directives.Resolver) (interface{}, error) {
 	if ctx.Value(RoleKey) != h.Role {
 		return nil, fmt.Errorf("access deinied, role %q required", h.Role)
@@ -45,9 +49,7 @@ func ExampleDirectives() {
 		}
 	`
 	opts := []graphql.SchemaOpt{
-		graphql.Directives(map[string]interface{}{
-			"hasRole": &HasRoleDirective{},
-		}),
+		graphql.Directives(&HasRoleDirective{}),
 		// other options go here
 	}
 	schema := graphql.MustParseSchema(s, &authResolver{}, opts...)

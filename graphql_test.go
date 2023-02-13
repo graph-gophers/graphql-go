@@ -59,8 +59,16 @@ type customInvalidDirective struct {
 	CustomAttribute *string
 }
 
+func (c customInvalidDirective) ImplementsDirective(name string) bool {
+	return "customDirective" == name
+}
+
 type customDirectiveVisitor struct {
 	CustomAttribute *string
+}
+
+func (v *customDirectiveVisitor) ImplementsDirective(name string) bool {
+	return "customDirective" == name
 }
 
 func (v *customDirectiveVisitor) Resolve(ctx context.Context, args interface{}, next directives.Resolver) (output interface{}, err error) {
@@ -77,6 +85,10 @@ func (v *customDirectiveVisitor) Resolve(ctx context.Context, args interface{}, 
 
 type cachedDirectiveVisitor struct {
 	Key string
+}
+
+func (v *cachedDirectiveVisitor) ImplementsDirective(name string) bool {
+	return "cached" == name
 }
 
 func (v *cachedDirectiveVisitor) Resolve(context.Context, interface{}, directives.Resolver) (output interface{}, err error) {
@@ -287,6 +299,10 @@ type wrapDirective struct {
 	Suffix string
 }
 
+func (w *wrapDirective) ImplementsDirective(name string) bool {
+	return "wrap" == name
+}
+
 func (w *wrapDirective) Resolve(ctx context.Context, in interface{}, next directives.Resolver) (out interface{}, err error) {
 	out, err = next.Resolve(ctx, in)
 	if err != nil {
@@ -323,9 +339,7 @@ func TestCustomDirective(t *testing.T) {
 					hello_html: String! @customDirective
 				}
 			`, &helloSnakeResolver1{},
-				graphql.Directives(map[string]interface{}{
-					"customDirective": &customDirectiveVisitor{},
-				})),
+				graphql.Directives(&customDirectiveVisitor{})),
 			Query: `
 				{
 					hello_html
@@ -351,9 +365,7 @@ func TestCustomDirective(t *testing.T) {
 					say_hello(full_name: String!): String! @customDirective(customAttribute: "hi")
 				}
 			`, &helloSnakeResolver1{},
-				graphql.Directives(map[string]interface{}{
-					"customDirective": &customDirectiveVisitor{},
-				})),
+				graphql.Directives(&customDirectiveVisitor{})),
 			Query: `
 				{
 					say_hello(full_name: "Johnny")
@@ -379,9 +391,7 @@ func TestCustomDirective(t *testing.T) {
 					hello(full_name: String!): String! @cached(key: "notcheckedintest")
 				}
 			`, &cachedDirectiveResolver{t: t},
-				graphql.Directives(map[string]interface{}{
-					"cached": &cachedDirectiveVisitor{},
-				})),
+				graphql.Directives(&cachedDirectiveVisitor{})),
 			Query: `
 				{
 					hello(full_name: "Full Name")
@@ -405,9 +415,7 @@ func TestCustomDirective(t *testing.T) {
 					hello: String! @wrap(prefix: "[", suffix: "]") @wrap(prefix: "{", suffix: "}")
 				}`,
 				&helloResolver{},
-				graphql.Directives(map[string]interface{}{
-					"wrap": &wrapDirective{},
-				}),
+				graphql.Directives(&wrapDirective{}),
 			),
 			Query: `
 				{
@@ -432,9 +440,7 @@ func TestCustomDirective(t *testing.T) {
 					hello: String! @wrap(prefix: "~*", suffix: "*~") @deprecated(reason: "Testing a custom directive together with @deprecated.")
 				}`,
 				&helloResolver{},
-				graphql.Directives(map[string]interface{}{
-					"wrap": &wrapDirective{},
-				}),
+				graphql.Directives(&wrapDirective{}),
 			),
 			Query: `
 				{
@@ -454,9 +460,7 @@ func TestCustomDirectiveStructFieldResolver(t *testing.T) {
 	t.Parallel()
 
 	schemaOpt := []graphql.SchemaOpt{
-		graphql.Directives(map[string]interface{}{
-			"customDirective": &customDirectiveVisitor{},
-		}),
+		graphql.Directives(&customDirectiveVisitor{}),
 		graphql.UseFieldResolvers(),
 	}
 
@@ -521,9 +525,7 @@ func TestCustomDirectiveStructFieldResolver(t *testing.T) {
 					hello: String! @wrap(prefix: "[", suffix: "]") @wrap(prefix: "{", suffix: "}")
 				}`,
 				&structFieldResolver{Hello: "Hello world!"},
-				graphql.Directives(map[string]interface{}{
-					"wrap": &wrapDirective{},
-				}),
+				graphql.Directives(&wrapDirective{}),
 				graphql.UseFieldResolvers(),
 			),
 			Query: `
@@ -549,9 +551,7 @@ func TestCustomDirectiveStructFieldResolver(t *testing.T) {
 					hello: String! @wrap(prefix: "~*", suffix: "*~") @deprecated(reason: "Testing a custom directive together with @deprecated.")
 				}`,
 				&structFieldResolver{Hello: "Hello world!"},
-				graphql.Directives(map[string]interface{}{
-					"wrap": &wrapDirective{},
-				}),
+				graphql.Directives(&wrapDirective{}),
 				graphql.UseFieldResolvers(),
 			),
 			Query: `
@@ -572,7 +572,7 @@ func TestParseSchemaWithInvalidCustomDirectives(t *testing.T) {
 	t.Parallel()
 
 	type args struct {
-		Directives map[string]interface{}
+		Directives []directives.Directive
 		Resolver   interface{}
 		Schema     string
 	}
@@ -585,12 +585,45 @@ func TestParseSchemaWithInvalidCustomDirectives(t *testing.T) {
 		Args args
 		Want want
 	}{
+		"Missing required directive": {
+			Args: args{
+				Resolver: &helloSnakeResolver1{},
+				Schema: `
+					directive @customDirective on FIELD_DEFINITION
+	
+					schema {
+						query: Query
+					}
+	
+					type Query {
+						hello_html: String! @customDirective
+					}
+				`,
+			},
+			Want: want{Error: `no visitors have been registered for directive "customDirective"`},
+		},
+		"Duplicate directive implementations": {
+			Args: args{
+				Directives: []directives.Directive{&customDirectiveVisitor{}, &customInvalidDirective{}},
+				Resolver:   &helloSnakeResolver1{},
+				Schema: `
+					directive @customDirective on FIELD_DEFINITION
+	
+					schema {
+						query: Query
+					}
+	
+					type Query {
+						hello_html: String! @customDirective
+					}
+				`,
+			},
+			Want: want{Error: `multiple implementations registered for directive "customDirective". Implementation types *graphql_test.customDirectiveVisitor and *graphql_test.customInvalidDirective`},
+		},
 		"Missing directive visitor function": {
 			Args: args{
-				Directives: map[string]interface{}{
-					"customDirective": &customInvalidDirective{},
-				},
-				Resolver: &helloSnakeResolver1{},
+				Directives: []directives.Directive{&customInvalidDirective{}},
+				Resolver:   &helloSnakeResolver1{},
 				Schema: `
 					directive @customDirective on FIELD_DEFINITION
 	
@@ -613,7 +646,7 @@ func TestParseSchemaWithInvalidCustomDirectives(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := graphql.ParseSchema(tt.Args.Schema, tt.Args.Resolver, graphql.Directives(tt.Args.Directives))
+			_, err := graphql.ParseSchema(tt.Args.Schema, tt.Args.Resolver, graphql.Directives(tt.Args.Directives...))
 			if err == nil || err.Error() != tt.Want.Error {
 				t.Logf("got:  %v", err)
 				t.Logf("want: %s", tt.Want.Error)

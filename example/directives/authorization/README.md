@@ -70,11 +70,15 @@ $ curl 'http://localhost:8080/query' \
     }
     ```
 
-4. Define a Go type which implements the ResolverVisitor interface:
+4. Define a Go type which implements the `directives.Directive` interface:
     ```go
     type HasRoleDirective struct{
         Role string
     }
+
+   func (h *HasRoleDirective) ImplementsDirective(name string) bool {
+       return "hasRole" == name
+   }
 
     func (h *HasRoleDirective) Resolve(ctx context.Context, args interface{}, next directives.Resolver) (output interface{}, err error) {
         u, ok := user.FromContext(ctx)
@@ -92,9 +96,10 @@ $ curl 'http://localhost:8080/query' \
 5. Pay attention to the schmema options. Directive visitors are added as schema option:
     ```go
         opts := []graphql.SchemaOpt{
-            graphql.Directives(map[string]interface{}{
-                "hasRole": &authorization.HasRoleDirective{},
-            }),
+            graphql.Directives(
+                &authorization.HasRoleDirective{},
+                // additional directives
+            ),
             // other options go here
         }
         schema := graphql.MustParseSchema(authorization.Schema, &authorization.Resolver{}, opts...)

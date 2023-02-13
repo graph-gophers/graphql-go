@@ -32,6 +32,10 @@ type HasRoleDirective struct {
 	Role string
 }
 
+func (h *HasRoleDirective) ImplementsDirective(name string) bool {
+	return "hasRole" == name
+}
+
 func (h *HasRoleDirective) Resolve(ctx context.Context, args interface{}, next directives.Resolver) (output interface{}, err error) {
 	u, ok := user.FromContext(ctx)
 	if !ok {

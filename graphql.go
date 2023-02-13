@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec"
@@ -31,7 +32,6 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		tracer:         noop.Tracer{},
 		logger:         &log.DefaultLogger{},
 		panicHandler:   &errors.DefaultPanicHandler{},
-		directives:     map[string]interface{}{},
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -75,7 +75,7 @@ type Schema struct {
 	schema *types.Schema
 	res    *resolvable.Schema
 
-	directives               map[string]interface{}
+	directives               []directives.Directive
 	maxQueryLength           int
 	maxDepth                 int
 	maxParallelism           int
@@ -184,9 +184,9 @@ func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
 
 // Directives defines the implementation for each directive.
 // Per the GraphQL specification, each Field Directive in the schema must have an implementation here.
-func Directives(directives map[string]interface{}) SchemaOpt {
+func Directives(ds ...directives.Directive) SchemaOpt {
 	return func(s *Schema) {
-		s.directives = directives
+		s.directives = ds
 	}
 }
 

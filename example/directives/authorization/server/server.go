@@ -13,9 +13,7 @@ import (
 
 func main() {
 	opts := []graphql.SchemaOpt{
-		graphql.Directives(map[string]interface{}{
-			"hasRole": &authorization.HasRoleDirective{},
-		}),
+		graphql.Directives(&authorization.HasRoleDirective{}),
 		// other options go here
 	}
 	schema := graphql.MustParseSchema(authorization.Schema, &authorization.Resolver{}, opts...)

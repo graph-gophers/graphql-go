@@ -71,20 +71,17 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *types.Schema, resolver interface{}, registeredDirectives map[string]interface{}) (*Schema, error) {
+func ApplyResolver(s *types.Schema, resolver interface{}, dirVisitors []directives.Directive) (*Schema, error) {
 	if resolver == nil {
 		return &Schema{Meta: newMeta(s), Schema: *s}, nil
 	}
 
-	for name, d := range registeredDirectives {
-		if _, ok := d.(directives.ResolverInterceptor); ok {
-			continue
-		}
-
-		return nil, fmt.Errorf("directive %q (implemented by %T) does not implement a valid directive visitor function", name, d)
+	ds, err := applyDirectives(s, dirVisitors)
+	if err != nil {
+		return nil, err
 	}
 
-	b := newBuilder(s, registeredDirectives)
+	b := newBuilder(s, ds)
 
 	var query, mutation, subscription Resolvable
 
@@ -161,10 +158,50 @@ func ApplyResolver(s *types.Schema, resolver interface{}, registeredDirectives m
 	}, nil
 }
 
+func applyDirectives(s *types.Schema, visitors []directives.Directive) (map[string]directives.Directive, error) {
+	byName := make(map[string]directives.Directive, len(s.Directives))
+
+	for name := range s.Directives {
+		for _, v := range visitors {
+			if !v.ImplementsDirective(name) {
+				continue
+			}
+
+			if existing, ok := byName[name]; ok {
+				return nil, fmt.Errorf("multiple implementations registered for directive %q. Implementation types %T and %T", name, existing, v)
+			}
+
+			byName[name] = v
+		}
+
+		if _, ok := byName[name]; !ok {
+			if name == "include" || name == "skip" || name == "deprecated" || name == "specifiedBy" {
+				// Special case directives, ignore
+				continue
+			}
+
+			return nil, fmt.Errorf("no visitors have been registered for directive %q", name)
+		}
+	}
+
+	// Validate that all the directive visitors are valid; each must implement *at least 1* of the optional functions
+	for name, v := range byName {
+		// At least 1 of the optional directive functions must be defined for each directive.
+		// For now this is the only valid directive function
+		if _, ok := v.(directives.ResolverInterceptor); ok {
+			continue
+		}
+
+		return nil, fmt.Errorf("directive %q (implemented by %T) does not implement a valid directive visitor function", name, v)
+	}
+
+	return byName, nil
+}
+
 type execBuilder struct {
 	schema        *types.Schema
 	resMap        map[typePair]*resMapEntry
-	directives    map[string]interface{}
+	directives    map[string]directives.Directive
 	packerBuilder *packer.Builder
 }
 
@@ -178,7 +215,7 @@ type resMapEntry struct {
 	targets []*Resolvable
 }
 
-func newBuilder(s *types.Schema, directives map[string]interface{}) *execBuilder {
+func newBuilder(s *types.Schema, directives map[string]directives.Directive) *execBuilder {
 	return &execBuilder{
 		schema:        s,
 		resMap:        make(map[typePair]*resMapEntry),
