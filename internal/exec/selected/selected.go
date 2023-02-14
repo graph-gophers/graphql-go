@@ -14,12 +14,12 @@ import (
 )
 
 type Request struct {
-	Schema               *types.Schema
-	Doc                  *types.ExecutableDefinition
-	Vars                 map[string]interface{}
-	Mu                   sync.Mutex
-	Errs                 []*errors.QueryError
-	DisableIntrospection bool
+	Schema             *types.Schema
+	Doc                *types.ExecutableDefinition
+	Vars               map[string]interface{}
+	Mu                 sync.Mutex
+	Errs               []*errors.QueryError
+	AllowIntrospection bool
 }
 
 func (r *Request) AddError(err *errors.QueryError) {
@@ -80,7 +80,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 
 			switch field.Name.Name {
 			case "__typename":
-				// __typename is available even though r.DisableIntrospection == true
+				// __typename is available even though r.AllowIntrospection == false
 				// because it is necessary when using union types and interfaces: https://graphql.org/learn/schema/#union-types
 				flattenedSels = append(flattenedSels, &TypenameField{
 					Object: *e,
@@ -88,7 +88,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 				})
 
 			case "__schema":
-				if !r.DisableIntrospection {
+				if r.AllowIntrospection {
 					flattenedSels = append(flattenedSels, &SchemaField{
 						Field:       s.Meta.FieldSchema,
 						Alias:       field.Alias.Name,
@@ -99,7 +99,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 				}
 
 			case "__type":
-				if !r.DisableIntrospection {
+				if r.AllowIntrospection {
 					p := packer.ValuePacker{ValueType: reflect.TypeOf("")}
 					v, err := p.Pack(field.Arguments.MustGet("name").Deserialize(r.Vars))
 					if err != nil {
@@ -123,7 +123,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 				}
 
 			case "_service":
-				if !r.DisableIntrospection {
+				if r.AllowIntrospection {
 					flattenedSels = append(flattenedSels, &SchemaField{
 						Field:       s.Meta.FieldService,
 						Alias:       field.Alias.Name,
