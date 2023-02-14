@@ -18,8 +18,8 @@ type HasRoleDirective struct {
 	Role string
 }
 
-func (h *HasRoleDirective) ImplementsDirective(name string) bool {
-	return "hasRole" == name
+func (h *HasRoleDirective) ImplementsDirective() string {
+	return "hasRole"
 }
 
 func (h *HasRoleDirective) Resolve(ctx context.Context, in interface{}, next directives.Resolver) (interface{}, error) {

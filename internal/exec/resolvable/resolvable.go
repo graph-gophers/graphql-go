@@ -161,19 +161,23 @@ func ApplyResolver(s *types.Schema, resolver interface{}, dirVisitors []directiv
 func applyDirectives(s *types.Schema, visitors []directives.Directive) (map[string]directives.Directive, error) {
 	byName := make(map[string]directives.Directive, len(s.Directives))
 
-	for name := range s.Directives {
-		for _, v := range visitors {
-			if !v.ImplementsDirective(name) {
-				continue
-			}
+	for _, v := range visitors {
+		name := v.ImplementsDirective()
 
-			if existing, ok := byName[name]; ok {
-				return nil, fmt.Errorf("multiple implementations registered for directive %q. Implementation types %T and %T", name, existing, v)
-			}
-
-			byName[name] = v
+		if existing, ok := byName[name]; ok {
+			return nil, fmt.Errorf("multiple implementations registered for directive %q. Implementation types %T and %T", name, existing, v)
 		}
 
+		// At least 1 of the optional directive functions must be defined for each directive.
+		// For now this is the only valid directive function
+		if _, ok := v.(directives.ResolverInterceptor); !ok {
+			return nil, fmt.Errorf("directive %q (implemented by %T) does not implement a valid directive visitor function", name, v)
+		}
+
+		byName[name] = v
+	}
+
+	for name := range s.Directives {
 		if _, ok := byName[name]; !ok {
 			if name == "include" || name == "skip" || name == "deprecated" || name == "specifiedBy" {
 				// Special case directives, ignore
@@ -182,17 +186,6 @@ func applyDirectives(s *types.Schema, visitors []directives.Directive) (map[stri
 
 			return nil, fmt.Errorf("no visitors have been registered for directive %q", name)
 		}
-	}
-
-	// Validate that all the directive visitors are valid; each must implement *at least 1* of the optional functions
-	for name, v := range byName {
-		// At least 1 of the optional directive functions must be defined for each directive.
-		// For now this is the only valid directive function
-		if _, ok := v.(directives.ResolverInterceptor); ok {
-			continue
-		}
-
-		return nil, fmt.Errorf("directive %q (implemented by %T) does not implement a valid directive visitor function", name, v)
 	}
 
 	return byName, nil

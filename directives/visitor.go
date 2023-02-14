@@ -10,7 +10,7 @@ import (
 //
 // See the graphql.Directives() Schema Option.
 type Directive interface {
-	ImplementsDirective(name string) bool
+	ImplementsDirective() string
 }
 
 // Resolver for a field definition during execution of a request.

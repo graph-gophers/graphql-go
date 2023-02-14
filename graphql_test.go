@@ -59,16 +59,16 @@ type customInvalidDirective struct {
 	CustomAttribute *string
 }
 
-func (c customInvalidDirective) ImplementsDirective(name string) bool {
-	return "customDirective" == name
+func (c customInvalidDirective) ImplementsDirective() string {
+	return "customDirective"
 }
 
 type customDirectiveVisitor struct {
 	CustomAttribute *string
 }
 
-func (v *customDirectiveVisitor) ImplementsDirective(name string) bool {
-	return "customDirective" == name
+func (v *customDirectiveVisitor) ImplementsDirective() string {
+	return "customDirective"
 }
 
 func (v *customDirectiveVisitor) Resolve(ctx context.Context, args interface{}, next directives.Resolver) (output interface{}, err error) {
@@ -87,8 +87,8 @@ type cachedDirectiveVisitor struct {
 	Key string
 }
 
-func (v *cachedDirectiveVisitor) ImplementsDirective(name string) bool {
-	return "cached" == name
+func (v *cachedDirectiveVisitor) ImplementsDirective() string {
+	return "cached"
 }
 
 func (v *cachedDirectiveVisitor) Resolve(context.Context, interface{}, directives.Resolver) (output interface{}, err error) {
@@ -299,8 +299,8 @@ type wrapDirective struct {
 	Suffix string
 }
 
-func (w *wrapDirective) ImplementsDirective(name string) bool {
-	return "wrap" == name
+func (w *wrapDirective) ImplementsDirective() string {
+	return "wrap"
 }
 
 func (w *wrapDirective) Resolve(ctx context.Context, in interface{}, next directives.Resolver) (out interface{}, err error) {
