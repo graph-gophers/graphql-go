@@ -565,6 +565,34 @@ func TestCustomDirectiveStructFieldResolver(t *testing.T) {
 				}
 			`,
 		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @customDirective on FIELD_DEFINITION | INPUT_FIELD_DEFINITION
+				directive @upper on ARGUMENT_DEFINITION | SCALAR | ENUM | ENUM_VALUE
+				directive @join on OBJECT | INTERFACE | UNION 
+				directive @polite on FIELD | FRAGMENT_SPREAD
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					sayHello(fullName: String! @upper): String! @customDirective
+				}`,
+				&helloSnakeResolver1{},
+				graphql.Directives(&customDirectiveVisitor{}),
+			),
+			Query: `
+				{
+					sayHello(fullName: "friend") @polite
+				}
+			`,
+			ExpectedResult: `
+				{
+					"sayHello": "Directive modified result: Hello friend!"
+				}
+			`,
+		},
 	})
 }
 
