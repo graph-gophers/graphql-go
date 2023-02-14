@@ -75,6 +75,7 @@ type Schema struct {
 	schema *types.Schema
 	res    *resolvable.Schema
 
+	allowIntrospection       func(ctx context.Context) bool
 	maxQueryLength           int
 	maxDepth                 int
 	maxParallelism           int
@@ -83,7 +84,6 @@ type Schema struct {
 	logger                   log.Logger
 	panicHandler             errors.PanicHandler
 	useStringDescriptions    bool
-	disableIntrospection     bool
 	subscribeResolverTimeout time.Duration
 	visitors                 map[string]directives.Visitor
 }
@@ -166,10 +166,32 @@ func PanicHandler(panicHandler errors.PanicHandler) SchemaOpt {
 	}
 }
 
-// DisableIntrospection disables introspection queries.
+// RestrictIntrospection accepts a filter func. If this function returns false the introspection is disabled, otherwise it is enabled.
+// If this option is not provided the introspection is enabled by default. This option is useful for allowing introspection only to admin users, for example:
+//
+//	filter := func(ctx context.Context) bool {
+//		u, ok := user.FromContext(ctx)
+//		return ok && u.IsAdmin()
+//	}
+//
+// Do not use it together with [DisableIntrospection], otherwise the option added last takes precedence.
+func RestrictIntrospection(fn func(ctx context.Context) bool) SchemaOpt {
+	return func(s *Schema) {
+		s.allowIntrospection = fn
+	}
+}
+
+// DisableIntrospection disables introspection queries. This function is left for backwards compatibility reasons and is just a shorthand for:
+//
+//	filter := func(context.Context) bool {
+//	   return false
+//	}
+//	graphql.RestrictIntrospection(filter)
+//
+// Deprecated: use [RestrictIntrospection] filter instead. Do not use it together with [RestrictIntrospection], otherwise the option added last takes precedence.
 func DisableIntrospection() SchemaOpt {
 	return func(s *Schema) {
-		s.disableIntrospection = true
+		s.allowIntrospection = func(context.Context) bool { return false }
 	}
 }
 
@@ -276,10 +298,10 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 
 	r := &exec.Request{
 		Request: selected.Request{
-			Doc:                  doc,
-			Vars:                 variables,
-			Schema:               s.schema,
-			DisableIntrospection: s.disableIntrospection,
+			Doc:                doc,
+			Vars:               variables,
+			Schema:             s.schema,
+			AllowIntrospection: s.allowIntrospection == nil || s.allowIntrospection(ctx), // allow introspection by default, i.e. when allowIntrospection is nil
 		},
 		Limiter:      make(chan struct{}, s.maxParallelism),
 		Tracer:       s.tracer,
