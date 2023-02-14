@@ -3,6 +3,7 @@ package graphql_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/graph-gophers/graphql-go"
@@ -150,5 +151,79 @@ func ExampleMaxQueryLength() {
 	//       "message": "query length 53 exceeds the maximum allowed query length of 50 bytes"
 	//     }
 	//   ]
+	// }
+}
+
+func ExampleRestrictIntrospection() {
+	allowKey := struct{}{}
+	// only allow introspection if the function below returns true
+	filter := func(ctx context.Context) bool {
+		allow, found := ctx.Value(allowKey).(bool)
+		return found && allow
+	}
+	schema := graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.RestrictIntrospection(filter))
+
+	query := `{
+		__type(name: "Episode") {
+			enumValues {
+				name
+			}
+		}
+	}`
+
+	cases := []struct {
+		name string
+		ctx  context.Context
+	}{
+		{
+			name: "Empty context",
+			ctx:  context.Background(),
+		},
+		{
+			name: "Introspection forbidden",
+			ctx:  context.WithValue(context.Background(), allowKey, false),
+		},
+		{
+			name: "Introspection allowed",
+			ctx:  context.WithValue(context.Background(), allowKey, true),
+		},
+	}
+	for _, c := range cases {
+		fmt.Println(c.name, "result:")
+		res := schema.Exec(c.ctx, query, "", nil)
+
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		err := enc.Encode(res)
+		if err != nil {
+			panic(err)
+		}
+	}
+	// output:
+	// Empty context result:
+	// {
+	//   "data": {}
+	// }
+	// Introspection forbidden result:
+	// {
+	//   "data": {}
+	// }
+	// Introspection allowed result:
+	// {
+	//   "data": {
+	//     "__type": {
+	//       "enumValues": [
+	//         {
+	//           "name": "NEWHOPE"
+	//         },
+	//         {
+	//           "name": "EMPIRE"
+	//         },
+	//         {
+	//           "name": "JEDI"
+	//         }
+	//       ]
+	//     }
+	//   }
 	// }
 }
