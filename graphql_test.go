@@ -16,7 +16,6 @@ import (
 	"github.com/graph-gophers/graphql-go/gqltesting"
 	"github.com/graph-gophers/graphql-go/introspection"
 	"github.com/graph-gophers/graphql-go/trace/tracer"
-	"github.com/graph-gophers/graphql-go/types"
 )
 
 type helloWorldResolver1 struct{}
@@ -55,38 +54,46 @@ type structFieldResolver struct {
 	Hello string
 }
 
+// customInvalidDirective lacks any valid directive functions.
+type customInvalidDirective struct {
+	CustomAttribute *string
+}
+
+func (c customInvalidDirective) ImplementsDirective() string {
+	return "customDirective"
+}
+
 type customDirectiveVisitor struct {
-	beforeWasCalled bool
+	CustomAttribute *string
 }
 
-func (v *customDirectiveVisitor) Before(ctx context.Context, directive *types.Directive, input interface{}) (bool, error) {
-	v.beforeWasCalled = true
-	return false, nil
+func (v *customDirectiveVisitor) ImplementsDirective() string {
+	return "customDirective"
 }
 
-func (v *customDirectiveVisitor) After(ctx context.Context, directive *types.Directive, output interface{}) (interface{}, error) {
-	if v.beforeWasCalled == false {
-		return nil, errors.New("Before directive visitor method wasn't called.")
+func (v *customDirectiveVisitor) Resolve(ctx context.Context, args interface{}, next directives.Resolver) (output interface{}, err error) {
+	output, err = next.Resolve(ctx, args)
+	if err != nil {
+		return output, err
 	}
 
-	if value, ok := directive.Arguments.Get("customAttribute"); ok {
-		return fmt.Sprintf("Directive '%s' (with arg '%s') modified result: %s", directive.Name.Name, value.String(), output.(string)), nil
+	if v.CustomAttribute != nil {
+		return fmt.Sprintf("Directive (with arg '%s') modified result: %s", *v.CustomAttribute, output.(string)), nil
 	}
-	return fmt.Sprintf("Directive '%s' modified result: %s", directive.Name.Name, output.(string)), nil
+	return fmt.Sprintf("Directive modified result: %s", output.(string)), nil
 }
 
 type cachedDirectiveVisitor struct {
-	cachedValue interface{}
+	Key string
 }
 
-func (v *cachedDirectiveVisitor) Before(ctx context.Context, directive *types.Directive, input interface{}) (bool, error) {
-	s := "valueFromCache"
-	v.cachedValue = s
-	return true, nil
+func (v *cachedDirectiveVisitor) ImplementsDirective() string {
+	return "cached"
 }
 
-func (v *cachedDirectiveVisitor) After(ctx context.Context, directive *types.Directive, output interface{}) (interface{}, error) {
-	return v.cachedValue, nil
+func (v *cachedDirectiveVisitor) Resolve(context.Context, interface{}, directives.Resolver) (output interface{}, err error) {
+	// Bypasses resolver, returns a "cached" value directly
+	return "valueFromCache", nil
 }
 
 type cachedDirectiveResolver struct {
@@ -287,6 +294,35 @@ func TestHelloWorldStructFieldResolver(t *testing.T) {
 	})
 }
 
+type wrapDirective struct {
+	Prefix string
+	Suffix string
+}
+
+func (w *wrapDirective) ImplementsDirective() string {
+	return "wrap"
+}
+
+func (w *wrapDirective) Resolve(ctx context.Context, in interface{}, next directives.Resolver) (out interface{}, err error) {
+	out, err = next.Resolve(ctx, in)
+	if err != nil {
+		return out, err
+	}
+
+	// only alter output in case prefix or suffix are present
+	if w.Prefix == "" && w.Suffix == "" {
+		return out, err
+	}
+
+	// only modify string outputs
+	switch val := out.(type) {
+	case string:
+		return w.Prefix + val + w.Suffix, nil
+	default:
+		return nil, fmt.Errorf("expected string output, got %T", val)
+	}
+}
+
 func TestCustomDirective(t *testing.T) {
 	t.Parallel()
 
@@ -303,9 +339,7 @@ func TestCustomDirective(t *testing.T) {
 					hello_html: String! @customDirective
 				}
 			`, &helloSnakeResolver1{},
-				graphql.DirectiveVisitors(map[string]directives.Visitor{
-					"customDirective": &customDirectiveVisitor{},
-				})),
+				graphql.Directives(&customDirectiveVisitor{})),
 			Query: `
 				{
 					hello_html
@@ -313,14 +347,14 @@ func TestCustomDirective(t *testing.T) {
 			`,
 			ExpectedResult: `
 				{
-					"hello_html": "Directive 'customDirective' modified result: Hello snake!"
+					"hello_html": "Directive modified result: Hello snake!"
 				}
 			`,
 		},
 		{
 			Schema: graphql.MustParseSchema(`
 				directive @customDirective(
-					customAttribute: String!
+					customAttribute: String
 			    ) on FIELD_DEFINITION
 
 				schema {
@@ -328,12 +362,10 @@ func TestCustomDirective(t *testing.T) {
 				}
 
 				type Query {
-					say_hello(full_name: String!): String! @customDirective(customAttribute: hi)
+					say_hello(full_name: String!): String! @customDirective(customAttribute: "hi")
 				}
 			`, &helloSnakeResolver1{},
-				graphql.DirectiveVisitors(map[string]directives.Visitor{
-					"customDirective": &customDirectiveVisitor{},
-				})),
+				graphql.Directives(&customDirectiveVisitor{})),
 			Query: `
 				{
 					say_hello(full_name: "Johnny")
@@ -341,7 +373,7 @@ func TestCustomDirective(t *testing.T) {
 			`,
 			ExpectedResult: `
 				{
-					"say_hello": "Directive 'customDirective' (with arg 'hi') modified result: Hello Johnny!"
+					"say_hello": "Directive (with arg 'hi') modified result: Hello Johnny!"
 				}
 			`,
 		},
@@ -359,9 +391,7 @@ func TestCustomDirective(t *testing.T) {
 					hello(full_name: String!): String! @cached(key: "notcheckedintest")
 				}
 			`, &cachedDirectiveResolver{t: t},
-				graphql.DirectiveVisitors(map[string]directives.Visitor{
-					"cached": &cachedDirectiveVisitor{},
-				})),
+				graphql.Directives(&cachedDirectiveVisitor{})),
 			Query: `
 				{
 					hello(full_name: "Full Name")
@@ -373,6 +403,56 @@ func TestCustomDirective(t *testing.T) {
 				}
 			`,
 		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @wrap(prefix: String!, suffix: String!) repeatable on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String! @wrap(prefix: "[", suffix: "]") @wrap(prefix: "{", suffix: "}")
+				}`,
+				&helloResolver{},
+				graphql.Directives(&wrapDirective{}),
+			),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "{[Hello world!]}"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @wrap(prefix: String!, suffix: String!) on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String! @wrap(prefix: "~*", suffix: "*~") @deprecated(reason: "Testing a custom directive together with @deprecated.")
+				}`,
+				&helloResolver{},
+				graphql.Directives(&wrapDirective{}),
+			),
+			Query: `
+				{
+					hello @skip(if: false)
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "~*Hello world!*~"
+				}
+			`,
+		},
 	})
 }
 
@@ -380,9 +460,7 @@ func TestCustomDirectiveStructFieldResolver(t *testing.T) {
 	t.Parallel()
 
 	schemaOpt := []graphql.SchemaOpt{
-		graphql.DirectiveVisitors(map[string]directives.Visitor{
-			"customDirective": &customDirectiveVisitor{},
-		}),
+		graphql.Directives(&customDirectiveVisitor{}),
 		graphql.UseFieldResolvers(),
 	}
 
@@ -406,14 +484,14 @@ func TestCustomDirectiveStructFieldResolver(t *testing.T) {
 			`,
 			ExpectedResult: `
 				{
-					"hello": "Directive 'customDirective' modified result: Hello world!"
+					"hello": "Directive modified result: Hello world!"
 				}
 			`,
 		},
 		{
 			Schema: graphql.MustParseSchema(`
 				directive @customDirective(
-					customAttribute: String!
+					customAttribute: String
 			    ) on FIELD_DEFINITION
 
 				schema {
@@ -421,7 +499,7 @@ func TestCustomDirectiveStructFieldResolver(t *testing.T) {
 				}
 
 				type Query {
-					hello: String! @customDirective(customAttribute: hi)
+					hello: String! @customDirective(customAttribute: "hi")
 				}
 			`, &structFieldResolver{Hello: "Hello world!"}, schemaOpt...),
 			Query: `
@@ -431,11 +509,179 @@ func TestCustomDirectiveStructFieldResolver(t *testing.T) {
 			`,
 			ExpectedResult: `
 				{
-					"hello": "Directive 'customDirective' (with arg 'hi') modified result: Hello world!"
+					"hello": "Directive (with arg 'hi') modified result: Hello world!"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @wrap(prefix: String!, suffix: String!) repeatable on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String! @wrap(prefix: "[", suffix: "]") @wrap(prefix: "{", suffix: "}")
+				}`,
+				&structFieldResolver{Hello: "Hello world!"},
+				graphql.Directives(&wrapDirective{}),
+				graphql.UseFieldResolvers(),
+			),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "{[Hello world!]}"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @wrap(prefix: String!, suffix: String!) on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String! @wrap(prefix: "~*", suffix: "*~") @deprecated(reason: "Testing a custom directive together with @deprecated.")
+				}`,
+				&structFieldResolver{Hello: "Hello world!"},
+				graphql.Directives(&wrapDirective{}),
+				graphql.UseFieldResolvers(),
+			),
+			Query: `
+				{
+					hello @include(if: true)
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "~*Hello world!*~"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @customDirective on FIELD_DEFINITION | INPUT_FIELD_DEFINITION
+				directive @upper on ARGUMENT_DEFINITION | SCALAR | ENUM | ENUM_VALUE
+				directive @join on OBJECT | INTERFACE | UNION 
+				directive @polite on FIELD | FRAGMENT_SPREAD
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					sayHello(fullName: String! @upper): String! @customDirective
+				}`,
+				&helloSnakeResolver1{},
+				graphql.Directives(&customDirectiveVisitor{}),
+			),
+			Query: `
+				{
+					sayHello(fullName: "friend") @polite
+				}
+			`,
+			ExpectedResult: `
+				{
+					"sayHello": "Directive modified result: Hello friend!"
 				}
 			`,
 		},
 	})
+}
+
+func TestParseSchemaWithInvalidCustomDirectives(t *testing.T) {
+	t.Parallel()
+
+	type args struct {
+		Directives []directives.Directive
+		Resolver   interface{}
+		Schema     string
+	}
+
+	type want struct {
+		Error string
+	}
+
+	testTable := map[string]struct {
+		Args args
+		Want want
+	}{
+		"Missing required directive": {
+			Args: args{
+				Resolver: &helloSnakeResolver1{},
+				Schema: `
+					directive @customDirective on FIELD_DEFINITION
+	
+					schema {
+						query: Query
+					}
+	
+					type Query {
+						hello_html: String! @customDirective
+					}
+				`,
+			},
+			Want: want{Error: `no visitors have been registered for directive "customDirective"`},
+		},
+		"Duplicate directive implementations": {
+			Args: args{
+				Directives: []directives.Directive{&customDirectiveVisitor{}, &customInvalidDirective{}},
+				Resolver:   &helloSnakeResolver1{},
+				Schema: `
+					directive @customDirective on FIELD_DEFINITION
+	
+					schema {
+						query: Query
+					}
+	
+					type Query {
+						hello_html: String! @customDirective
+					}
+				`,
+			},
+			Want: want{Error: `multiple implementations registered for directive "customDirective". Implementation types *graphql_test.customDirectiveVisitor and *graphql_test.customInvalidDirective`},
+		},
+		"Missing directive visitor function": {
+			Args: args{
+				Directives: []directives.Directive{&customInvalidDirective{}},
+				Resolver:   &helloSnakeResolver1{},
+				Schema: `
+					directive @customDirective on FIELD_DEFINITION
+	
+					schema {
+						query: Query
+					}
+	
+					type Query {
+						hello_html: String! @customDirective
+					}
+				`,
+			},
+			Want: want{Error: `directive "customDirective" (implemented by *graphql_test.customInvalidDirective) does not implement a valid directive visitor function`},
+		},
+	}
+
+	for name, tt := range testTable {
+		tt := tt
+
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := graphql.ParseSchema(tt.Args.Schema, tt.Args.Resolver, graphql.Directives(tt.Args.Directives...))
+			if err == nil || err.Error() != tt.Want.Error {
+				t.Logf("got:  %v", err)
+				t.Logf("want: %s", tt.Want.Error)
+				t.Fail()
+			}
+		})
+	}
 }
 
 func TestHelloSnake(t *testing.T) {

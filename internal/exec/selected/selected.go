@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
@@ -47,12 +48,13 @@ type Selection interface {
 
 type SchemaField struct {
 	resolvable.Field
-	Alias       string
-	Args        map[string]interface{}
-	PackedArgs  reflect.Value
-	Sels        []Selection
-	Async       bool
-	FixedResult reflect.Value
+	Alias            string
+	Args             map[string]interface{}
+	PackedArgs       reflect.Value
+	PackedDirectives []directives.ResolverInterceptor
+	Sels             []Selection
+	Async            bool
+	FixedResult      reflect.Value
 }
 
 type TypeAssertion struct {
@@ -151,14 +153,21 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 					}
 				}
 
+				packedDirectives, err := packDirectives(fe, r.Vars)
+				if err != nil {
+					r.AddError(errors.Errorf("%s", err))
+					return
+				}
+
 				fieldSels := applyField(r, s, fe.ValueExec, field.SelectionSet)
 				flattenedSels = append(flattenedSels, &SchemaField{
-					Field:      *fe,
-					Alias:      field.Alias.Name,
-					Args:       args,
-					PackedArgs: packedArgs,
-					Sels:       fieldSels,
-					Async:      fe.HasContext || fe.ArgsPacker != nil || fe.HasError || HasAsyncSel(fieldSels),
+					Field:            *fe,
+					Alias:            field.Alias.Name,
+					Args:             args,
+					PackedArgs:       packedArgs,
+					PackedDirectives: packedDirectives,
+					Sels:             fieldSels,
+					Async:            fe.HasContext || fe.ArgsPacker != nil || fe.HasError || HasAsyncSel(fieldSels),
 				})
 			}
 
@@ -181,6 +190,32 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 		}
 	}
 	return
+}
+
+func packDirectives(fe *resolvable.Field, vars map[string]interface{}) ([]directives.ResolverInterceptor, error) {
+	packed := make([]directives.ResolverInterceptor, 0, len(fe.Directives))
+	for _, d := range fe.Directives {
+		dp, ok := fe.DirectivesPackers[d.Name.Name]
+		if !ok {
+			continue // skip directives without packers
+		}
+
+		args := make(map[string]interface{})
+		for _, arg := range d.Arguments {
+			args[arg.Name.Name] = arg.Value.Deserialize(vars)
+		}
+
+		p, err := dp.Pack(args)
+		if err != nil {
+			return nil, err
+		}
+
+		v := p.Interface().(directives.ResolverInterceptor)
+
+		packed = append(packed, v)
+	}
+
+	return packed, nil
 }
 
 func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag *types.Fragment) []Selection {

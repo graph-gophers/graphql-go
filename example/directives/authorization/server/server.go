@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/graph-gophers/graphql-go"
-	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/example/directives/authorization"
 	"github.com/graph-gophers/graphql-go/example/directives/authorization/user"
 	"github.com/graph-gophers/graphql-go/relay"
@@ -14,9 +13,7 @@ import (
 
 func main() {
 	opts := []graphql.SchemaOpt{
-		graphql.DirectiveVisitors(map[string]directives.Visitor{
-			"hasRole": &authorization.HasRoleDirective{},
-		}),
+		graphql.Directives(&authorization.HasRoleDirective{}),
 		// other options go here
 	}
 	schema := graphql.MustParseSchema(authorization.Schema, &authorization.Resolver{}, opts...)

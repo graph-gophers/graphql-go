@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"github.com/graph-gophers/graphql-go/internal/exec/selected"
@@ -26,7 +25,6 @@ type Request struct {
 	Logger                   log.Logger
 	PanicHandler             errors.PanicHandler
 	SubscribeResolverTimeout time.Duration
-	Visitors                 map[string]directives.Visitor
 }
 
 func (r *Request) handlePanic(ctx context.Context) {
@@ -66,6 +64,12 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *types.O
 	return out.Bytes(), r.Errs
 }
 
+type resolverFunc func(ctx context.Context, args interface{}) (output interface{}, err error)
+
+func (f resolverFunc) Resolve(ctx context.Context, args interface{}) (output interface{}, err error) {
+	return f(ctx, args)
+}
+
 type fieldToExec struct {
 	field    *selected.SchemaField
 	sels     []selected.Selection
@@ -73,53 +77,25 @@ type fieldToExec struct {
 	out      *bytes.Buffer
 }
 
-// TODO: for now we need the Request due to the directives being declared there; we shouldn't need it once that is changed
-func (f *fieldToExec) resolve(ctx context.Context, r *Request) (output interface{}, err error) {
-	var skipResolver bool
+func (f *fieldToExec) resolve(ctx context.Context) (output interface{}, err error) {
 	var args interface{}
 
 	if f.field.ArgsPacker != nil {
 		args = f.field.PackedArgs.Interface()
 	}
 
-	// Before hook directive visitor
-	if len(f.field.Directives) > 0 {
-		for _, directive := range f.field.Directives {
-			if visitor, ok := r.Visitors[directive.Name.Name]; ok {
-				skipResolver, err = visitor.Before(ctx, directive, args)
-				if err != nil {
-					return nil, err
-				}
-			}
+	currResolver := f.resolveField
+
+	for _, pd := range f.field.PackedDirectives {
+		pd := pd // Needed to avoid passing only the last directive, since we're closing over this loop var pointer
+		innerResolver := currResolver
+
+		currResolver = func(ctx context.Context, args interface{}) (output interface{}, err error) {
+			return pd.Resolve(ctx, args, resolverFunc(innerResolver))
 		}
 	}
 
-	// Call resolver method unless a Before visitor tells us not to
-	if !skipResolver {
-		output, err = f.resolveField(ctx, args)
-	}
-
-	// After hook directive visitor (when no error is returned from resolver)
-	if !f.field.HasError && len(f.field.Directives) > 0 {
-		var modified interface{}
-		for _, directive := range f.field.Directives {
-			if visitor, ok := r.Visitors[directive.Name.Name]; ok {
-				if !skipResolver {
-					modified, err = visitor.After(ctx, directive, output)
-				} else {
-					modified, err = visitor.After(ctx, directive, nil)
-				}
-
-				if err != nil {
-					return nil, err
-				}
-
-				output = modified
-			}
-		}
-	}
-
-	return output, err
+	return currResolver(ctx, args)
 }
 
 func (f *fieldToExec) resolveField(ctx context.Context, args interface{}) (output interface{}, err error) {
@@ -295,7 +271,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			return errors.Errorf("%s", err) // don't execute any more resolvers if context got cancelled
 		}
 
-		res, resolverErr := f.resolve(ctx, r)
+		res, resolverErr := f.resolve(ctx)
 		if resolverErr != nil {
 			err := errors.Errorf("%s", resolverErr)
 			err.Path = path.toSlice()
