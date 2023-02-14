@@ -50,7 +50,7 @@ $ curl 'http://localhost:8080/query' \
         }
     ```
 
-3. Define a user Go type which can have a slice of roles where each role is a string:
+3. Define a user Go type which can be assigned to different roles where each role is a string:
     ```go
     type User struct {
         ID    string
@@ -70,34 +70,36 @@ $ curl 'http://localhost:8080/query' \
     }
     ```
 
-4. Define a Go type which implements the DirevtiveVisitor interface:
+4. Define a Go type which implements the `directives.Directive` interface:
     ```go
-    type HasRoleDirective struct{}
-
-    func (h *HasRoleDirective) Before(ctx context.Context, directive *types.Directive, input interface{}) (bool, error) {
-        u, ok := user.FromContext(ctx)
-        if !ok {
-            return true, fmt.Errorf("user not provided in cotext")
-        }
-        role := strings.ToLower((directive.Arguments.MustGet("role").String())
-        if !u.HasRole(role) {
-            return true, fmt.Errorf("access denied, %q role required", role)
-        }
-        return false, nil
+    type HasRoleDirective struct{
+        Role string
     }
 
-    // After is a no-op and returns the output unchanged.
-    func (h *HasRoleDirective) After(ctx context.Context, directive *types.Directive, output interface{}) (interface{}, error) {
-        return output, nil
+   func (h *HasRoleDirective) ImplementsDirective() string {
+       return "hasRole"
+   }
+
+    func (h *HasRoleDirective) Resolve(ctx context.Context, args interface{}, next directives.Resolver) (output interface{}, err error) {
+        u, ok := user.FromContext(ctx)
+        if !ok {
+            return nil, fmt.Errorf("user not provided in context")
+        }
+        role := strings.ToLower(h.Role)
+        if !u.HasRole(role) {
+            return nil, fmt.Errorf("access denied, %q role required", role)
+        }
+        return next.Resolve(ctx, args)
     }
     ```
 
 5. Pay attention to the schmema options. Directive visitors are added as schema option:
     ```go
         opts := []graphql.SchemaOpt{
-            graphql.DirectiveVisitors(map[string]directives.Visitor{
-                "hasRole": &authorization.HasRoleDirective{},
-            }),
+            graphql.Directives(
+                &authorization.HasRoleDirective{},
+                // additional directives
+            ),
             // other options go here
         }
         schema := graphql.MustParseSchema(authorization.Schema, &authorization.Resolver{}, opts...)

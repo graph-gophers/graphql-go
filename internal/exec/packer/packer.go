@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/graph-gophers/graphql-go/decode"
+	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/types"
 )
@@ -46,12 +47,12 @@ func (b *Builder) Finish() error {
 	for _, p := range b.structPackers {
 		p.defaultStruct = reflect.New(p.structType).Elem()
 		for _, f := range p.fields {
-			if defaultVal := f.field.Default; defaultVal != nil {
-				v, err := f.fieldPacker.Pack(defaultVal.Deserialize(nil))
+			if defaultVal := f.def; defaultVal != nil {
+				v, err := f.packer.Pack(defaultVal.Deserialize(nil))
 				if err != nil {
 					return err
 				}
-				p.defaultStruct.FieldByIndex(f.fieldIndex).Set(v)
+				p.defaultStruct.FieldByIndex(f.index).Set(v)
 			}
 		}
 	}
@@ -178,19 +179,27 @@ func (b *Builder) MakeStructPacker(values []*types.InputValueDefinition, typ ref
 
 	var fields []*structPackerField
 	for _, v := range values {
-		fe := &structPackerField{field: v}
+		name := v.Name.Name
+		fe := &structPackerField{name: name, def: v.Default}
 		fx := func(n string) bool {
-			return strings.EqualFold(stripUnderscore(n), stripUnderscore(v.Name.Name))
+			return strings.EqualFold(stripUnderscore(n), stripUnderscore(name))
 		}
 
 		sf, ok := structType.FieldByNameFunc(fx)
 		if !ok {
-			return nil, fmt.Errorf("%s does not define field %q (hint: missing `args struct { ... }` wrapper for field arguments, or missing field on input struct)", typ, v.Name.Name)
+			dv := reflect.TypeOf((*directives.ResolverInterceptor)(nil)).Elem()
+
+			// Check the original type here to compare using the pointer (if applicable)
+			if ok := typ.Implements(dv); ok {
+				return nil, fmt.Errorf("directive %s does not define field %q (hint: missing field on directive visitor struct)", typ, name)
+			}
+
+			return nil, fmt.Errorf("%s does not define field %q (hint: missing `args struct { ... }` wrapper for field arguments, or missing field on input struct)", typ, name)
 		}
 		if sf.PkgPath != "" {
 			return nil, fmt.Errorf("field %q must be exported", sf.Name)
 		}
-		fe.fieldIndex = sf.Index
+		fe.index = sf.Index
 
 		ft := v.Type
 		if v.Default != nil {
@@ -198,7 +207,7 @@ func (b *Builder) MakeStructPacker(values []*types.InputValueDefinition, typ ref
 			ft = &types.NonNull{OfType: ft}
 		}
 
-		if err := b.assignPacker(&fe.fieldPacker, ft, sf.Type); err != nil {
+		if err := b.assignPacker(&fe.packer, ft, sf.Type); err != nil {
 			return nil, fmt.Errorf("field %q: %s", sf.Name, err)
 		}
 
@@ -222,9 +231,10 @@ type StructPacker struct {
 }
 
 type structPackerField struct {
-	field       *types.InputValueDefinition
-	fieldIndex  []int
-	fieldPacker packer
+	name   string
+	index  []int
+	def    types.Value
+	packer packer
 }
 
 func (p *StructPacker) Pack(value interface{}) (reflect.Value, error) {
@@ -236,12 +246,12 @@ func (p *StructPacker) Pack(value interface{}) (reflect.Value, error) {
 	v := reflect.New(p.structType)
 	v.Elem().Set(p.defaultStruct)
 	for _, f := range p.fields {
-		if value, ok := values[f.field.Name.Name]; ok {
-			packed, err := f.fieldPacker.Pack(value)
+		if value, ok := values[f.name]; ok {
+			packed, err := f.packer.Pack(value)
 			if err != nil {
 				return reflect.Value{}, err
 			}
-			v.Elem().FieldByIndex(f.fieldIndex).Set(packed)
+			v.Elem().FieldByIndex(f.index).Set(packed)
 		}
 	}
 	if !p.usePtr {
@@ -364,7 +374,7 @@ func unmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("incompatible type")
+	return nil, fmt.Errorf("incompatible type: %s", reflect.TypeOf(input))
 }
 
 func unwrapNonNull(t types.Type) (types.Type, bool) {

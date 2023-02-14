@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/graph-gophers/graphql-go/decode"
+	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 	"github.com/graph-gophers/graphql-go/types"
 )
@@ -40,14 +41,15 @@ type Object struct {
 
 type Field struct {
 	types.FieldDefinition
-	TypeName    string
-	MethodIndex int
-	FieldIndex  []int
-	HasContext  bool
-	HasError    bool
-	ArgsPacker  *packer.StructPacker
-	ValueExec   Resolvable
-	TraceLabel  string
+	TypeName          string
+	MethodIndex       int
+	FieldIndex        []int
+	HasContext        bool
+	HasError          bool
+	ArgsPacker        *packer.StructPacker
+	DirectivesPackers map[string]*packer.StructPacker
+	ValueExec         Resolvable
+	TraceLabel        string
 }
 
 func (f *Field) UseMethodResolver() bool {
@@ -69,12 +71,17 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *types.Schema, resolver interface{}) (*Schema, error) {
+func ApplyResolver(s *types.Schema, resolver interface{}, dirVisitors []directives.Directive) (*Schema, error) {
 	if resolver == nil {
 		return &Schema{Meta: newMeta(s), Schema: *s}, nil
 	}
 
-	b := newBuilder(s)
+	ds, err := applyDirectives(s, dirVisitors)
+	if err != nil {
+		return nil, err
+	}
+
+	b := newBuilder(s, ds)
 
 	var query, mutation, subscription Resolvable
 
@@ -151,9 +158,58 @@ func ApplyResolver(s *types.Schema, resolver interface{}) (*Schema, error) {
 	}, nil
 }
 
+func applyDirectives(s *types.Schema, visitors []directives.Directive) (map[string]directives.Directive, error) {
+	byName := make(map[string]directives.Directive, len(s.Directives))
+
+	for _, v := range visitors {
+		name := v.ImplementsDirective()
+
+		if existing, ok := byName[name]; ok {
+			return nil, fmt.Errorf("multiple implementations registered for directive %q. Implementation types %T and %T", name, existing, v)
+		}
+
+		// At least 1 of the optional directive functions must be defined for each directive.
+		// For now this is the only valid directive function
+		if _, ok := v.(directives.ResolverInterceptor); !ok {
+			return nil, fmt.Errorf("directive %q (implemented by %T) does not implement a valid directive visitor function", name, v)
+		}
+
+		byName[name] = v
+	}
+
+	for name, def := range s.Directives {
+		// TODO: directives other than FIELD_DEFINITION also need to be supported, and later addition of
+		// capabilities to 'visit' other kinds of directive locations shouldn't break the parsing of existing
+		// schemas that declare those directives, but don't have a visitor for them?
+		var acceptedType bool
+		for _, l := range def.Locations {
+			if l == "FIELD_DEFINITION" {
+				acceptedType = true
+				break
+			}
+		}
+
+		if !acceptedType {
+			continue
+		}
+
+		if _, ok := byName[name]; !ok {
+			if name == "include" || name == "skip" || name == "deprecated" || name == "specifiedBy" {
+				// Special case directives, ignore
+				continue
+			}
+
+			return nil, fmt.Errorf("no visitors have been registered for directive %q", name)
+		}
+	}
+
+	return byName, nil
+}
+
 type execBuilder struct {
 	schema        *types.Schema
 	resMap        map[typePair]*resMapEntry
+	directives    map[string]directives.Directive
 	packerBuilder *packer.Builder
 }
 
@@ -167,10 +223,11 @@ type resMapEntry struct {
 	targets []*Resolvable
 }
 
-func newBuilder(s *types.Schema) *execBuilder {
+func newBuilder(s *types.Schema, directives map[string]directives.Directive) *execBuilder {
 	return &execBuilder{
 		schema:        s,
 		resMap:        make(map[typePair]*resMapEntry),
+		directives:    directives,
 		packerBuilder: packer.NewBuilder(),
 	}
 }
@@ -412,15 +469,51 @@ func (b *execBuilder) makeFieldExec(typeName string, f *types.FieldDefinition, m
 		}
 	}
 
+	directivesPackers := map[string]*packer.StructPacker{}
+	for _, d := range f.Directives {
+		n := d.Name.Name
+
+		// skip special directives without packers
+		if n == "deprecated" {
+			continue
+		}
+
+		v, ok := b.directives[n]
+		if !ok {
+			return nil, fmt.Errorf("directive %q on field %q does not have a visitor registered with the schema", n, f.Name)
+		}
+
+		if _, ok := v.(directives.ResolverInterceptor); !ok {
+			// Directive doesn't apply at field resolution time, skip it
+			continue
+		}
+
+		r := reflect.TypeOf(v)
+
+		// The directive definition is needed here in order to get the arguments definition list.
+		// d.Arguments wouldn't work in this case because it does not contain args type information.
+		dd, ok := b.schema.Directives[n]
+		if !ok {
+			return nil, fmt.Errorf("directive definition %q is not defined in the schema", n)
+		}
+		p, err := b.packerBuilder.MakeStructPacker(dd.Arguments, r)
+		if err != nil {
+			return nil, err
+		}
+
+		directivesPackers[n] = p
+	}
+
 	fe := &Field{
-		FieldDefinition: *f,
-		TypeName:        typeName,
-		MethodIndex:     methodIndex,
-		FieldIndex:      fieldIndex,
-		HasContext:      hasContext,
-		ArgsPacker:      argsPacker,
-		HasError:        hasError,
-		TraceLabel:      fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name),
+		FieldDefinition:   *f,
+		TypeName:          typeName,
+		MethodIndex:       methodIndex,
+		FieldIndex:        fieldIndex,
+		HasContext:        hasContext,
+		ArgsPacker:        argsPacker,
+		DirectivesPackers: directivesPackers,
+		HasError:          hasError,
+		TraceLabel:        fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name),
 	}
 
 	var out reflect.Type

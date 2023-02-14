@@ -57,7 +57,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		return nil, err
 	}
 
-	r, err := resolvable.ApplyResolver(s.schema, resolver)
+	r, err := resolvable.ApplyResolver(s.schema, resolver, s.directives)
 	if err != nil {
 		return nil, err
 	}
@@ -81,6 +81,7 @@ type Schema struct {
 	res    *resolvable.Schema
 
 	allowIntrospection       func(ctx context.Context) bool
+	directives               []directives.Directive
 	maxQueryLength           int
 	maxDepth                 int
 	maxParallelism           int
@@ -228,12 +229,11 @@ func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
 	}
 }
 
-// DirectiveVisitors defines the implementation for each directive.
+// Directives defines the implementation for each directive.
 // Per the GraphQL specification, each Field Directive in the schema must have an implementation here.
-// The @deprecated directive is an exception and does not need to be registered here.
-func DirectiveVisitors(visitors map[string]directives.Visitor) SchemaOpt {
+func Directives(ds ...directives.Directive) SchemaOpt {
 	return func(s *Schema) {
-		s.visitors = visitors
+		s.directives = ds
 	}
 }
 
@@ -337,7 +337,6 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		Tracer:       s.tracer,
 		Logger:       s.logger,
 		PanicHandler: s.panicHandler,
-		Visitors:     s.visitors,
 	}
 	varTypes := make(map[string]*introspection.Type)
 	for _, v := range op.Vars {

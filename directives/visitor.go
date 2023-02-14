@@ -2,17 +2,24 @@ package directives
 
 import (
 	"context"
-
-	"github.com/graph-gophers/graphql-go/types"
 )
 
-// Visitor defines the interface that clients should use to implement a Directive
-// see the graphql.DirectiveVisitors() Schema Option.
-type Visitor interface {
-	// Before() is always called when the operation includes a directive matching this implementation's name.
-	// When the first return value is true, the field resolver will not be called.
-	// Errors in Before() will prevent field resolution.
-	Before(ctx context.Context, directive *types.Directive, input interface{}) (skipResolver bool, err error)
-	// After is called if Before() *and* the field resolver do not error.
-	After(ctx context.Context, directive *types.Directive, output interface{}) (modified interface{}, err error)
+// Directive defines the interface that clients should use to implement a custom Directive.
+// Implementations then choose to implement other *optional* interfaces based on the needs of the directive, but each
+// must implement *at least 1* of the optional functions
+//
+// See the graphql.Directives() Schema Option.
+type Directive interface {
+	ImplementsDirective() string
+}
+
+// Resolver for a field definition during execution of a request.
+type Resolver interface {
+	Resolve(ctx context.Context, args interface{}) (output interface{}, err error)
+}
+
+// ResolverInterceptor for a field resolver function, applying the directive logic.
+// This is an *optional* directive function (at least 1 optional function must be declared for each directive).
+type ResolverInterceptor interface {
+	Resolve(ctx context.Context, args interface{}, next Resolver) (output interface{}, err error)
 }

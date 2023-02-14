@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/example/directives/authorization/user"
-	"github.com/graph-gophers/graphql-go/types"
 )
 
 const Schema = `
@@ -28,22 +28,25 @@ const Schema = `
 	}
 `
 
-type HasRoleDirective struct{}
-
-func (h *HasRoleDirective) Before(ctx context.Context, directive *types.Directive, input interface{}) (bool, error) {
-	u, ok := user.FromContext(ctx)
-	if !ok {
-		return true, fmt.Errorf("user not provided in cotext")
-	}
-	role := strings.ToLower(directive.Arguments.MustGet("role").String())
-	if !u.HasRole(role) {
-		return true, fmt.Errorf("access denied, %q role required", role)
-	}
-	return false, nil
+type HasRoleDirective struct {
+	Role string
 }
 
-func (h *HasRoleDirective) After(ctx context.Context, directive *types.Directive, output interface{}) (interface{}, error) {
-	return output, nil
+func (h *HasRoleDirective) ImplementsDirective() string {
+	return "hasRole"
+}
+
+func (h *HasRoleDirective) Resolve(ctx context.Context, args interface{}, next directives.Resolver) (output interface{}, err error) {
+	u, ok := user.FromContext(ctx)
+	if !ok {
+		return nil, fmt.Errorf("user not provided in cotext")
+	}
+	role := strings.ToLower(h.Role)
+	if !u.HasRole(role) {
+		return nil, fmt.Errorf("access denied, %q role required", role)
+	}
+
+	return next.Resolve(ctx, args)
 }
 
 type Resolver struct{}
