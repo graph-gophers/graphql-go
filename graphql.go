@@ -52,7 +52,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		return nil, err
 	}
 
-	r, err := resolvable.ApplyResolver(s.schema, resolver, s.directives)
+	r, err := resolvable.ApplyResolver(s.schema, resolver, s.directives, s.useFieldResolvers)
 	if err != nil {
 		return nil, err
 	}
@@ -86,6 +86,7 @@ type Schema struct {
 	panicHandler             errors.PanicHandler
 	useStringDescriptions    bool
 	subscribeResolverTimeout time.Duration
+	useFieldResolvers        bool
 }
 
 // ASTSchema returns the abstract syntax tree of the GraphQL schema definition.
@@ -111,7 +112,7 @@ func UseStringDescriptions() SchemaOpt {
 // UseFieldResolvers specifies whether to use struct fields as resolvers.
 func UseFieldResolvers() SchemaOpt {
 	return func(s *Schema) {
-		s.schema.UseFieldResolvers = true
+		s.useFieldResolvers = true
 	}
 }
 
