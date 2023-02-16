@@ -278,31 +278,29 @@ type {{ $enum.Name }} int
 
 const (
 	{{ range $i, $e :=  $enum.EnumValuesDefinition }}{{ if ne $i 0 }}{{ printf "\n\t" }}{{ end }}
-		{{- $e.EnumValue | toVar }}
-		{{- if eq $i 0 }} {{ $enum.Name }} = iota{{ end }}
+		{{- $e.EnumValue | toVar }}{{ if eq $i 0 }} {{ $enum.Name }} = iota{{ end }}
 	{{- end }}
 )
 
 func (s Season) String() string {
 	switch s {
 	{{ range $i, $e :=  $enum.EnumValuesDefinition }}{{ if ne $i 0 }}{{ printf "\n\t" }}{{ end -}}
-		case {{ $e.EnumValue | toVar }}:
-			return "{{ $e.EnumValue }}"
+	case {{ $e.EnumValue | toVar }}:
+		return "{{ $e.EnumValue }}"
 	{{- end }}
 	}
 	panic("unreachable")
 }
-	`
-	toVar := func(s string) string {
-		if len(s) == 0 {
-			return s
-		}
-		return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
+`
+	funcs := template.FuncMap{
+		"toVar": func(s string) string {
+			if len(s) == 0 {
+				return s
+			}
+			return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
+		},
 	}
-	funcMap := template.FuncMap{
-		"toVar": toVar,
-	}
-	tpl, err := template.New("enum").Funcs(funcMap).Parse(gocode)
+	tpl, err := template.New("enum").Funcs(funcs).Parse(gocode)
 	if err != nil {
 		panic(err)
 	}
@@ -310,7 +308,6 @@ func (s Season) String() string {
 	opts := []graphql.SchemaOpt{
 		graphql.UseStringDescriptions(),
 	}
-
 	schema := graphql.MustParseSchema(s, nil, opts...)
 	ast := schema.ASTSchema()
 	seasons := ast.Enums[0]
@@ -333,14 +330,62 @@ func (s Season) String() string {
 	// func (s Season) String() string {
 	// 	switch s {
 	// 	case Spring:
-	// 			return "SPRING"
+	// 		return "SPRING"
 	// 	case Summer:
-	// 			return "SUMMER"
+	// 		return "SUMMER"
 	// 	case Autumn:
-	// 			return "AUTUMN"
+	// 		return "AUTUMN"
 	// 	case Winter:
-	// 			return "WINTER"
+	// 		return "WINTER"
 	// 	}
 	// 	panic("unreachable")
 	// }
+}
+
+func ExampleUseStringDescriptions() {
+	s := `
+	schema {
+		query: Query
+	}
+
+	type Query {
+		post(id: Int!): Post
+	}
+
+	"""
+	Post represents a blog post.
+	"""
+	type Post {
+		"""
+		Unique identifier of the post.
+		"""
+		id: ID!
+
+		# The title field has no description.
+		title: String!
+
+		"""
+		Tags of the post.
+		"""
+		# tags can be empty
+		tags: [String!]!
+	}
+	`
+
+	opts := []graphql.SchemaOpt{
+		graphql.UseStringDescriptions(),
+	}
+	schema := graphql.MustParseSchema(s, nil, opts...)
+	ast := schema.ASTSchema()
+
+	post := ast.Objects[1]
+	fmt.Printf("Field descriptions of the %q type:\n", post.TypeName())
+	for _, f := range post.Fields {
+		fmt.Printf("  field: %q, description: %q\n", f.Name, f.Desc)
+	}
+	// output:
+	// Field descriptions of the "Post" type:
+	//   field: "id", description: "Unique identifier of the post."
+	//   field: "title", description: ""
+	//   field: "tags", description: "Tags of the post."
 }
