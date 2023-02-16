@@ -71,7 +71,7 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *types.Schema, resolver interface{}, dirVisitors []directives.Directive) (*Schema, error) {
+func ApplyResolver(s *types.Schema, resolver interface{}, dirVisitors []directives.Directive, useFieldResolvers bool) (*Schema, error) {
 	if resolver == nil {
 		return &Schema{Meta: newMeta(s), Schema: *s}, nil
 	}
@@ -81,7 +81,7 @@ func ApplyResolver(s *types.Schema, resolver interface{}, dirVisitors []directiv
 		return nil, err
 	}
 
-	b := newBuilder(s, ds)
+	b := newBuilder(s, ds, useFieldResolvers)
 
 	var query, mutation, subscription Resolvable
 
@@ -207,10 +207,11 @@ func applyDirectives(s *types.Schema, visitors []directives.Directive) (map[stri
 }
 
 type execBuilder struct {
-	schema        *types.Schema
-	resMap        map[typePair]*resMapEntry
-	directives    map[string]directives.Directive
-	packerBuilder *packer.Builder
+	schema            *types.Schema
+	resMap            map[typePair]*resMapEntry
+	directives        map[string]directives.Directive
+	packerBuilder     *packer.Builder
+	useFieldResolvers bool
 }
 
 type typePair struct {
@@ -223,12 +224,13 @@ type resMapEntry struct {
 	targets []*Resolvable
 }
 
-func newBuilder(s *types.Schema, directives map[string]directives.Directive) *execBuilder {
+func newBuilder(s *types.Schema, directives map[string]directives.Directive, useFieldResolvers bool) *execBuilder {
 	return &execBuilder{
-		schema:        s,
-		resMap:        make(map[typePair]*resMapEntry),
-		directives:    directives,
-		packerBuilder: packer.NewBuilder(),
+		schema:            s,
+		resMap:            make(map[typePair]*resMapEntry),
+		directives:        directives,
+		packerBuilder:     packer.NewBuilder(),
+		useFieldResolvers: useFieldResolvers,
 	}
 }
 
@@ -339,7 +341,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields types.FieldsDefinit
 	for _, f := range fields {
 		var fieldIndex []int
 		methodIndex := findMethod(resolverType, f.Name)
-		if b.schema.UseFieldResolvers && methodIndex == -1 {
+		if b.useFieldResolvers && methodIndex == -1 {
 			if fieldsCount[strings.ToLower(stripUnderscore(f.Name))] > 1 {
 				return nil, fmt.Errorf("%s does not resolve %q: ambiguous field %q", resolverType, typeName, f.Name)
 			}
@@ -377,7 +379,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields types.FieldsDefinit
 	//	1) using method resolvers
 	//	2) Or resolver is not an interface type
 	typeAssertions := make(map[string]*TypeAssertion)
-	if !b.schema.UseFieldResolvers || resolverType.Kind() != reflect.Interface {
+	if !b.useFieldResolvers || resolverType.Kind() != reflect.Interface {
 		for _, impl := range possibleTypes {
 			methodIndex := findMethod(resolverType, "To"+impl.Name)
 			if methodIndex == -1 {
@@ -483,7 +485,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *types.FieldDefinition, m
 			return nil, fmt.Errorf("directive %q on field %q does not have a visitor registered with the schema", n, f.Name)
 		}
 
-		if _, ok := v.(directives.ResolverInterceptor); !ok {
+		if _, ok = v.(directives.ResolverInterceptor); !ok {
 			// Directive doesn't apply at field resolution time, skip it
 			continue
 		}
