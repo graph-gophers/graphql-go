@@ -13,5 +13,5 @@
   - If your pull request contains a new feature, please document it well:
     * Consider adding Go executable examples
     * Comment all new exported types if outside of the `internal` package
-    * (optional) Mentione it in the README
+    * (optional) Mention it in the README
     * Add a comment in the CHANGELOG.md explaining your feature
