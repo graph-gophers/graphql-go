@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
+	"text/template"
 
 	"github.com/graph-gophers/graphql-go"
 	"github.com/graph-gophers/graphql-go/example/starwars"
@@ -225,5 +227,120 @@ func ExampleRestrictIntrospection() {
 	//       ]
 	//     }
 	//   }
+	// }
+}
+
+func ExampleSchema_ASTSchema() {
+	schema := graphql.MustParseSchema(starwars.Schema, nil)
+	ast := schema.ASTSchema()
+
+	for _, e := range ast.Enums {
+		fmt.Printf("Enum %q has the following options:\n", e.Name)
+		for _, o := range e.EnumValuesDefinition {
+			fmt.Printf("  - %s\n", o.EnumValue)
+		}
+	}
+	// output:
+	// Enum "Episode" has the following options:
+	//   - NEWHOPE
+	//   - EMPIRE
+	//   - JEDI
+	// Enum "LengthUnit" has the following options:
+	//   - METER
+	//   - FOOT
+}
+
+func ExampleSchema_ASTSchema_generateEnum() {
+	s := `
+		schema {
+			query: Query
+		}
+
+		type Query {
+			currentSeason: Season!
+		}
+
+		"""
+		Season represents a season of the year.
+		"""
+		enum Season {
+			SPRING
+			SUMMER
+			AUTUMN
+			WINTER
+		}
+	`
+
+	gocode := `
+{{ $enum := . }}
+// {{ $enum.Desc }}
+type {{ $enum.Name }} int
+
+const (
+	{{ range $i, $e :=  $enum.EnumValuesDefinition }}{{ if ne $i 0 }}{{ printf "\n\t" }}{{ end }}
+		{{- $e.EnumValue | toVar }}
+		{{- if eq $i 0 }} {{ $enum.Name }} = iota{{ end }}
+	{{- end }}
+)
+
+func (s Season) String() string {
+	switch s {
+	{{ range $i, $e :=  $enum.EnumValuesDefinition }}{{ if ne $i 0 }}{{ printf "\n\t" }}{{ end -}}
+		case {{ $e.EnumValue | toVar }}:
+			return "{{ $e.EnumValue }}"
+	{{- end }}
+	}
+	panic("unreachable")
+}
+	`
+	toVar := func(s string) string {
+		if len(s) == 0 {
+			return s
+		}
+		return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
+	}
+	funcMap := template.FuncMap{
+		"toVar": toVar,
+	}
+	tpl, err := template.New("enum").Funcs(funcMap).Parse(gocode)
+	if err != nil {
+		panic(err)
+	}
+
+	opts := []graphql.SchemaOpt{
+		graphql.UseStringDescriptions(),
+	}
+
+	schema := graphql.MustParseSchema(s, nil, opts...)
+	ast := schema.ASTSchema()
+	seasons := ast.Enums[0]
+
+	err = tpl.Execute(os.Stdout, seasons)
+	if err != nil {
+		panic(err)
+	}
+	// output:
+	// // Season represents a season of the year.
+	// type Season int
+	//
+	// const (
+	// 	Spring Season = iota
+	// 	Summer
+	// 	Autumn
+	// 	Winter
+	// )
+	//
+	// func (s Season) String() string {
+	// 	switch s {
+	// 	case Spring:
+	// 			return "SPRING"
+	// 	case Summer:
+	// 			return "SUMMER"
+	// 	case Autumn:
+	// 			return "AUTUMN"
+	// 	case Winter:
+	// 			return "WINTER"
+	// 	}
+	// 	panic("unreachable")
 	// }
 }
