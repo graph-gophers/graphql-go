@@ -41,7 +41,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		if t, ok := s.tracer.(tracer.ValidationTracer); ok {
 			s.validationTracer = t
 		} else {
-			s.validationTracer = &validationBridgingTracer{tracer: tracer.LegacyNoopValidationTracer{}} //nolint:staticcheck
+			s.validationTracer = &validationBridgingTracer{tracer: tracer.LegacyNoopValidationTracer{}} //lint:ignore SA1019 TODO: requires tracing refactoring
 		}
 	}
 
@@ -145,8 +145,9 @@ func Tracer(t tracer.Tracer) SchemaOpt {
 }
 
 // ValidationTracer is used to trace validation errors. It defaults to [tracer.LegacyNoopValidationTracer].
+//
 // Deprecated: context is needed to support tracing correctly. Use a tracer which implements [tracer.ValidationTracer].
-func ValidationTracer(tracer tracer.LegacyValidationTracer) SchemaOpt { //nolint:staticcheck
+func ValidationTracer(tracer tracer.LegacyValidationTracer) SchemaOpt {
 	return func(s *Schema) {
 		s.validationTracer = &validationBridgingTracer{tracer: tracer}
 	}
@@ -346,7 +347,7 @@ func (s *Schema) validateSchema() error {
 }
 
 type validationBridgingTracer struct {
-	tracer tracer.LegacyValidationTracer //nolint:staticcheck
+	tracer tracer.LegacyValidationTracer //lint:ignore SA1019 left for backwards compatibility
 }
 
 func (t *validationBridgingTracer) TraceValidation(context.Context) func([]*errors.QueryError) {
