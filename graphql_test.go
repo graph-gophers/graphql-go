@@ -3327,7 +3327,7 @@ func TestTime(t *testing.T) {
 
 type resolverWithUnexportedMethod struct{}
 
-func (r *resolverWithUnexportedMethod) changeTheNumber(args struct{ NewNumber int32 }) int32 { //lint:ignore U1000 ingore this for now
+func (r *resolverWithUnexportedMethod) changeTheNumber(args struct{ NewNumber int32 }) int32 { //lint:file-ignore U1000 this is not supposed to be called
 	return args.NewNumber
 }
 
