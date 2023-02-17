@@ -98,6 +98,11 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 ```
 
 ### Separate resolvers for different operations
+> **NOTE**: This feature is not in the stable release yet. In order to use it you need to run `go get github.com/graph-gophers/graphql-go@master` and in your `go.mod` file you will have something like:
+>  ```
+>  v1.5.1-0.20230216224648-5aa631d05992
+>  ```
+> It is expected to be released in `v1.6.0` soon.
 
 The GraphQL specification allows for fields with the same name defined in different query types. For example, the schema below is a valid schema definition:
 ```graphql
