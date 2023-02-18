@@ -230,9 +230,9 @@ func ExampleRestrictIntrospection() {
 	// }
 }
 
-func ExampleSchema_ASTSchema() {
+func ExampleSchema_AST() {
 	schema := graphql.MustParseSchema(starwars.Schema, nil)
-	ast := schema.ASTSchema()
+	ast := schema.AST()
 
 	for _, e := range ast.Enums {
 		fmt.Printf("Enum %q has the following options:\n", e.Name)
@@ -250,7 +250,7 @@ func ExampleSchema_ASTSchema() {
 	//   - FOOT
 }
 
-func ExampleSchema_ASTSchema_generateEnum() {
+func ExampleSchema_AST_generateEnum() {
 	s := `
 		schema {
 			query: Query
@@ -309,7 +309,7 @@ func (s Season) String() string {
 		graphql.UseStringDescriptions(),
 	}
 	schema := graphql.MustParseSchema(s, nil, opts...)
-	ast := schema.ASTSchema()
+	ast := schema.AST()
 	seasons := ast.Enums[0]
 
 	err = tpl.Execute(os.Stdout, seasons)
@@ -376,7 +376,7 @@ func ExampleUseStringDescriptions() {
 		graphql.UseStringDescriptions(),
 	}
 	schema := graphql.MustParseSchema(s, nil, opts...)
-	ast := schema.ASTSchema()
+	ast := schema.AST()
 
 	post := ast.Objects[1]
 	fmt.Printf("Field descriptions of the %q type:\n", post.TypeName())

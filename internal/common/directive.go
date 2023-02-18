@@ -1,12 +1,12 @@
 package common
 
-import "github.com/graph-gophers/graphql-go/types"
+import "github.com/graph-gophers/graphql-go/ast"
 
-func ParseDirectives(l *Lexer) types.DirectiveList {
-	var directives types.DirectiveList
+func ParseDirectives(l *Lexer) ast.DirectiveList {
+	var directives ast.DirectiveList
 	for l.Peek() == '@' {
 		l.ConsumeToken('@')
-		d := &types.Directive{}
+		d := &ast.Directive{}
 		d.Name = l.ConsumeIdentWithLoc()
 		d.Name.Loc.Column--
 		if l.Peek() == '(' {
