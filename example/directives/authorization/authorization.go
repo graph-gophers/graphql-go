@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/example/directives/authorization/user"
 )
 
@@ -36,17 +35,17 @@ func (h *HasRoleDirective) ImplementsDirective() string {
 	return "hasRole"
 }
 
-func (h *HasRoleDirective) Resolve(ctx context.Context, args interface{}, next directives.Resolver) (output interface{}, err error) {
+func (h *HasRoleDirective) Validate(ctx context.Context, _ interface{}) error {
 	u, ok := user.FromContext(ctx)
 	if !ok {
-		return nil, fmt.Errorf("user not provided in cotext")
+		return fmt.Errorf("user not provided in cotext")
 	}
 	role := strings.ToLower(h.Role)
 	if !u.HasRole(role) {
-		return nil, fmt.Errorf("access denied, %q role required", role)
+		return fmt.Errorf("access denied, %q role required", role)
 	}
 
-	return next.Resolve(ctx, args)
+	return nil
 }
 
 type Resolver struct{}

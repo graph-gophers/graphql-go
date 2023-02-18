@@ -169,7 +169,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 					Args:       args,
 					PackedArgs: packedArgs,
 					Sels:       fieldSels,
-					Async:      fe.HasContext || fe.ArgsPacker != nil || len(fe.DirectiveVisitors) > 0 || fe.HasError || HasAsyncSel(fieldSels),
+					Async:      fe.HasContext || fe.ArgsPacker != nil || len(fe.Visitors.Interceptors) > 0 || fe.HasError || HasAsyncSel(fieldSels),
 				})
 			}
 
