@@ -3,15 +3,15 @@ package introspection
 import (
 	"sort"
 
-	"github.com/graph-gophers/graphql-go/types"
+	"github.com/graph-gophers/graphql-go/ast"
 )
 
 type Schema struct {
-	schema *types.Schema
+	schema *ast.Schema
 }
 
 // WrapSchema is only used internally.
-func WrapSchema(schema *types.Schema) *Schema {
+func WrapSchema(schema *ast.Schema) *Schema {
 	return &Schema{schema}
 }
 
@@ -68,11 +68,11 @@ func (r *Schema) SubscriptionType() *Type {
 }
 
 type Type struct {
-	typ types.Type
+	typ ast.Type
 }
 
 // WrapType is only used internally.
-func WrapType(typ types.Type) *Type {
+func WrapType(typ ast.Type) *Type {
 	return &Type{typ}
 }
 
@@ -81,7 +81,7 @@ func (r *Type) Kind() string {
 }
 
 func (r *Type) Name() *string {
-	if named, ok := r.typ.(types.NamedType); ok {
+	if named, ok := r.typ.(ast.NamedType); ok {
 		name := named.TypeName()
 		return &name
 	}
@@ -89,7 +89,7 @@ func (r *Type) Name() *string {
 }
 
 func (r *Type) Description() *string {
-	if named, ok := r.typ.(types.NamedType); ok {
+	if named, ok := r.typ.(ast.NamedType); ok {
 		desc := named.Description()
 		if desc == "" {
 			return nil
@@ -100,11 +100,11 @@ func (r *Type) Description() *string {
 }
 
 func (r *Type) Fields(args *struct{ IncludeDeprecated bool }) *[]*Field {
-	var fields types.FieldsDefinition
+	var fields ast.FieldsDefinition
 	switch t := r.typ.(type) {
-	case *types.ObjectTypeDefinition:
+	case *ast.ObjectTypeDefinition:
 		fields = t.Fields
-	case *types.InterfaceTypeDefinition:
+	case *ast.InterfaceTypeDefinition:
 		fields = t.Fields
 	default:
 		return nil
@@ -120,7 +120,7 @@ func (r *Type) Fields(args *struct{ IncludeDeprecated bool }) *[]*Field {
 }
 
 func (r *Type) Interfaces() *[]*Type {
-	t, ok := r.typ.(*types.ObjectTypeDefinition)
+	t, ok := r.typ.(*ast.ObjectTypeDefinition)
 	if !ok {
 		return nil
 	}
@@ -133,11 +133,11 @@ func (r *Type) Interfaces() *[]*Type {
 }
 
 func (r *Type) PossibleTypes() *[]*Type {
-	var possibleTypes []*types.ObjectTypeDefinition
+	var possibleTypes []*ast.ObjectTypeDefinition
 	switch t := r.typ.(type) {
-	case *types.InterfaceTypeDefinition:
+	case *ast.InterfaceTypeDefinition:
 		possibleTypes = t.PossibleTypes
-	case *types.Union:
+	case *ast.Union:
 		possibleTypes = t.UnionMemberTypes
 	default:
 		return nil
@@ -151,7 +151,7 @@ func (r *Type) PossibleTypes() *[]*Type {
 }
 
 func (r *Type) EnumValues(args *struct{ IncludeDeprecated bool }) *[]*EnumValue {
-	t, ok := r.typ.(*types.EnumTypeDefinition)
+	t, ok := r.typ.(*ast.EnumTypeDefinition)
 	if !ok {
 		return nil
 	}
@@ -166,7 +166,7 @@ func (r *Type) EnumValues(args *struct{ IncludeDeprecated bool }) *[]*EnumValue 
 }
 
 func (r *Type) InputFields() *[]*InputValue {
-	t, ok := r.typ.(*types.InputObject)
+	t, ok := r.typ.(*ast.InputObject)
 	if !ok {
 		return nil
 	}
@@ -180,9 +180,9 @@ func (r *Type) InputFields() *[]*InputValue {
 
 func (r *Type) OfType() *Type {
 	switch t := r.typ.(type) {
-	case *types.List:
+	case *ast.List:
 		return &Type{t.OfType}
-	case *types.NonNull:
+	case *ast.NonNull:
 		return &Type{t.OfType}
 	default:
 		return nil
@@ -191,7 +191,7 @@ func (r *Type) OfType() *Type {
 
 func (r *Type) SpecifiedByURL() *string {
 	switch t := r.typ.(type) {
-	case *types.ScalarTypeDefinition:
+	case *ast.ScalarTypeDefinition:
 		if d := t.Directives.Get("specifiedBy"); d != nil {
 			arg := d.Arguments.MustGet("url")
 			url := arg.Deserialize(nil).(string)
@@ -204,7 +204,7 @@ func (r *Type) SpecifiedByURL() *string {
 }
 
 type Field struct {
-	field *types.FieldDefinition
+	field *ast.FieldDefinition
 }
 
 func (r *Field) Name() string {
@@ -244,7 +244,7 @@ func (r *Field) DeprecationReason() *string {
 }
 
 type InputValue struct {
-	value *types.InputValueDefinition
+	value *ast.InputValueDefinition
 }
 
 func (r *InputValue) Name() string {
@@ -271,7 +271,7 @@ func (r *InputValue) DefaultValue() *string {
 }
 
 type EnumValue struct {
-	value *types.EnumValueDefinition
+	value *ast.EnumValueDefinition
 }
 
 func (r *EnumValue) Name() string {
@@ -299,7 +299,7 @@ func (r *EnumValue) DeprecationReason() *string {
 }
 
 type Directive struct {
-	directive *types.DirectiveDefinition
+	directive *ast.DirectiveDefinition
 }
 
 func (r *Directive) Name() string {
@@ -326,11 +326,11 @@ func (r *Directive) Args() []*InputValue {
 }
 
 type Service struct {
-	schema *types.Schema
+	schema *ast.Schema
 }
 
 // WrapService is only used internally.
-func WrapService(schema *types.Schema) *Service {
+func WrapService(schema *ast.Schema) *Service {
 	return &Service{schema}
 }
 

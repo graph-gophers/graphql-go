@@ -6,10 +6,10 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/decode"
 	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/types"
 )
 
 type packer interface {
@@ -22,7 +22,7 @@ type Builder struct {
 }
 
 type typePair struct {
-	graphQLType  types.Type
+	graphQLType  ast.Type
 	resolverType reflect.Type
 }
 
@@ -60,7 +60,7 @@ func (b *Builder) Finish() error {
 	return nil
 }
 
-func (b *Builder) assignPacker(target *packer, schemaType types.Type, reflectType reflect.Type) error {
+func (b *Builder) assignPacker(target *packer, schemaType ast.Type, reflectType reflect.Type) error {
 	k := typePair{schemaType, reflectType}
 	ref, ok := b.packerMap[k]
 	if !ok {
@@ -76,13 +76,13 @@ func (b *Builder) assignPacker(target *packer, schemaType types.Type, reflectTyp
 	return nil
 }
 
-func (b *Builder) makePacker(schemaType types.Type, reflectType reflect.Type) (packer, error) {
+func (b *Builder) makePacker(schemaType ast.Type, reflectType reflect.Type) (packer, error) {
 	t, nonNull := unwrapNonNull(schemaType)
 	if !nonNull {
 		if reflectType.Kind() == reflect.Ptr {
 			elemType := reflectType.Elem()
 			addPtr := true
-			if _, ok := t.(*types.InputObject); ok {
+			if _, ok := t.(*ast.InputObject); ok {
 				elemType = reflectType // keep pointer for input objects
 				addPtr = false
 			}
@@ -115,7 +115,7 @@ func (b *Builder) makePacker(schemaType types.Type, reflectType reflect.Type) (p
 	return b.makeNonNullPacker(t, reflectType)
 }
 
-func (b *Builder) makeNonNullPacker(schemaType types.Type, reflectType reflect.Type) (packer, error) {
+func (b *Builder) makeNonNullPacker(schemaType ast.Type, reflectType reflect.Type) (packer, error) {
 	if u, ok := reflect.New(reflectType).Interface().(decode.Unmarshaler); ok {
 		if !u.ImplementsGraphQLType(schemaType.String()) {
 			return nil, fmt.Errorf("can not unmarshal %s into %s", schemaType, reflectType)
@@ -126,12 +126,12 @@ func (b *Builder) makeNonNullPacker(schemaType types.Type, reflectType reflect.T
 	}
 
 	switch t := schemaType.(type) {
-	case *types.ScalarTypeDefinition:
+	case *ast.ScalarTypeDefinition:
 		return &ValuePacker{
 			ValueType: reflectType,
 		}, nil
 
-	case *types.EnumTypeDefinition:
+	case *ast.EnumTypeDefinition:
 		if reflectType.Kind() != reflect.String {
 			return nil, fmt.Errorf("wrong type, expected %s", reflect.String)
 		}
@@ -139,14 +139,14 @@ func (b *Builder) makeNonNullPacker(schemaType types.Type, reflectType reflect.T
 			ValueType: reflectType,
 		}, nil
 
-	case *types.InputObject:
+	case *ast.InputObject:
 		e, err := b.MakeStructPacker(t.Values, reflectType)
 		if err != nil {
 			return nil, err
 		}
 		return e, nil
 
-	case *types.List:
+	case *ast.List:
 		if reflectType.Kind() != reflect.Slice {
 			return nil, fmt.Errorf("expected slice, got %s", reflectType)
 		}
@@ -158,7 +158,7 @@ func (b *Builder) makeNonNullPacker(schemaType types.Type, reflectType reflect.T
 		}
 		return p, nil
 
-	case *types.ObjectTypeDefinition, *types.InterfaceTypeDefinition, *types.Union:
+	case *ast.ObjectTypeDefinition, *ast.InterfaceTypeDefinition, *ast.Union:
 		return nil, fmt.Errorf("type of kind %s can not be used as input", t.Kind())
 
 	default:
@@ -166,7 +166,7 @@ func (b *Builder) makeNonNullPacker(schemaType types.Type, reflectType reflect.T
 	}
 }
 
-func (b *Builder) MakeStructPacker(values []*types.InputValueDefinition, typ reflect.Type) (*StructPacker, error) {
+func (b *Builder) MakeStructPacker(values []*ast.InputValueDefinition, typ reflect.Type) (*StructPacker, error) {
 	structType := typ
 	usePtr := false
 	if typ.Kind() == reflect.Ptr {
@@ -204,7 +204,7 @@ func (b *Builder) MakeStructPacker(values []*types.InputValueDefinition, typ ref
 		ft := v.Type
 		if v.Default != nil {
 			ft, _ = unwrapNonNull(ft)
-			ft = &types.NonNull{OfType: ft}
+			ft = &ast.NonNull{OfType: ft}
 		}
 
 		if err := b.assignPacker(&fe.packer, ft, sf.Type); err != nil {
@@ -233,7 +233,7 @@ type StructPacker struct {
 type structPackerField struct {
 	name   string
 	index  []int
-	def    types.Value
+	def    ast.Value
 	packer packer
 }
 
@@ -377,8 +377,8 @@ func unmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
 	return nil, fmt.Errorf("incompatible type: %s", reflect.TypeOf(input))
 }
 
-func unwrapNonNull(t types.Type) (types.Type, bool) {
-	if nn, ok := t.(*types.NonNull); ok {
+func unwrapNonNull(t ast.Type) (ast.Type, bool) {
+	if nn, ok := t.(*ast.NonNull); ok {
 		return nn.OfType, true
 	}
 	return t, false

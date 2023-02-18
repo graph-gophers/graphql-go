@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
@@ -19,12 +20,11 @@ import (
 	"github.com/graph-gophers/graphql-go/log"
 	"github.com/graph-gophers/graphql-go/trace/noop"
 	"github.com/graph-gophers/graphql-go/trace/tracer"
-	"github.com/graph-gophers/graphql-go/types"
 )
 
 // ParseSchema parses a GraphQL schema and attaches the given root resolver. It returns an error if
 // the Go type signature of the resolvers does not match the schema. If nil is passed as the
-// resolver, then the schema can not be executed, but it may be inspected (e.g. with [Schema.ToJSON] or [Schema.ASTSchema]).
+// resolver, then the schema can not be executed, but it may be inspected (e.g. with [Schema.ToJSON] or [Schema.AST]).
 func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (*Schema, error) {
 	s := &Schema{
 		schema:         schema.New(),
@@ -72,7 +72,7 @@ func MustParseSchema(schemaString string, resolver interface{}, opts ...SchemaOp
 
 // Schema represents a GraphQL schema with an optional resolver.
 type Schema struct {
-	schema *types.Schema
+	schema *ast.Schema
 	res    *resolvable.Schema
 
 	allowIntrospection       func(ctx context.Context) bool
@@ -89,9 +89,16 @@ type Schema struct {
 	useFieldResolvers        bool
 }
 
-// ASTSchema returns the abstract syntax tree of the GraphQL schema definition.
+// AST returns the abstract syntax tree of the GraphQL schema definition.
 // It in turn can be used by other tools such as validators or generators.
-func (s *Schema) ASTSchema() *types.Schema {
+func (s *Schema) AST() *ast.Schema {
+	return s.schema
+}
+
+// ASTSchema returns the abstract syntax tree of the GraphQL schema definition.
+//
+// Deprecated: use [Schema.AST] instead.
+func (s *Schema) ASTSchema() *ast.Schema {
 	return s.schema
 }
 
@@ -353,7 +360,7 @@ func (t *validationBridgingTracer) TraceValidation(context.Context) func([]*erro
 	return t.tracer.TraceValidation()
 }
 
-func validateRootOp(s *types.Schema, name string, mandatory bool) error {
+func validateRootOp(s *ast.Schema, name string, mandatory bool) error {
 	t, ok := s.RootOperationTypes[name]
 	if !ok {
 		if mandatory {
@@ -367,7 +374,7 @@ func validateRootOp(s *types.Schema, name string, mandatory bool) error {
 	return nil
 }
 
-func getOperation(document *types.ExecutableDefinition, operationName string) (*types.OperationDefinition, error) {
+func getOperation(document *ast.ExecutableDefinition, operationName string) (*ast.OperationDefinition, error) {
 	if len(document.Operations) == 0 {
 		return nil, fmt.Errorf("no operations in query document")
 	}
