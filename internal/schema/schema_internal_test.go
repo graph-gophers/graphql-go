@@ -4,31 +4,31 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
-	"github.com/graph-gophers/graphql-go/types"
 )
 
 func TestParseInterfaceDef(t *testing.T) {
 	type testCase struct {
 		description string
 		definition  string
-		expected    *types.InterfaceTypeDefinition
+		expected    *ast.InterfaceTypeDefinition
 		err         *errors.QueryError
 	}
 
 	tests := []testCase{{
 		description: "Parses simple interface",
 		definition:  "Greeting { field: String }",
-		expected: &types.InterfaceTypeDefinition{
+		expected: &ast.InterfaceTypeDefinition{
 			Name:   "Greeting",
 			Loc:    errors.Location{Line: 1, Column: 1},
-			Fields: types.FieldsDefinition{&types.FieldDefinition{Name: "field"}}},
+			Fields: ast.FieldsDefinition{&ast.FieldDefinition{Name: "field"}}},
 	}}
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			var actual *types.InterfaceTypeDefinition
+			var actual *ast.InterfaceTypeDefinition
 			lex := setup(t, test.definition)
 
 			parse := func() { actual = parseInterfaceDef(lex) }
@@ -46,31 +46,31 @@ func TestParseObjectDef(t *testing.T) {
 	type testCase struct {
 		description string
 		definition  string
-		expected    *types.ObjectTypeDefinition
+		expected    *ast.ObjectTypeDefinition
 		err         *errors.QueryError
 	}
 
 	tests := []testCase{{
 		description: "Parses type inheriting single interface",
 		definition:  "Hello implements World { field: String }",
-		expected:    &types.ObjectTypeDefinition{Name: "Hello", Loc: errors.Location{Line: 1, Column: 1}, InterfaceNames: []string{"World"}},
+		expected:    &ast.ObjectTypeDefinition{Name: "Hello", Loc: errors.Location{Line: 1, Column: 1}, InterfaceNames: []string{"World"}},
 	}, {
 		description: "Parses type inheriting multiple interfaces",
 		definition:  "Hello implements Wo & rld { field: String }",
-		expected:    &types.ObjectTypeDefinition{Name: "Hello", Loc: errors.Location{Line: 1, Column: 1}, InterfaceNames: []string{"Wo", "rld"}},
+		expected:    &ast.ObjectTypeDefinition{Name: "Hello", Loc: errors.Location{Line: 1, Column: 1}, InterfaceNames: []string{"Wo", "rld"}},
 	}, {
 		description: "Parses type inheriting multiple interfaces with leading ampersand",
 		definition:  "Hello implements & Wo & rld { field: String }",
-		expected:    &types.ObjectTypeDefinition{Name: "Hello", Loc: errors.Location{Line: 1, Column: 1}, InterfaceNames: []string{"Wo", "rld"}},
+		expected:    &ast.ObjectTypeDefinition{Name: "Hello", Loc: errors.Location{Line: 1, Column: 1}, InterfaceNames: []string{"Wo", "rld"}},
 	}, {
 		description: "Allows legacy SDL interfaces",
 		definition:  "Hello implements Wo, rld { field: String }",
-		expected:    &types.ObjectTypeDefinition{Name: "Hello", Loc: errors.Location{Line: 1, Column: 1}, InterfaceNames: []string{"Wo", "rld"}},
+		expected:    &ast.ObjectTypeDefinition{Name: "Hello", Loc: errors.Location{Line: 1, Column: 1}, InterfaceNames: []string{"Wo", "rld"}},
 	}}
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			var actual *types.ObjectTypeDefinition
+			var actual *ast.ObjectTypeDefinition
 			lex := setup(t, test.definition)
 
 			parse := func() { actual = parseObjectDef(lex) }
@@ -86,7 +86,7 @@ func TestParseUnionDef(t *testing.T) {
 	type testCase struct {
 		description string
 		definition  string
-		expected    *types.Union
+		expected    *ast.Union
 		err         *errors.QueryError
 	}
 
@@ -94,7 +94,7 @@ func TestParseUnionDef(t *testing.T) {
 		{
 			description: "Parses a union",
 			definition:  "Foo = Bar | Qux | Quux",
-			expected: &types.Union{
+			expected: &ast.Union{
 				Name:      "Foo",
 				TypeNames: []string{"Bar", "Qux", "Quux"},
 				Loc:       errors.Location{Line: 1, Column: 1},
@@ -104,7 +104,7 @@ func TestParseUnionDef(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			var actual *types.Union
+			var actual *ast.Union
 			lex := setup(t, test.definition)
 
 			parse := func() { actual = parseUnionDef(lex) }
@@ -120,7 +120,7 @@ func TestParseEnumDef(t *testing.T) {
 	type testCase struct {
 		description string
 		definition  string
-		expected    *types.EnumTypeDefinition
+		expected    *ast.EnumTypeDefinition
 		err         *errors.QueryError
 	}
 
@@ -128,9 +128,9 @@ func TestParseEnumDef(t *testing.T) {
 		{
 			description: "parses EnumTypeDefinition on single line",
 			definition:  "Foo { BAR QUX }",
-			expected: &types.EnumTypeDefinition{
+			expected: &ast.EnumTypeDefinition{
 				Name: "Foo",
-				EnumValuesDefinition: []*types.EnumValueDefinition{
+				EnumValuesDefinition: []*ast.EnumValueDefinition{
 					{
 						EnumValue: "BAR",
 						Loc:       errors.Location{Line: 1, Column: 7},
@@ -149,9 +149,9 @@ func TestParseEnumDef(t *testing.T) {
 				BAR
 				QUX
 			}`,
-			expected: &types.EnumTypeDefinition{
+			expected: &ast.EnumTypeDefinition{
 				Name: "Foo",
-				EnumValuesDefinition: []*types.EnumValueDefinition{
+				EnumValuesDefinition: []*ast.EnumValueDefinition{
 					{
 						EnumValue: "BAR",
 						Loc:       errors.Location{Line: 2, Column: 5},
@@ -168,7 +168,7 @@ func TestParseEnumDef(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			var actual *types.EnumTypeDefinition
+			var actual *ast.EnumTypeDefinition
 			lex := setup(t, test.definition)
 
 			parse := func() { actual = parseEnumDef(lex) }
@@ -184,7 +184,7 @@ func TestParseDirectiveDef(t *testing.T) {
 	type testCase struct {
 		description string
 		definition  string
-		expected    *types.DirectiveDefinition
+		expected    *ast.DirectiveDefinition
 		err         *errors.QueryError
 	}
 
@@ -192,7 +192,7 @@ func TestParseDirectiveDef(t *testing.T) {
 		{
 			description: "parses DirectiveDefinition",
 			definition:  "@Foo on FIELD",
-			expected: &types.DirectiveDefinition{
+			expected: &ast.DirectiveDefinition{
 				Name:      "Foo",
 				Loc:       errors.Location{Line: 1, Column: 2},
 				Locations: []string{"FIELD"},
@@ -202,7 +202,7 @@ func TestParseDirectiveDef(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			var actual *types.DirectiveDefinition
+			var actual *ast.DirectiveDefinition
 			lex := setup(t, test.definition)
 
 			parse := func() { actual = parseDirectiveDef(lex) }
@@ -218,7 +218,7 @@ func TestParseInputDef(t *testing.T) {
 	type testCase struct {
 		description string
 		definition  string
-		expected    *types.InputObject
+		expected    *ast.InputObject
 		err         *errors.QueryError
 	}
 
@@ -226,7 +226,7 @@ func TestParseInputDef(t *testing.T) {
 		{
 			description: "parses an input object type definition",
 			definition:  "Foo { qux: String }",
-			expected: &types.InputObject{
+			expected: &ast.InputObject{
 				Name:   "Foo",
 				Values: nil,
 				Loc:    errors.Location{Line: 1, Column: 1},
@@ -236,7 +236,7 @@ func TestParseInputDef(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			var actual *types.InputObject
+			var actual *ast.InputObject
 			lex := setup(t, test.definition)
 
 			parse := func() { actual = parseInputDef(lex) }
@@ -248,7 +248,7 @@ func TestParseInputDef(t *testing.T) {
 	}
 }
 
-func compareDirectiveDefinitions(t *testing.T, expected *types.DirectiveDefinition, actual *types.DirectiveDefinition) {
+func compareDirectiveDefinitions(t *testing.T, expected *ast.DirectiveDefinition, actual *ast.DirectiveDefinition) {
 	t.Helper()
 
 	if expected.Name != actual.Name {
@@ -262,7 +262,7 @@ func compareDirectiveDefinitions(t *testing.T, expected *types.DirectiveDefiniti
 	compareLoc(t, "DirectiveDefinition", expected.Loc, actual.Loc)
 }
 
-func compareInputObjectTypeDefinition(t *testing.T, expected, actual *types.InputObject) {
+func compareInputObjectTypeDefinition(t *testing.T, expected, actual *ast.InputObject) {
 	t.Helper()
 
 	if expected.Name != actual.Name {
@@ -272,7 +272,7 @@ func compareInputObjectTypeDefinition(t *testing.T, expected, actual *types.Inpu
 	compareLoc(t, "InputObjectTypeDefinition", expected.Loc, actual.Loc)
 }
 
-func compareEnumTypeDefs(t *testing.T, expected, actual *types.EnumTypeDefinition) {
+func compareEnumTypeDefs(t *testing.T, expected, actual *ast.EnumTypeDefinition) {
 	t.Helper()
 
 	if expected.Name != actual.Name {
@@ -318,7 +318,7 @@ func compareErrors(t *testing.T, expected, actual *errors.QueryError) {
 	}
 }
 
-func compareInterfaces(t *testing.T, expected, actual *types.InterfaceTypeDefinition) {
+func compareInterfaces(t *testing.T, expected, actual *ast.InterfaceTypeDefinition) {
 	t.Helper()
 
 	if expected.Name != actual.Name {
@@ -338,7 +338,7 @@ func compareInterfaces(t *testing.T, expected, actual *types.InterfaceTypeDefini
 	}
 }
 
-func compareUnions(t *testing.T, expected, actual *types.Union) {
+func compareUnions(t *testing.T, expected, actual *ast.Union) {
 	t.Helper()
 
 	if expected.Name != actual.Name {
@@ -350,7 +350,7 @@ func compareUnions(t *testing.T, expected, actual *types.Union) {
 	}
 }
 
-func compareObjects(t *testing.T, expected, actual *types.ObjectTypeDefinition) {
+func compareObjects(t *testing.T, expected, actual *ast.ObjectTypeDefinition) {
 	t.Helper()
 
 	if expected.Name != actual.Name {

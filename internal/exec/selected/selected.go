@@ -6,17 +6,17 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"github.com/graph-gophers/graphql-go/internal/query"
 	"github.com/graph-gophers/graphql-go/introspection"
-	"github.com/graph-gophers/graphql-go/types"
 )
 
 type Request struct {
-	Schema             *types.Schema
-	Doc                *types.ExecutableDefinition
+	Schema             *ast.Schema
+	Doc                *ast.ExecutableDefinition
 	Vars               map[string]interface{}
 	Mu                 sync.Mutex
 	Errs               []*errors.QueryError
@@ -29,7 +29,7 @@ func (r *Request) AddError(err *errors.QueryError) {
 	r.Mu.Unlock()
 }
 
-func ApplyOperation(r *Request, s *resolvable.Schema, op *types.OperationDefinition) []Selection {
+func ApplyOperation(r *Request, s *resolvable.Schema, op *ast.OperationDefinition) []Selection {
 	var obj *resolvable.Object
 	switch op.Type {
 	case query.Query:
@@ -80,10 +80,10 @@ func (*SchemaField) isSelection()   {}
 func (*TypeAssertion) isSelection() {}
 func (*TypenameField) isSelection() {}
 
-func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, sels []types.Selection) (flattenedSels []Selection) {
+func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, sels []ast.Selection) (flattenedSels []Selection) {
 	for _, sel := range sels {
 		switch sel := sel.(type) {
-		case *types.Field:
+		case *ast.Field:
 			field := sel
 			if skipByDirective(r, field.Directives) {
 				continue
@@ -173,14 +173,14 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 				})
 			}
 
-		case *types.InlineFragment:
+		case *ast.InlineFragment:
 			frag := sel
 			if skipByDirective(r, frag.Directives) {
 				continue
 			}
 			flattenedSels = append(flattenedSels, applyFragment(r, s, e, &frag.Fragment)...)
 
-		case *types.FragmentSpread:
+		case *ast.FragmentSpread:
 			spread := sel
 			if skipByDirective(r, spread.Directives) {
 				continue
@@ -194,10 +194,10 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 	return
 }
 
-func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag *types.Fragment) []Selection {
+func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag *ast.Fragment) []Selection {
 	if frag.On.Name != e.Name {
 		t := r.Schema.Resolve(frag.On.Name)
-		face, ok := t.(*types.InterfaceTypeDefinition)
+		face, ok := t.(*ast.InterfaceTypeDefinition)
 		if !ok && frag.On.Name != "" {
 			a, ok2 := e.TypeAssertions[frag.On.Name]
 			if !ok2 {
@@ -232,7 +232,7 @@ func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag 
 	return applySelectionSet(r, s, e, frag.Selections)
 }
 
-func applyField(r *Request, s *resolvable.Schema, e resolvable.Resolvable, sels []types.Selection) []Selection {
+func applyField(r *Request, s *resolvable.Schema, e resolvable.Resolvable, sels []ast.Selection) []Selection {
 	switch e := e.(type) {
 	case *resolvable.Object:
 		return applySelectionSet(r, s, e, sels)
@@ -245,7 +245,7 @@ func applyField(r *Request, s *resolvable.Schema, e resolvable.Resolvable, sels 
 	}
 }
 
-func skipByDirective(r *Request, directives types.DirectiveList) bool {
+func skipByDirective(r *Request, directives ast.DirectiveList) bool {
 	if d := directives.Get("skip"); d != nil {
 		p := packer.ValuePacker{ValueType: reflect.TypeOf(false)}
 		v, err := p.Pack(d.Arguments.MustGet("if").Deserialize(r.Vars))

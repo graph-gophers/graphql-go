@@ -1,4 +1,4 @@
-package types
+package ast
 
 import "github.com/graph-gophers/graphql-go/errors"
 

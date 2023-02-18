@@ -4,21 +4,21 @@ import (
 	"fmt"
 	"text/scanner"
 
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
-	"github.com/graph-gophers/graphql-go/types"
 )
 
 const (
-	Query        types.OperationType = "QUERY"
-	Mutation     types.OperationType = "MUTATION"
-	Subscription types.OperationType = "SUBSCRIPTION"
+	Query        ast.OperationType = "QUERY"
+	Mutation     ast.OperationType = "MUTATION"
+	Subscription ast.OperationType = "SUBSCRIPTION"
 )
 
-func Parse(queryString string) (*types.ExecutableDefinition, *errors.QueryError) {
+func Parse(queryString string) (*ast.ExecutableDefinition, *errors.QueryError) {
 	l := common.NewLexer(queryString, false)
 
-	var execDef *types.ExecutableDefinition
+	var execDef *ast.ExecutableDefinition
 	err := l.CatchSyntaxError(func() { execDef = parseExecutableDefinition(l) })
 	if err != nil {
 		return nil, err
@@ -27,12 +27,12 @@ func Parse(queryString string) (*types.ExecutableDefinition, *errors.QueryError)
 	return execDef, nil
 }
 
-func parseExecutableDefinition(l *common.Lexer) *types.ExecutableDefinition {
-	ed := &types.ExecutableDefinition{}
+func parseExecutableDefinition(l *common.Lexer) *ast.ExecutableDefinition {
+	ed := &ast.ExecutableDefinition{}
 	l.ConsumeWhitespace()
 	for l.Peek() != scanner.EOF {
 		if l.Peek() == '{' {
-			op := &types.OperationDefinition{Type: Query, Loc: l.Location()}
+			op := &ast.OperationDefinition{Type: Query, Loc: l.Location()}
 			op.Selections = parseSelectionSet(l)
 			ed.Operations = append(ed.Operations, op)
 			continue
@@ -63,8 +63,8 @@ func parseExecutableDefinition(l *common.Lexer) *types.ExecutableDefinition {
 	return ed
 }
 
-func parseOperation(l *common.Lexer, opType types.OperationType) *types.OperationDefinition {
-	op := &types.OperationDefinition{Type: opType}
+func parseOperation(l *common.Lexer, opType ast.OperationType) *ast.OperationDefinition {
+	op := &ast.OperationDefinition{Type: opType}
 	op.Name.Loc = l.Location()
 	if l.Peek() == scanner.Ident {
 		op.Name = l.ConsumeIdentWithLoc()
@@ -85,18 +85,18 @@ func parseOperation(l *common.Lexer, opType types.OperationType) *types.Operatio
 	return op
 }
 
-func parseFragment(l *common.Lexer) *types.FragmentDefinition {
-	f := &types.FragmentDefinition{}
+func parseFragment(l *common.Lexer) *ast.FragmentDefinition {
+	f := &ast.FragmentDefinition{}
 	f.Name = l.ConsumeIdentWithLoc()
 	l.ConsumeKeyword("on")
-	f.On = types.TypeName{Ident: l.ConsumeIdentWithLoc()}
+	f.On = ast.TypeName{Ident: l.ConsumeIdentWithLoc()}
 	f.Directives = common.ParseDirectives(l)
 	f.Selections = parseSelectionSet(l)
 	return f
 }
 
-func parseSelectionSet(l *common.Lexer) []types.Selection {
-	var sels []types.Selection
+func parseSelectionSet(l *common.Lexer) []ast.Selection {
+	var sels []ast.Selection
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
 		sels = append(sels, parseSelection(l))
@@ -105,15 +105,15 @@ func parseSelectionSet(l *common.Lexer) []types.Selection {
 	return sels
 }
 
-func parseSelection(l *common.Lexer) types.Selection {
+func parseSelection(l *common.Lexer) ast.Selection {
 	if l.Peek() == '.' {
 		return parseSpread(l)
 	}
 	return parseFieldDef(l)
 }
 
-func parseFieldDef(l *common.Lexer) *types.Field {
-	f := &types.Field{}
+func parseFieldDef(l *common.Lexer) *ast.Field {
+	f := &ast.Field{}
 	f.Alias = l.ConsumeIdentWithLoc()
 	f.Name = f.Alias
 	if l.Peek() == ':' {
@@ -131,24 +131,24 @@ func parseFieldDef(l *common.Lexer) *types.Field {
 	return f
 }
 
-func parseSpread(l *common.Lexer) types.Selection {
+func parseSpread(l *common.Lexer) ast.Selection {
 	loc := l.Location()
 	l.ConsumeToken('.')
 	l.ConsumeToken('.')
 	l.ConsumeToken('.')
 
-	f := &types.InlineFragment{Loc: loc}
+	f := &ast.InlineFragment{Loc: loc}
 	if l.Peek() == scanner.Ident {
 		ident := l.ConsumeIdentWithLoc()
 		if ident.Name != "on" {
-			fs := &types.FragmentSpread{
+			fs := &ast.FragmentSpread{
 				Name: ident,
 				Loc:  loc,
 			}
 			fs.Directives = common.ParseDirectives(l)
 			return fs
 		}
-		f.On = types.TypeName{Ident: l.ConsumeIdentWithLoc()}
+		f.On = ast.TypeName{Ident: l.ConsumeIdentWithLoc()}
 	}
 	f.Directives = common.ParseDirectives(l)
 	f.Selections = parseSelectionSet(l)
