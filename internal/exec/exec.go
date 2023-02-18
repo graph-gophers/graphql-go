@@ -64,12 +64,6 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *types.O
 	return out.Bytes(), r.Errs
 }
 
-type resolverFunc func(ctx context.Context, args interface{}) (output interface{}, err error)
-
-func (f resolverFunc) Resolve(ctx context.Context, args interface{}) (output interface{}, err error) {
-	return f(ctx, args)
-}
-
 type fieldToExec struct {
 	field    *selected.SchemaField
 	sels     []selected.Selection
@@ -78,58 +72,7 @@ type fieldToExec struct {
 }
 
 func (f *fieldToExec) resolve(ctx context.Context) (output interface{}, err error) {
-	var args interface{}
-
-	if f.field.ArgsPacker != nil {
-		args = f.field.PackedArgs.Interface()
-	}
-
-	currResolver := f.resolveField
-
-	for _, pd := range f.field.PackedDirectives {
-		pd := pd // Needed to avoid passing only the last directive, since we're closing over this loop var pointer
-		innerResolver := currResolver
-
-		currResolver = func(ctx context.Context, args interface{}) (output interface{}, err error) {
-			return pd.Resolve(ctx, args, resolverFunc(innerResolver))
-		}
-	}
-
-	return currResolver(ctx, args)
-}
-
-func (f *fieldToExec) resolveField(ctx context.Context, args interface{}) (output interface{}, err error) {
-	if !f.field.UseMethodResolver() {
-		res := f.resolver
-
-		// TODO extract out unwrapping ptr logic to a common place
-		if res.Kind() == reflect.Ptr {
-			res = res.Elem()
-		}
-
-		return res.FieldByIndex(f.field.FieldIndex).Interface(), nil
-	}
-
-	var in []reflect.Value
-	var callOut []reflect.Value
-
-	if f.field.HasContext {
-		in = append(in, reflect.ValueOf(ctx))
-	}
-
-	if f.field.ArgsPacker != nil {
-		in = append(in, reflect.ValueOf(args))
-	}
-
-	callOut = f.resolver.Method(f.field.MethodIndex).Call(in)
-	result := callOut[0]
-
-	if f.field.HasError && !callOut[1].IsNil() {
-		resolverErr := callOut[1].Interface().(error)
-		return result.Interface(), resolverErr
-	}
-
-	return result.Interface(), nil
+	return f.field.Resolve(ctx, f.resolver)
 }
 
 func resolvedToNull(b *bytes.Buffer) bool {
