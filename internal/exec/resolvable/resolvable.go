@@ -58,28 +58,27 @@ func (f *Field) UseMethodResolver() bool {
 
 func (f *Field) Resolve(ctx context.Context, resolver reflect.Value, args interface{}) (output interface{}, err error) {
 	// Short circuit case to avoid wrapping functions
-	// TODO: confirm performance / memory difference, is it needed?
 	if len(f.DirectiveVisitors) == 0 {
-		return f.resolveInternal(ctx, resolver, args)
+		return f.resolve(ctx, resolver, args)
 	}
 
-	currResolver := func(ctx context.Context, args interface{}) (output interface{}, err error) {
-		return f.resolveInternal(ctx, resolver, args)
+	wrapResolver := func(ctx context.Context, args interface{}) (output interface{}, err error) {
+		return f.resolve(ctx, resolver, args)
 	}
 
-	for _, pd := range f.DirectiveVisitors {
-		pd := pd // Needed to avoid passing only the last directive, since we're closing over this loop var pointer
-		innerResolver := currResolver
+	for _, d := range f.DirectiveVisitors {
+		d := d // Needed to avoid passing only the last directive, since we're closing over this loop var pointer
+		innerResolver := wrapResolver
 
-		currResolver = func(ctx context.Context, args interface{}) (output interface{}, err error) {
-			return pd.Resolve(ctx, args, resolverFunc(innerResolver))
+		wrapResolver = func(ctx context.Context, args interface{}) (output interface{}, err error) {
+			return d.Resolve(ctx, args, resolverFunc(innerResolver))
 		}
 	}
 
-	return currResolver(ctx, args)
+	return wrapResolver(ctx, args)
 }
 
-func (f *Field) resolveInternal(ctx context.Context, resolver reflect.Value, args interface{}) (output interface{}, err error) {
+func (f *Field) resolve(ctx context.Context, resolver reflect.Value, args interface{}) (output interface{}, err error) {
 	if !f.UseMethodResolver() {
 		res := resolver
 
@@ -134,12 +133,12 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *types.Schema, resolver interface{}, dirVisitors []directives.Directive, useFieldResolvers bool) (*Schema, error) {
+func ApplyResolver(s *types.Schema, resolver interface{}, dirs []directives.Directive, useFieldResolvers bool) (*Schema, error) {
 	if resolver == nil {
 		return &Schema{Meta: newMeta(s), Schema: *s}, nil
 	}
 
-	ds, err := applyDirectives(s, dirVisitors)
+	ds, err := applyDirectives(s, dirs)
 	if err != nil {
 		return nil, err
 	}
@@ -238,11 +237,11 @@ func buildDirectivePackers(s *types.Schema, visitors map[string]directives.Direc
 		v, ok := visitors[n]
 		if !ok {
 			// Directives which need visitors have already been checked
-			// Anything without a visitor now is an in-built directive without a packer.
+			// Anything without a visitor now is a built-in directive without a packer.
 			continue
 		}
 
-		if _, ok := v.(directives.ResolverInterceptor); !ok {
+		if _, ok = v.(directives.ResolverInterceptor); !ok {
 			// Directive doesn't apply at field resolution time, skip it
 			continue
 		}
