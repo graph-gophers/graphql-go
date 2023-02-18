@@ -1,4 +1,4 @@
-package types
+package ast
 
 // Argument is a representation of the GraphQL Argument.
 //

@@ -3,9 +3,9 @@ package validation
 import (
 	"testing"
 
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/internal/query"
 	"github.com/graph-gophers/graphql-go/internal/schema"
-	"github.com/graph-gophers/graphql-go/types"
 )
 
 const (
@@ -76,7 +76,7 @@ type maxDepthTestCase struct {
 	expectedErrors []string
 }
 
-func (tc maxDepthTestCase) Run(t *testing.T, s *types.Schema) {
+func (tc maxDepthTestCase) Run(t *testing.T, s *ast.Schema) {
 	t.Run(tc.name, func(t *testing.T) {
 		doc, qErr := query.Parse(tc.query)
 		if qErr != nil {
