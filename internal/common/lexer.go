@@ -7,8 +7,8 @@ import (
 	"strings"
 	"text/scanner"
 
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/types"
 )
 
 type syntaxError string
@@ -119,11 +119,11 @@ func (l *Lexer) ConsumeIdent() string {
 	return name
 }
 
-func (l *Lexer) ConsumeIdentWithLoc() types.Ident {
+func (l *Lexer) ConsumeIdentWithLoc() ast.Ident {
 	loc := l.Location()
 	name := l.sc.TokenText()
 	l.ConsumeToken(scanner.Ident)
-	return types.Ident{Name: name, Loc: loc}
+	return ast.Ident{Name: name, Loc: loc}
 }
 
 func (l *Lexer) ConsumeKeyword(keyword string) {
@@ -133,8 +133,8 @@ func (l *Lexer) ConsumeKeyword(keyword string) {
 	l.ConsumeWhitespace()
 }
 
-func (l *Lexer) ConsumeLiteral() *types.PrimitiveValue {
-	lit := &types.PrimitiveValue{Type: l.next, Text: l.sc.TokenText()}
+func (l *Lexer) ConsumeLiteral() *ast.PrimitiveValue {
+	lit := &ast.PrimitiveValue{Type: l.next, Text: l.sc.TokenText()}
 	l.ConsumeWhitespace()
 	return lit
 }

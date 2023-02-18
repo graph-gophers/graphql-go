@@ -6,10 +6,10 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/decode"
 	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
-	"github.com/graph-gophers/graphql-go/types"
 )
 
 const (
@@ -20,7 +20,7 @@ const (
 
 type Schema struct {
 	*Meta
-	types.Schema
+	ast.Schema
 	Query                Resolvable
 	Mutation             Resolvable
 	Subscription         Resolvable
@@ -40,7 +40,7 @@ type Object struct {
 }
 
 type Field struct {
-	types.FieldDefinition
+	ast.FieldDefinition
 	TypeName          string
 	MethodIndex       int
 	FieldIndex        []int
@@ -133,7 +133,7 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *types.Schema, resolver interface{}, dirs []directives.Directive, useFieldResolvers bool) (*Schema, error) {
+func ApplyResolver(s *ast.Schema, resolver interface{}, dirs []directives.Directive, useFieldResolvers bool) (*Schema, error) {
 	if resolver == nil {
 		return &Schema{Meta: newMeta(s), Schema: *s}, nil
 	}
@@ -225,7 +225,7 @@ func ApplyResolver(s *types.Schema, resolver interface{}, dirs []directives.Dire
 	}, nil
 }
 
-func buildDirectivePackers(s *types.Schema, visitors map[string]directives.Directive) (map[string]*packer.StructPacker, error) {
+func buildDirectivePackers(s *ast.Schema, visitors map[string]directives.Directive) (map[string]*packer.StructPacker, error) {
 	// Directive packers need to use a dedicated builder which is ready ('finish()' called) while
 	// schema fields (and their argument packers) are still being built
 	builder := packer.NewBuilder()
@@ -263,7 +263,7 @@ func buildDirectivePackers(s *types.Schema, visitors map[string]directives.Direc
 	return packers, nil
 }
 
-func applyDirectives(s *types.Schema, visitors []directives.Directive) (map[string]directives.Directive, error) {
+func applyDirectives(s *ast.Schema, visitors []directives.Directive) (map[string]directives.Directive, error) {
 	byName := make(map[string]directives.Directive, len(s.Directives))
 
 	for _, v := range visitors {
@@ -312,7 +312,7 @@ func applyDirectives(s *types.Schema, visitors []directives.Directive) (map[stri
 }
 
 type execBuilder struct {
-	schema            *types.Schema
+	schema            *ast.Schema
 	resMap            map[typePair]*resMapEntry
 	directivePackers  map[string]*packer.StructPacker
 	packerBuilder     *packer.Builder
@@ -320,7 +320,7 @@ type execBuilder struct {
 }
 
 type typePair struct {
-	graphQLType  types.Type
+	graphQLType  ast.Type
 	resolverType reflect.Type
 }
 
@@ -329,7 +329,7 @@ type resMapEntry struct {
 	targets []*Resolvable
 }
 
-func newBuilder(s *types.Schema, directives map[string]*packer.StructPacker, useFieldResolvers bool) *execBuilder {
+func newBuilder(s *ast.Schema, directives map[string]*packer.StructPacker, useFieldResolvers bool) *execBuilder {
 	return &execBuilder{
 		schema:            s,
 		resMap:            make(map[typePair]*resMapEntry),
@@ -349,7 +349,7 @@ func (b *execBuilder) finish() error {
 	return b.packerBuilder.Finish()
 }
 
-func (b *execBuilder) assignExec(target *Resolvable, t types.Type, resolverType reflect.Type) error {
+func (b *execBuilder) assignExec(target *Resolvable, t ast.Type, resolverType reflect.Type) error {
 	k := typePair{t, resolverType}
 	ref, ok := b.resMap[k]
 	if !ok {
@@ -365,18 +365,18 @@ func (b *execBuilder) assignExec(target *Resolvable, t types.Type, resolverType 
 	return nil
 }
 
-func (b *execBuilder) makeExec(t types.Type, resolverType reflect.Type) (Resolvable, error) {
+func (b *execBuilder) makeExec(t ast.Type, resolverType reflect.Type) (Resolvable, error) {
 	var nonNull bool
 	t, nonNull = unwrapNonNull(t)
 
 	switch t := t.(type) {
-	case *types.ObjectTypeDefinition:
+	case *ast.ObjectTypeDefinition:
 		return b.makeObjectExec(t.Name, t.Fields, nil, nonNull, resolverType)
 
-	case *types.InterfaceTypeDefinition:
+	case *ast.InterfaceTypeDefinition:
 		return b.makeObjectExec(t.Name, t.Fields, t.PossibleTypes, nonNull, resolverType)
 
-	case *types.Union:
+	case *ast.Union:
 		return b.makeObjectExec(t.Name, nil, t.UnionMemberTypes, nonNull, resolverType)
 	}
 
@@ -388,13 +388,13 @@ func (b *execBuilder) makeExec(t types.Type, resolverType reflect.Type) (Resolva
 	}
 
 	switch t := t.(type) {
-	case *types.ScalarTypeDefinition:
+	case *ast.ScalarTypeDefinition:
 		return makeScalarExec(t, resolverType)
 
-	case *types.EnumTypeDefinition:
+	case *ast.EnumTypeDefinition:
 		return &Scalar{}, nil
 
-	case *types.List:
+	case *ast.List:
 		if resolverType.Kind() != reflect.Slice {
 			return nil, fmt.Errorf("%s is not a slice", resolverType)
 		}
@@ -409,7 +409,7 @@ func (b *execBuilder) makeExec(t types.Type, resolverType reflect.Type) (Resolva
 	}
 }
 
-func makeScalarExec(t *types.ScalarTypeDefinition, resolverType reflect.Type) (Resolvable, error) {
+func makeScalarExec(t *ast.ScalarTypeDefinition, resolverType reflect.Type) (Resolvable, error) {
 	implementsType := false
 	switch r := reflect.New(resolverType).Interface().(type) {
 	case *int32:
@@ -430,7 +430,7 @@ func makeScalarExec(t *types.ScalarTypeDefinition, resolverType reflect.Type) (R
 	return &Scalar{}, nil
 }
 
-func (b *execBuilder) makeObjectExec(typeName string, fields types.FieldsDefinition, possibleTypes []*types.ObjectTypeDefinition,
+func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinition, possibleTypes []*ast.ObjectTypeDefinition,
 	nonNull bool, resolverType reflect.Type) (*Object, error) {
 	if !nonNull {
 		if resolverType.Kind() != reflect.Ptr && resolverType.Kind() != reflect.Interface {
@@ -521,7 +521,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields types.FieldsDefinit
 var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
 
-func (b *execBuilder) makeFieldExec(typeName string, f *types.FieldDefinition, m reflect.Method, sf reflect.StructField,
+func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m reflect.Method, sf reflect.StructField,
 	methodIndex int, fieldIndex []int, methodHasReceiver bool) (*Field, error) {
 
 	var argsPacker *packer.StructPacker
@@ -610,7 +610,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *types.FieldDefinition, m
 	return fe, nil
 }
 
-func packDirectives(ds types.DirectiveList, packers map[string]*packer.StructPacker) ([]directives.ResolverInterceptor, error) {
+func packDirectives(ds ast.DirectiveList, packers map[string]*packer.StructPacker) ([]directives.ResolverInterceptor, error) {
 	packed := make([]directives.ResolverInterceptor, 0, len(ds))
 	for _, d := range ds {
 		dp, ok := packers[d.Name.Name]
@@ -687,8 +687,8 @@ func fieldCount(t reflect.Type, count map[string]int) map[string]int {
 	return count
 }
 
-func unwrapNonNull(t types.Type) (types.Type, bool) {
-	if nn, ok := t.(*types.NonNull); ok {
+func unwrapNonNull(t ast.Type) (ast.Type, bool) {
+	if nn, ok := t.(*ast.NonNull); ok {
 		return nn.OfType, true
 	}
 	return t, false
