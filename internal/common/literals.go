@@ -3,10 +3,10 @@ package common
 import (
 	"text/scanner"
 
-	"github.com/graph-gophers/graphql-go/types"
+	"github.com/graph-gophers/graphql-go/ast"
 )
 
-func ParseLiteral(l *Lexer, constOnly bool) types.Value {
+func ParseLiteral(l *Lexer, constOnly bool) ast.Value {
 	loc := l.Location()
 	switch l.Peek() {
 	case '$':
@@ -15,12 +15,12 @@ func ParseLiteral(l *Lexer, constOnly bool) types.Value {
 			panic("unreachable")
 		}
 		l.ConsumeToken('$')
-		return &types.Variable{Name: l.ConsumeIdent(), Loc: loc}
+		return &ast.Variable{Name: l.ConsumeIdent(), Loc: loc}
 
 	case scanner.Int, scanner.Float, scanner.String, scanner.Ident:
 		lit := l.ConsumeLiteral()
 		if lit.Type == scanner.Ident && lit.Text == "null" {
-			return &types.NullValue{Loc: loc}
+			return &ast.NullValue{Loc: loc}
 		}
 		lit.Loc = loc
 		return lit
@@ -32,24 +32,24 @@ func ParseLiteral(l *Lexer, constOnly bool) types.Value {
 		return lit
 	case '[':
 		l.ConsumeToken('[')
-		var list []types.Value
+		var list []ast.Value
 		for l.Peek() != ']' {
 			list = append(list, ParseLiteral(l, constOnly))
 		}
 		l.ConsumeToken(']')
-		return &types.ListValue{Values: list, Loc: loc}
+		return &ast.ListValue{Values: list, Loc: loc}
 
 	case '{':
 		l.ConsumeToken('{')
-		var fields []*types.ObjectField
+		var fields []*ast.ObjectField
 		for l.Peek() != '}' {
 			name := l.ConsumeIdentWithLoc()
 			l.ConsumeToken(':')
 			value := ParseLiteral(l, constOnly)
-			fields = append(fields, &types.ObjectField{Name: name, Value: value})
+			fields = append(fields, &ast.ObjectField{Name: name, Value: value})
 		}
 		l.ConsumeToken('}')
-		return &types.ObjectValue{Fields: fields, Loc: loc}
+		return &ast.ObjectValue{Fields: fields, Loc: loc}
 
 	default:
 		l.SyntaxError("invalid value")

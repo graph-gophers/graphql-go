@@ -3,8 +3,8 @@ package resolvable
 import (
 	"reflect"
 
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/introspection"
-	"github.com/graph-gophers/graphql-go/types"
 )
 
 // Meta defines the details of the metadata schema for introspection.
@@ -18,23 +18,23 @@ type Meta struct {
 	Service       *Object
 }
 
-func newMeta(s *types.Schema) *Meta {
+func newMeta(s *ast.Schema) *Meta {
 	var err error
 	b := newBuilder(s, nil, false)
 
-	metaSchema := s.Types["__Schema"].(*types.ObjectTypeDefinition)
+	metaSchema := s.Types["__Schema"].(*ast.ObjectTypeDefinition)
 	so, err := b.makeObjectExec(metaSchema.Name, metaSchema.Fields, nil, false, reflect.TypeOf(&introspection.Schema{}))
 	if err != nil {
 		panic(err)
 	}
 
-	metaType := s.Types["__Type"].(*types.ObjectTypeDefinition)
+	metaType := s.Types["__Type"].(*ast.ObjectTypeDefinition)
 	t, err := b.makeObjectExec(metaType.Name, metaType.Fields, nil, false, reflect.TypeOf(&introspection.Type{}))
 	if err != nil {
 		panic(err)
 	}
 
-	metaService := s.Types["_Service"].(*types.ObjectTypeDefinition)
+	metaService := s.Types["_Service"].(*ast.ObjectTypeDefinition)
 	sv, err := b.makeObjectExec(metaService.Name, metaService.Fields, nil, false, reflect.TypeOf(&introspection.Service{}))
 	if err != nil {
 		panic(err)
@@ -45,15 +45,15 @@ func newMeta(s *types.Schema) *Meta {
 	}
 
 	fieldTypename := Field{
-		FieldDefinition: types.FieldDefinition{
+		FieldDefinition: ast.FieldDefinition{
 			Name: "__typename",
-			Type: &types.NonNull{OfType: s.Types["String"]},
+			Type: &ast.NonNull{OfType: s.Types["String"]},
 		},
 		TraceLabel: "GraphQL field: __typename",
 	}
 
 	fieldSchema := Field{
-		FieldDefinition: types.FieldDefinition{
+		FieldDefinition: ast.FieldDefinition{
 			Name: "__schema",
 			Type: s.Types["__Schema"],
 		},
@@ -61,7 +61,7 @@ func newMeta(s *types.Schema) *Meta {
 	}
 
 	fieldType := Field{
-		FieldDefinition: types.FieldDefinition{
+		FieldDefinition: ast.FieldDefinition{
 			Name: "__type",
 			Type: s.Types["__Type"],
 		},
@@ -69,7 +69,7 @@ func newMeta(s *types.Schema) *Meta {
 	}
 
 	fieldService := Field{
-		FieldDefinition: types.FieldDefinition{
+		FieldDefinition: ast.FieldDefinition{
 			Name: "_service",
 			Type: s.Types["_Service"],
 		},

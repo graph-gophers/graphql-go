@@ -4,17 +4,17 @@ import (
 	"fmt"
 	"text/scanner"
 
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
-	"github.com/graph-gophers/graphql-go/types"
 )
 
 // New initializes an instance of Schema.
-func New() *types.Schema {
-	s := &types.Schema{
+func New() *ast.Schema {
+	s := &ast.Schema{
 		EntryPointNames: make(map[string]string),
-		Types:           make(map[string]types.NamedType),
-		Directives:      make(map[string]*types.DirectiveDefinition),
+		Types:           make(map[string]ast.NamedType),
+		Directives:      make(map[string]*ast.DirectiveDefinition),
 	}
 	m := newMeta()
 	for n, t := range m.Types {
@@ -26,7 +26,7 @@ func New() *types.Schema {
 	return s
 }
 
-func Parse(s *types.Schema, schemaString string, useStringDescriptions bool) error {
+func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error {
 	l := common.NewLexer(schemaString, useStringDescriptions)
 	err := l.CatchSyntaxError(func() { parseSchema(s, l) })
 	if err != nil {
@@ -67,7 +67,7 @@ func Parse(s *types.Schema, schemaString string, useStringDescriptions bool) err
 			s.EntryPointNames["subscription"] = "Subscription"
 		}
 	}
-	s.RootOperationTypes = make(map[string]types.NamedType)
+	s.RootOperationTypes = make(map[string]ast.NamedType)
 	for key, name := range s.EntryPointNames {
 		t, ok := s.Types[name]
 		if !ok {
@@ -79,13 +79,13 @@ func Parse(s *types.Schema, schemaString string, useStringDescriptions bool) err
 	// Interface types need validation: https://spec.graphql.org/draft/#sec-Interfaces.Interfaces-Implementing-Interfaces
 	for _, typeDef := range s.Types {
 		switch t := typeDef.(type) {
-		case *types.InterfaceTypeDefinition:
+		case *ast.InterfaceTypeDefinition:
 			for i, implements := range t.Interfaces {
 				typ, ok := s.Types[implements.Name]
 				if !ok {
 					return errors.Errorf("interface %q not found", implements)
 				}
-				inteface, ok := typ.(*types.InterfaceTypeDefinition)
+				inteface, ok := typ.(*ast.InterfaceTypeDefinition)
 				if !ok {
 					return errors.Errorf("type %q is not an interface", inteface)
 				}
@@ -104,7 +104,7 @@ func Parse(s *types.Schema, schemaString string, useStringDescriptions bool) err
 	}
 
 	for _, obj := range s.Objects {
-		obj.Interfaces = make([]*types.InterfaceTypeDefinition, len(obj.InterfaceNames))
+		obj.Interfaces = make([]*ast.InterfaceTypeDefinition, len(obj.InterfaceNames))
 		if err := resolveDirectives(s, obj.Directives, "OBJECT"); err != nil {
 			return err
 		}
@@ -118,7 +118,7 @@ func Parse(s *types.Schema, schemaString string, useStringDescriptions bool) err
 			if !ok {
 				return errors.Errorf("interface %q not found", intfName)
 			}
-			intf, ok := t.(*types.InterfaceTypeDefinition)
+			intf, ok := t.(*ast.InterfaceTypeDefinition)
 			if !ok {
 				return errors.Errorf("type %q is not an interface", intfName)
 			}
@@ -136,13 +136,13 @@ func Parse(s *types.Schema, schemaString string, useStringDescriptions bool) err
 		if err := resolveDirectives(s, union.Directives, "UNION"); err != nil {
 			return err
 		}
-		union.UnionMemberTypes = make([]*types.ObjectTypeDefinition, len(union.TypeNames))
+		union.UnionMemberTypes = make([]*ast.ObjectTypeDefinition, len(union.TypeNames))
 		for i, name := range union.TypeNames {
 			t, ok := s.Types[name]
 			if !ok {
 				return errors.Errorf("object type %q not found", name)
 			}
-			obj, ok := t.(*types.ObjectTypeDefinition)
+			obj, ok := t.(*ast.ObjectTypeDefinition)
 			if !ok {
 				return errors.Errorf("type %q is not an object", name)
 			}
@@ -166,13 +166,13 @@ func Parse(s *types.Schema, schemaString string, useStringDescriptions bool) err
 	return nil
 }
 
-func ParseSchema(schemaString string, useStringDescriptions bool) (*types.Schema, error) {
+func ParseSchema(schemaString string, useStringDescriptions bool) (*ast.Schema, error) {
 	s := New()
 	err := Parse(s, schemaString, useStringDescriptions)
 	return s, err
 }
 
-func mergeExtensions(s *types.Schema) error {
+func mergeExtensions(s *ast.Schema) error {
 	for _, ext := range s.Extensions {
 		typ := s.Types[ext.Type.TypeName()]
 		if typ == nil {
@@ -184,8 +184,8 @@ func mergeExtensions(s *types.Schema) error {
 		}
 
 		switch og := typ.(type) {
-		case *types.ObjectTypeDefinition:
-			e := ext.Type.(*types.ObjectTypeDefinition)
+		case *ast.ObjectTypeDefinition:
+			e := ext.Type.(*ast.ObjectTypeDefinition)
 
 			for _, field := range e.Fields {
 				if og.Fields.Get(field.Name) != nil {
@@ -203,8 +203,8 @@ func mergeExtensions(s *types.Schema) error {
 			}
 			og.InterfaceNames = append(og.InterfaceNames, e.InterfaceNames...)
 
-		case *types.InputObject:
-			e := ext.Type.(*types.InputObject)
+		case *ast.InputObject:
+			e := ext.Type.(*ast.InputObject)
 
 			for _, field := range e.Values {
 				if og.Values.Get(field.Name.Name) != nil {
@@ -213,8 +213,8 @@ func mergeExtensions(s *types.Schema) error {
 			}
 			og.Values = append(og.Values, e.Values...)
 
-		case *types.InterfaceTypeDefinition:
-			e := ext.Type.(*types.InterfaceTypeDefinition)
+		case *ast.InterfaceTypeDefinition:
+			e := ext.Type.(*ast.InterfaceTypeDefinition)
 
 			for _, field := range e.Fields {
 				if og.Fields.Get(field.Name) != nil {
@@ -223,8 +223,8 @@ func mergeExtensions(s *types.Schema) error {
 			}
 			og.Fields = append(og.Fields, e.Fields...)
 
-		case *types.Union:
-			e := ext.Type.(*types.Union)
+		case *ast.Union:
+			e := ext.Type.(*ast.Union)
 
 			for _, en := range e.TypeNames {
 				for _, on := range og.TypeNames {
@@ -235,8 +235,8 @@ func mergeExtensions(s *types.Schema) error {
 			}
 			og.TypeNames = append(og.TypeNames, e.TypeNames...)
 
-		case *types.EnumTypeDefinition:
-			e := ext.Type.(*types.EnumTypeDefinition)
+		case *ast.EnumTypeDefinition:
+			e := ext.Type.(*ast.EnumTypeDefinition)
 
 			for _, en := range e.EnumValuesDefinition {
 				for _, on := range og.EnumValuesDefinition {
@@ -254,15 +254,15 @@ func mergeExtensions(s *types.Schema) error {
 	return nil
 }
 
-func resolveNamedType(s *types.Schema, t types.NamedType) error {
+func resolveNamedType(s *ast.Schema, t ast.NamedType) error {
 	switch t := t.(type) {
-	case *types.ObjectTypeDefinition:
+	case *ast.ObjectTypeDefinition:
 		for _, f := range t.Fields {
 			if err := resolveField(s, f); err != nil {
 				return err
 			}
 		}
-	case *types.InterfaceTypeDefinition:
+	case *ast.InterfaceTypeDefinition:
 		for _, f := range t.Fields {
 			if err := resolveField(s, f); err != nil {
 				return err
@@ -271,14 +271,14 @@ func resolveNamedType(s *types.Schema, t types.NamedType) error {
 		if err := resolveDirectives(s, t.Directives, "INTERFACE"); err != nil {
 			return err
 		}
-	case *types.InputObject:
+	case *ast.InputObject:
 		if err := resolveInputObject(s, t.Values); err != nil {
 			return err
 		}
 		if err := resolveDirectives(s, t.Directives, "INPUT_OBJECT"); err != nil {
 			return err
 		}
-	case *types.ScalarTypeDefinition:
+	case *ast.ScalarTypeDefinition:
 		if err := resolveDirectives(s, t.Directives, "SCALAR"); err != nil {
 			return err
 		}
@@ -286,7 +286,7 @@ func resolveNamedType(s *types.Schema, t types.NamedType) error {
 	return nil
 }
 
-func resolveField(s *types.Schema, f *types.FieldDefinition) error {
+func resolveField(s *ast.Schema, f *ast.FieldDefinition) error {
 	t, err := common.ResolveType(f.Type, s.Resolve)
 	if err != nil {
 		return err
@@ -298,7 +298,7 @@ func resolveField(s *types.Schema, f *types.FieldDefinition) error {
 	return resolveInputObject(s, f.Arguments)
 }
 
-func resolveDirectives(s *types.Schema, directives types.DirectiveList, loc string) error {
+func resolveDirectives(s *ast.Schema, directives ast.DirectiveList, loc string) error {
 	alreadySeenNonRepeatable := make(map[string]struct{})
 	for _, d := range directives {
 		dirName := d.Name.Name
@@ -323,7 +323,7 @@ func resolveDirectives(s *types.Schema, directives types.DirectiveList, loc stri
 		}
 		for _, arg := range dd.Arguments {
 			if _, ok := d.Arguments.Get(arg.Name.Name); !ok {
-				d.Arguments = append(d.Arguments, &types.Argument{Name: arg.Name, Value: arg.Default})
+				d.Arguments = append(d.Arguments, &ast.Argument{Name: arg.Name, Value: arg.Default})
 			}
 		}
 
@@ -338,7 +338,7 @@ func resolveDirectives(s *types.Schema, directives types.DirectiveList, loc stri
 	return nil
 }
 
-func resolveInputObject(s *types.Schema, values types.ArgumentsDefinition) error {
+func resolveInputObject(s *ast.Schema, values ast.ArgumentsDefinition) error {
 	for _, v := range values {
 		t, err := common.ResolveType(v.Type, s.Resolve)
 		if err != nil {
@@ -354,7 +354,7 @@ func resolveInputObject(s *types.Schema, values types.ArgumentsDefinition) error
 	return nil
 }
 
-func parseSchema(s *types.Schema, l *common.Lexer) {
+func parseSchema(s *ast.Schema, l *common.Lexer) {
 	l.ConsumeWhitespace()
 
 	for l.Peek() != scanner.EOF {
@@ -404,7 +404,7 @@ func parseSchema(s *types.Schema, l *common.Lexer) {
 			loc := l.Location()
 			name := l.ConsumeIdent()
 			directives := common.ParseDirectives(l)
-			s.Types[name] = &types.ScalarTypeDefinition{Name: name, Desc: desc, Directives: directives, Loc: loc}
+			s.Types[name] = &ast.ScalarTypeDefinition{Name: name, Desc: desc, Directives: directives, Loc: loc}
 
 		case "directive":
 			directive := parseDirectiveDef(l)
@@ -415,14 +415,13 @@ func parseSchema(s *types.Schema, l *common.Lexer) {
 			parseExtension(s, l)
 
 		default:
-			// TODO: Add support for type extensions.
 			l.SyntaxError(fmt.Sprintf(`unexpected %q, expecting "schema", "type", "enum", "interface", "union", "input", "scalar" or "directive"`, x))
 		}
 	}
 }
 
-func parseObjectDef(l *common.Lexer) *types.ObjectTypeDefinition {
-	object := &types.ObjectTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
+func parseObjectDef(l *common.Lexer) *ast.ObjectTypeDefinition {
+	object := &ast.ObjectTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
 
 	for {
 		if l.Peek() == '{' {
@@ -456,16 +455,16 @@ func parseObjectDef(l *common.Lexer) *types.ObjectTypeDefinition {
 
 }
 
-func parseInterfaceDef(l *common.Lexer) *types.InterfaceTypeDefinition {
-	i := &types.InterfaceTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
+func parseInterfaceDef(l *common.Lexer) *ast.InterfaceTypeDefinition {
+	i := &ast.InterfaceTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
 
 	if l.Peek() == scanner.Ident {
 		l.ConsumeKeyword("implements")
-		i.Interfaces = append(i.Interfaces, &types.InterfaceTypeDefinition{Name: l.ConsumeIdent()})
+		i.Interfaces = append(i.Interfaces, &ast.InterfaceTypeDefinition{Name: l.ConsumeIdent()})
 
 		for l.Peek() == '&' {
 			l.ConsumeToken('&')
-			i.Interfaces = append(i.Interfaces, &types.InterfaceTypeDefinition{Name: l.ConsumeIdent()})
+			i.Interfaces = append(i.Interfaces, &ast.InterfaceTypeDefinition{Name: l.ConsumeIdent()})
 		}
 	}
 
@@ -478,8 +477,8 @@ func parseInterfaceDef(l *common.Lexer) *types.InterfaceTypeDefinition {
 	return i
 }
 
-func parseUnionDef(l *common.Lexer) *types.Union {
-	union := &types.Union{Loc: l.Location(), Name: l.ConsumeIdent()}
+func parseUnionDef(l *common.Lexer) *ast.Union {
+	union := &ast.Union{Loc: l.Location(), Name: l.ConsumeIdent()}
 
 	union.Directives = common.ParseDirectives(l)
 	l.ConsumeToken('=')
@@ -492,8 +491,8 @@ func parseUnionDef(l *common.Lexer) *types.Union {
 	return union
 }
 
-func parseInputDef(l *common.Lexer) *types.InputObject {
-	i := &types.InputObject{}
+func parseInputDef(l *common.Lexer) *ast.InputObject {
+	i := &ast.InputObject{}
 	i.Loc = l.Location()
 	i.Name = l.ConsumeIdent()
 	i.Directives = common.ParseDirectives(l)
@@ -505,13 +504,13 @@ func parseInputDef(l *common.Lexer) *types.InputObject {
 	return i
 }
 
-func parseEnumDef(l *common.Lexer) *types.EnumTypeDefinition {
-	enum := &types.EnumTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
+func parseEnumDef(l *common.Lexer) *ast.EnumTypeDefinition {
+	enum := &ast.EnumTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
 
 	enum.Directives = common.ParseDirectives(l)
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
-		v := &types.EnumValueDefinition{
+		v := &ast.EnumValueDefinition{
 			Desc:       l.DescComment(),
 			Loc:        l.Location(),
 			EnumValue:  l.ConsumeIdent(),
@@ -523,10 +522,10 @@ func parseEnumDef(l *common.Lexer) *types.EnumTypeDefinition {
 	l.ConsumeToken('}')
 	return enum
 }
-func parseDirectiveDef(l *common.Lexer) *types.DirectiveDefinition {
+func parseDirectiveDef(l *common.Lexer) *ast.DirectiveDefinition {
 	l.ConsumeToken('@')
 	loc := l.Location()
-	d := &types.DirectiveDefinition{Name: l.ConsumeIdent(), Loc: loc}
+	d := &ast.DirectiveDefinition{Name: l.ConsumeIdent(), Loc: loc}
 
 	if l.Peek() == '(' {
 		l.ConsumeToken('(')
@@ -561,7 +560,7 @@ func parseDirectiveDef(l *common.Lexer) *types.DirectiveDefinition {
 	return d
 }
 
-func parseExtension(s *types.Schema, l *common.Lexer) {
+func parseExtension(s *ast.Schema, l *common.Lexer) {
 	loc := l.Location()
 	switch x := l.ConsumeIdent(); x {
 	case "schema":
@@ -576,23 +575,23 @@ func parseExtension(s *types.Schema, l *common.Lexer) {
 
 	case "type":
 		obj := parseObjectDef(l)
-		s.Extensions = append(s.Extensions, &types.Extension{Type: obj, Loc: loc})
+		s.Extensions = append(s.Extensions, &ast.Extension{Type: obj, Loc: loc})
 
 	case "interface":
 		iface := parseInterfaceDef(l)
-		s.Extensions = append(s.Extensions, &types.Extension{Type: iface, Loc: loc})
+		s.Extensions = append(s.Extensions, &ast.Extension{Type: iface, Loc: loc})
 
 	case "union":
 		union := parseUnionDef(l)
-		s.Extensions = append(s.Extensions, &types.Extension{Type: union, Loc: loc})
+		s.Extensions = append(s.Extensions, &ast.Extension{Type: union, Loc: loc})
 
 	case "enum":
 		enum := parseEnumDef(l)
-		s.Extensions = append(s.Extensions, &types.Extension{Type: enum, Loc: loc})
+		s.Extensions = append(s.Extensions, &ast.Extension{Type: enum, Loc: loc})
 
 	case "input":
 		input := parseInputDef(l)
-		s.Extensions = append(s.Extensions, &types.Extension{Type: input, Loc: loc})
+		s.Extensions = append(s.Extensions, &ast.Extension{Type: input, Loc: loc})
 
 	default:
 		// TODO: Add ScalarTypeDefinition when adding directives
@@ -600,10 +599,10 @@ func parseExtension(s *types.Schema, l *common.Lexer) {
 	}
 }
 
-func parseFieldsDef(l *common.Lexer) types.FieldsDefinition {
-	var fields types.FieldsDefinition
+func parseFieldsDef(l *common.Lexer) ast.FieldsDefinition {
+	var fields ast.FieldsDefinition
 	for l.Peek() != '}' {
-		f := &types.FieldDefinition{}
+		f := &ast.FieldDefinition{}
 		f.Desc = l.DescComment()
 		f.Loc = l.Location()
 		f.Name = l.ConsumeIdent()
