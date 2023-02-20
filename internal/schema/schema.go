@@ -12,9 +12,11 @@ import (
 // New initializes an instance of Schema.
 func New() *ast.Schema {
 	s := &ast.Schema{
-		EntryPointNames: make(map[string]string),
-		Types:           make(map[string]ast.NamedType),
-		Directives:      make(map[string]*ast.DirectiveDefinition),
+		SchemaDefinition: ast.SchemaDefinition{
+			EntryPointNames: make(map[string]string),
+		},
+		Types:      make(map[string]ast.NamedType),
+		Directives: make(map[string]*ast.DirectiveDefinition),
 	}
 	m := newMeta()
 	for n, t := range m.Types {
@@ -362,6 +364,10 @@ func parseSchema(s *ast.Schema, l *common.Lexer) {
 		switch x := l.ConsumeIdent(); x {
 
 		case "schema":
+			s.SchemaDefinition.Present = true
+			s.SchemaDefinition.Loc = l.Location()
+			s.SchemaDefinition.Desc = desc
+			s.SchemaDefinition.Directives = common.ParseDirectives(l)
 			l.ConsumeToken('{')
 			for l.Peek() != '}' {
 
@@ -565,6 +571,8 @@ func parseExtension(s *ast.Schema, l *common.Lexer) {
 	switch x := l.ConsumeIdent(); x {
 	case "schema":
 		l.ConsumeToken('{')
+		s.SchemaDefinition.Present = true
+		s.SchemaDefinition.Directives = append(s.SchemaDefinition.Directives, common.ParseDirectives(l)...)
 		for l.Peek() != '}' {
 			name := l.ConsumeIdent()
 			l.ConsumeToken(':')

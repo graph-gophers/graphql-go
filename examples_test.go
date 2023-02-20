@@ -292,6 +292,7 @@ func (s Season) String() string {
 	panic("unreachable")
 }
 `
+
 	funcs := template.FuncMap{
 		"toVar": func(s string) string {
 			if len(s) == 0 {
@@ -300,6 +301,7 @@ func (s Season) String() string {
 			return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
 		},
 	}
+
 	tpl, err := template.New("enum").Funcs(funcs).Parse(gocode)
 	if err != nil {
 		panic(err)

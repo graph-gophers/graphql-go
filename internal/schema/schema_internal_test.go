@@ -3,11 +3,187 @@ package schema
 import (
 	"reflect"
 	"testing"
+	"text/scanner"
 
 	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
 )
+
+func TestParseSchemaDef(t *testing.T) {
+	type testCase struct {
+		description string
+		definition  string
+		expected    *ast.SchemaDefinition
+		err         *errors.QueryError
+	}
+
+	tests := []testCase{
+		{
+			description: "Parses sdl without schema definition",
+			definition: `
+			type Query {
+				hello: String!
+			}
+			`,
+			expected: &ast.SchemaDefinition{Present: false},
+		},
+		{
+			description: "Schema definition present",
+			definition: `
+			schema {
+				query: Query
+			}
+			type Query{
+				hello: String!
+			}
+			`,
+			expected: &ast.SchemaDefinition{Present: true, Loc: errors.Location{Line: 2, Column: 11}},
+		},
+		{
+			description: "Schema definition present and has comment",
+			definition: `
+			"""
+			My cool schema.
+			"""
+			schema {
+				query: Query
+			}
+			type Query{
+				hello: String!
+			}
+			`,
+			expected: &ast.SchemaDefinition{
+				Desc:    "My cool schema.",
+				Present: true,
+				Loc:     errors.Location{Line: 5, Column: 11},
+			},
+		},
+		{
+			description: "Schema definition present with comment and directives",
+			definition: `
+			"""
+			My cool schema.
+			"""
+			schema @dir1(arg1: "Val1", arg2: 5) {
+				query: Query
+			}
+			type Query{
+				hello: String!
+			}
+			`,
+			expected: &ast.SchemaDefinition{
+				Desc: "My cool schema.",
+				Directives: ast.DirectiveList{
+					&ast.Directive{
+						Arguments: ast.ArgumentList{
+							{
+								Name: ast.Ident{
+									Name: "arg1",
+									Loc:  errors.Location{Line: 5, Column: 17},
+								},
+								Value: &ast.PrimitiveValue{
+									Type: scanner.String,
+									Text: `"Val1"`,
+									Loc:  errors.Location{Line: 5, Column: 23},
+								},
+							},
+							{
+								Name: ast.Ident{
+									Name: "arg2",
+									Loc:  errors.Location{Line: 5, Column: 31},
+								},
+								Value: &ast.PrimitiveValue{
+									Type: scanner.Int,
+									Text: "5",
+									Loc:  errors.Location{Line: 5, Column: 37},
+								},
+							},
+						},
+						Name: ast.Ident{
+							Name: "dir1",
+							Loc:  errors.Location{Line: 5, Column: 11},
+						},
+					},
+				},
+				Loc:     errors.Location{Line: 5, Column: 11},
+				Present: true,
+			},
+		},
+		{
+			description: "Schema definition present with directives",
+			definition: `
+			schema @dir3(a: 5) @dir4(b: 1) {
+				query: Query
+			}
+			type Query{
+				hello: String!
+			}
+			`,
+			expected: &ast.SchemaDefinition{
+				Directives: ast.DirectiveList{
+					&ast.Directive{
+						Arguments: ast.ArgumentList{
+							{
+								Name: ast.Ident{
+									Name: "a",
+									Loc:  errors.Location{Line: 2, Column: 17},
+								},
+								Value: &ast.PrimitiveValue{
+									Type: scanner.Int,
+									Text: "5",
+									Loc:  errors.Location{Line: 2, Column: 20},
+								},
+							},
+						},
+						Name: ast.Ident{
+							Name: "dir3",
+							Loc:  errors.Location{Line: 2, Column: 11},
+						},
+					},
+					&ast.Directive{
+						Arguments: ast.ArgumentList{
+							{
+								Name: ast.Ident{
+									Name: "b",
+									Loc:  errors.Location{Line: 2, Column: 29},
+								},
+								Value: &ast.PrimitiveValue{
+									Type: scanner.Int,
+									Text: "1",
+									Loc:  errors.Location{Line: 2, Column: 32},
+								},
+							},
+						},
+						Name: ast.Ident{
+							Name: "dir4",
+							Loc:  errors.Location{Line: 2, Column: 23},
+						},
+					},
+				},
+				Loc:     errors.Location{Line: 2, Column: 11},
+				Present: true,
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			var actual *ast.SchemaDefinition
+			lex := common.NewLexer(test.definition, true)
+			parse := func() {
+				s := New()
+				parseSchema(s, lex)
+				actual = &s.SchemaDefinition
+
+			}
+			err := lex.CatchSyntaxError(parse)
+
+			compareErrors(t, test.err, err)
+			compareSchemaDefinitions(t, test.expected, actual)
+		})
+	}
+}
 
 func TestParseInterfaceDef(t *testing.T) {
 	type testCase struct {
@@ -369,6 +545,91 @@ func compareObjects(t *testing.T, expected, actual *ast.ObjectTypeDefinition) {
 		actualName := actual.InterfaceNames[i]
 		if expectedName != actualName {
 			t.Errorf("wrong interface name: want %q, got %q", expectedName, actualName)
+		}
+	}
+}
+
+func compareSchemaDefinitions(t *testing.T, expected, actual *ast.SchemaDefinition) {
+	t.Helper()
+
+	if expected.Present != actual.Present {
+		t.Errorf("wrong boolean Present: want %v, got %v", expected.Present, actual.Present)
+	}
+
+	if expected.Desc != actual.Desc {
+		t.Errorf("wrong schema Desc: want %q, got %q", expected.Desc, actual.Desc)
+	}
+
+	if len(expected.RootOperationTypes) != len(actual.RootOperationTypes) {
+		t.Fatalf(
+			"wrong number of root operations: want %d, got %d",
+			len(expected.RootOperationTypes),
+			len(actual.RootOperationTypes),
+		)
+	}
+
+	for name, expectedOp := range expected.RootOperationTypes {
+		actualOp := actual.RootOperationTypes[name]
+		if actualOp != expectedOp {
+			t.Errorf("wrong root operation name: want %q, got %q", actualOp, expectedOp)
+		}
+	}
+
+	compareDirectiveList(t, "SchemaDef", expected.Directives, actual.Directives)
+
+	compareLoc(t, "SchemaDef ", expected.Loc, actual.Loc)
+}
+
+func compareDirectiveList(t *testing.T, target string, expectedList, actualList ast.DirectiveList) {
+	if len(expectedList) != len(actualList) {
+		t.Fatalf(
+			"wrong number of schema directives on %s: want %d, got %d",
+			target,
+			len(expectedList),
+			len(actualList),
+		)
+	}
+
+	for i, expected := range expectedList {
+		actual := actualList[i]
+		if !reflect.DeepEqual(expectedList, actualList) {
+			if expected.Name.Name != actual.Name.Name {
+				t.Errorf("wrong directive name: want %q, got %q", expected.Name.Name, actual.Name.Name)
+			}
+
+			target := "directive " + expected.Name.Name + " on SchemaDefinition"
+			compareLoc(t, target, expected.Name.Loc, actual.Name.Loc)
+			compareArgumentList(t, target, expected.Arguments, actual.Arguments)
+		}
+	}
+}
+
+func compareArgumentList(t *testing.T, target string, expectedList, actualList ast.ArgumentList) {
+	if len(expectedList) != len(actualList) {
+		t.Fatalf(
+			"wrong number of arguments on %s: want %d, got %d",
+			target,
+			len(expectedList),
+			len(actualList),
+		)
+	}
+
+	for i, expected := range expectedList {
+		actual := actualList[i]
+		if !reflect.DeepEqual(expectedList, actualList) {
+			if expected.Name.Name != actual.Name.Name {
+				t.Errorf("wrong argument name on %s: want %q, got %q", target, expected.Name.Name, actual.Name.Name)
+			}
+
+			if expected.Value.String() != actual.Value.String() {
+				t.Errorf("wrong argument value on %s: want %q, got %q", target, expected.Value, actual.Value)
+			}
+
+			compareDirectiveList(t, "argument "+expected.Name.Name+" on "+target, expected.Directives, actual.Directives)
+
+			compareLoc(t, "argument "+expected.Name.Name+" on "+target, expected.Name.Loc, actual.Name.Loc)
+
+			compareLoc(t, "value on argument "+expected.Name.Name+" on "+target, expected.Value.Location(), actual.Value.Location())
 		}
 	}
 }
