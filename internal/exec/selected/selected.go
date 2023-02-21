@@ -211,7 +211,7 @@ func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag 
 		}
 		// check if the fragment is on an interface which the current resolvable type implements
 		// see the second test in [TestFragments] in the graphql_test.go file.
-		if _, ok := e.Interfaces[frag.On.Name]; ok {
+		if _, found := e.Interfaces[frag.On.Name]; found {
 			return applyInterfaceFragment(r, s, e, frag)
 		}
 		if ok && len(face.PossibleTypes) > 0 {
