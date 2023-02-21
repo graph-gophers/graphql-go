@@ -1,0 +1,27 @@
+type Query {
+    """
+    Returns the current state.
+    """
+    state: State!
+}
+
+type Mutation {
+    """
+    Changes the state and returns the new state.
+    """
+    state(state: State!): State!
+}
+
+"""
+State holds the possible task states.
+"""
+enum State {
+    "Backlog indicates that a task is in the backlog and needs to be triaged."
+    BACKLOG
+    "Todo means that a task is ready to be worked on."
+    TODO
+    "INPROG means that a task is currently in progress."
+    INPROG
+    "Done means that a task is finished."
+    DONE
+}

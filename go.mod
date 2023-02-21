@@ -1,6 +1,6 @@
 module github.com/graph-gophers/graphql-go
 
-go 1.13
+go 1.16
 
 require (
 	github.com/opentracing/opentracing-go v1.2.0

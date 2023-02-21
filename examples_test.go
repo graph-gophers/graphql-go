@@ -252,10 +252,6 @@ func ExampleSchema_AST() {
 
 func ExampleSchema_AST_generateEnum() {
 	s := `
-		schema {
-			query: Query
-		}
-
 		type Query {
 			currentSeason: Season!
 		}
@@ -282,18 +278,48 @@ const (
 	{{- end }}
 )
 
-func (s Season) String() string {
-	switch s {
-	{{ range $i, $e :=  $enum.EnumValuesDefinition }}{{ if ne $i 0 }}{{ printf "\n\t" }}{{ end -}}
-	case {{ $e.EnumValue | toVar }}:
-		return "{{ $e.EnumValue }}"
-	{{- end }}
+var {{ $enum.Name | toLower }}Items = [...]string{
+{{- range $i, $e :=  $enum.EnumValuesDefinition }}{{ if ne $i 0 }}{{ printf ", " }}{{ end }}
+	{{- $e.EnumValue | quote }}
+{{- end -}}
+}
+
+func (s {{ $enum.Name }}) String() string { return {{ $enum.Name | toLower }}Items[s] }
+
+func (s *{{ $enum.Name }}) Deserialize(str string) {
+	var found bool
+	for i, st := range {{ $enum.Name | toLower }}Items {
+		if st == str {
+			found = true
+			(*s) = {{ $enum.Name }}(i)
+		}
 	}
-	panic("unreachable")
+	if !found {
+		panic("invalid value for enum {{ $enum.Name }}: " + str)
+	}
+}
+
+func ({{ $enum.Name }}) ImplementsGraphQLType(name string) bool {
+	return name == {{ $enum.Name | quote }}
+}
+
+func (s *{{ $enum.Name }}) UnmarshalGraphQL(input interface{}) error {
+	var err error
+	switch input := input.(type) {
+	case string:
+		s.Deserialize(input)
+	default:
+		err = fmt.Errorf("wrong type for {{ $enum.Name }}: %T", input)
+	}
+	return err
 }
 `
 
 	funcs := template.FuncMap{
+		"quote": func(s string) string {
+			return `"` + s + `"`
+		},
+		"toLower": strings.ToLower,
 		"toVar": func(s string) string {
 			if len(s) == 0 {
 				return s
@@ -323,24 +349,42 @@ func (s Season) String() string {
 	// type Season int
 	//
 	// const (
-	// 	Spring Season = iota
-	// 	Summer
-	// 	Autumn
-	// 	Winter
+	//	Spring Season = iota
+	//	Summer
+	//	Autumn
+	//	Winter
 	// )
 	//
-	// func (s Season) String() string {
-	// 	switch s {
-	// 	case Spring:
-	// 		return "SPRING"
-	// 	case Summer:
-	// 		return "SUMMER"
-	// 	case Autumn:
-	// 		return "AUTUMN"
-	// 	case Winter:
-	// 		return "WINTER"
+	// var seasonItems = [...]string{"SPRING", "SUMMER", "AUTUMN", "WINTER"}
+	//
+	// func (s Season) String() string { return seasonItems[s] }
+	//
+	// func (s *Season) Deserialize(str string) {
+	// 	var found bool
+	// 	for i, st := range seasonItems {
+	// 		if st == str {
+	// 			found = true
+	// 			(*s) = Season(i)
+	// 		}
 	// 	}
-	// 	panic("unreachable")
+	// 	if !found {
+	// 		panic("invalid value for enum Season: " + str)
+	// 	}
+	// }
+	//
+	// func (Season) ImplementsGraphQLType(name string) bool {
+	// 	return name == "Season"
+	// }
+	//
+	// func (s *Season) UnmarshalGraphQL(input interface{}) error {
+	// 	var err error
+	// 	switch input := input.(type) {
+	// 	case string:
+	// 		s.Deserialize(input)
+	// 	default:
+	// 		err = fmt.Errorf("wrong type for Season: %T", input)
+	// 	}
+	// 	return err
 	// }
 }
 
@@ -358,9 +402,7 @@ func ExampleUseStringDescriptions() {
 	Post represents a blog post.
 	"""
 	type Post {
-		"""
-		Unique identifier of the post.
-		"""
+		"Unique identifier of the post."
 		id: ID!
 
 		# The title field has no description.
