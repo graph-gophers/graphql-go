@@ -209,6 +209,11 @@ func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag 
 				Sels:          applySelectionSet(r, s, a.TypeExec.(*resolvable.Object), frag.Selections),
 			}}
 		}
+		// check if the fragment is on an interface which the current resolvable type implements
+		// see the second test in [TestFragments] in the graphql_test.go file.
+		if _, found := e.Interfaces[frag.On.Name]; found {
+			return applyInterfaceFragment(r, s, e, frag)
+		}
 		if ok && len(face.PossibleTypes) > 0 {
 			sels := []Selection{}
 			for _, t := range face.PossibleTypes {
@@ -230,6 +235,34 @@ func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag 
 		}
 	}
 	return applySelectionSet(r, s, e, frag.Selections)
+}
+
+func applyInterfaceFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag *ast.Fragment) []Selection {
+	// if the fragment is on an interface the object type implements, then filter out
+	// selections for any fragments that don't match this type.
+	var sels []ast.Selection
+	for _, sel := range frag.Selections {
+		switch sel := sel.(type) {
+		case *ast.Field:
+			sels = append(sels, sel)
+		case *ast.InlineFragment:
+			if sel.On.Name != e.Name {
+				if _, ok := e.Interfaces[sel.On.Name]; !ok {
+					continue
+				}
+			}
+			sels = append(sels, sel)
+		case *ast.FragmentSpread:
+			f := &r.Doc.Fragments.Get(sel.Name.Name).Fragment
+			if f.On.Name != e.Name {
+				if _, ok := e.Interfaces[f.On.Name]; !ok {
+					continue
+				}
+			}
+			sels = append(sels, sel)
+		}
+	}
+	return applySelectionSet(r, s, e, sels)
 }
 
 func applyField(r *Request, s *resolvable.Schema, e resolvable.Resolvable, sels []ast.Selection) []Selection {
