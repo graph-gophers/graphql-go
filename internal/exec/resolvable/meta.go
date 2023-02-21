@@ -23,19 +23,19 @@ func newMeta(s *ast.Schema) *Meta {
 	b := newBuilder(s, nil, false)
 
 	metaSchema := s.Types["__Schema"].(*ast.ObjectTypeDefinition)
-	so, err := b.makeObjectExec(metaSchema.Name, metaSchema.Fields, nil, false, reflect.TypeOf(&introspection.Schema{}))
+	so, err := b.makeObjectExec(metaSchema.Name, metaSchema.Fields, nil, nil, false, reflect.TypeOf(&introspection.Schema{}))
 	if err != nil {
 		panic(err)
 	}
 
 	metaType := s.Types["__Type"].(*ast.ObjectTypeDefinition)
-	t, err := b.makeObjectExec(metaType.Name, metaType.Fields, nil, false, reflect.TypeOf(&introspection.Type{}))
+	t, err := b.makeObjectExec(metaType.Name, metaType.Fields, nil, nil, false, reflect.TypeOf(&introspection.Type{}))
 	if err != nil {
 		panic(err)
 	}
 
 	metaService := s.Types["_Service"].(*ast.ObjectTypeDefinition)
-	sv, err := b.makeObjectExec(metaService.Name, metaService.Fields, nil, false, reflect.TypeOf(&introspection.Service{}))
+	sv, err := b.makeObjectExec(metaService.Name, metaService.Fields, nil, nil, false, reflect.TypeOf(&introspection.Service{}))
 	if err != nil {
 		panic(err)
 	}
