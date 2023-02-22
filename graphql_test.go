@@ -453,6 +453,27 @@ func TestCustomDirective(t *testing.T) {
 				}
 			`,
 		},
+		{
+			Schema: graphql.MustParseSchema(`
+				# this test ensures that directives without a Go visitor counterpart are allowed
+				directive @awesome on FIELD_DEFINITION
+
+				type Query {
+					hello: String! @awesome
+				}`,
+				&helloResolver{},
+			),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!"
+				}
+			`,
+		},
 	})
 }
 
@@ -613,23 +634,7 @@ func TestParseSchemaWithInvalidCustomDirectives(t *testing.T) {
 		Args args
 		Want want
 	}{
-		"Missing required directive": {
-			Args: args{
-				Resolver: &helloSnakeResolver1{},
-				Schema: `
-					directive @customDirective on FIELD_DEFINITION
-	
-					schema {
-						query: Query
-					}
-	
-					type Query {
-						hello_html: String! @customDirective
-					}
-				`,
-			},
-			Want: want{Error: `no visitors have been registered for directive "customDirective"`},
-		},
+
 		"Duplicate directive implementations": {
 			Args: args{
 				Directives: []directives.Directive{&customDirectiveVisitor{}, &customInvalidDirective{}},
