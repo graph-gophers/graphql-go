@@ -283,32 +283,6 @@ func applyDirectives(s *ast.Schema, visitors []directives.Directive) (map[string
 		byName[name] = v
 	}
 
-	for name, def := range s.Directives {
-		// TODO: directives other than FIELD_DEFINITION also need to be supported, and later addition of
-		// capabilities to 'visit' other kinds of directive locations shouldn't break the parsing of existing
-		// schemas that declare those directives, but don't have a visitor for them?
-		var acceptedType bool
-		for _, l := range def.Locations {
-			if l == "FIELD_DEFINITION" {
-				acceptedType = true
-				break
-			}
-		}
-
-		if !acceptedType {
-			continue
-		}
-
-		if _, ok := byName[name]; !ok {
-			if name == "include" || name == "skip" || name == "deprecated" || name == "specifiedBy" {
-				// Special case directives, ignore
-				continue
-			}
-
-			return nil, fmt.Errorf("no visitors have been registered for directive %q", name)
-		}
-	}
-
 	return byName, nil
 }
 
