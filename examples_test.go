@@ -288,8 +288,8 @@ func (s {{ $enum.Name }}) String() string { return {{ $enum.Name | toLower }}Ite
 
 func (s *{{ $enum.Name }}) Deserialize(str string) {
 	var found bool
-	for i, st := range {{ $enum.Name | toLower }}Items {
-		if st == str {
+	for i, v := range {{ $enum.Name | toLower }}Items {
+		if v == str {
 			found = true
 			(*s) = {{ $enum.Name }}(i)
 		}
@@ -361,8 +361,8 @@ func (s *{{ $enum.Name }}) UnmarshalGraphQL(input interface{}) error {
 	//
 	// func (s *Season) Deserialize(str string) {
 	// 	var found bool
-	// 	for i, st := range seasonItems {
-	// 		if st == str {
+	// 	for i, v := range seasonItems {
+	// 		if v == str {
 	// 			found = true
 	// 			(*s) = Season(i)
 	// 		}
