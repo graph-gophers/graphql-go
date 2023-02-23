@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/graph-gophers/graphql-go"
 	"github.com/graph-gophers/graphql-go/directives"
 	gqlerrors "github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/example/social"
 	"github.com/graph-gophers/graphql-go/example/starwars"
 	"github.com/graph-gophers/graphql-go/gqltesting"
 	"github.com/graph-gophers/graphql-go/introspection"
@@ -475,6 +477,205 @@ func TestCustomDirective(t *testing.T) {
 			`,
 		},
 	})
+}
+
+func TestCustomValidatingDirective(t *testing.T) {
+	t.Parallel()
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @hasRole(role: String!) on FIELD_DEFINITION
+		
+				schema {
+					query: Query
+				}
+		
+				type Query {
+					hello: String! @hasRole(role: "ADMIN")
+				}`,
+				&helloResolver{},
+				graphql.Directives(&HasRoleDirective{}),
+			),
+			Context: context.WithValue(context.Background(), RoleKey, "USER"),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: "null",
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{Message: `access denied, role "ADMIN" required`, Locations: []gqlerrors.Location{{Line: 9, Column: 6}}, Path: []interface{}{"hello"}},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @hasRole(role: String!) on FIELD_DEFINITION
+		
+				schema {
+					query: Query
+				}
+		
+				type Query {
+					hello: String! @hasRole(role: "ADMIN")
+				}`,
+				&helloResolver{},
+				graphql.Directives(&HasRoleDirective{}),
+			),
+			Context: context.WithValue(context.Background(), RoleKey, "ADMIN"),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(
+				`directive @hasRole(role: String!) on FIELD_DEFINITION
+
+				`+strings.ReplaceAll(
+					social.Schema,
+					"role: Role!",
+					`role: Role! @hasRole(role: "ADMIN")`,
+				),
+				&social.Resolver{},
+				graphql.Directives(&HasRoleDirective{}),
+				graphql.UseFieldResolvers(),
+			),
+			Context: context.WithValue(context.Background(), RoleKey, "ADMIN"),
+			Query: `
+				query {
+					user(id: "0x01") {
+						role
+						... on User {
+							email
+						}
+						... on Person {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"user": {
+						"role": "ADMIN",
+						"email": "Albus@hogwarts.com",
+						"name": "Albus Dumbledore"
+					}
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(
+				`directive @hasRole(role: String!) on FIELD_DEFINITION
+
+				`+strings.ReplaceAll(
+					starwars.Schema,
+					"hero(episode: Episode = NEWHOPE): Character",
+					`hero(episode: Episode = NEWHOPE): Character @hasRole(role: "REBELLION")`,
+				),
+				&starwars.Resolver{},
+				graphql.Directives(&HasRoleDirective{}),
+			),
+			Context: context.WithValue(context.Background(), RoleKey, "EMPIRE"),
+			Query: `
+				query HeroesOfTheRebellion($episode: Episode!) {
+					hero(episode: $episode) {
+						id name
+						... on Human { starships { id name } }
+						... on Droid { primaryFunction }
+					}
+				}
+			`,
+			Variables:      map[string]interface{}{"episode": "NEWHOPE"},
+			ExpectedResult: "null",
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{Message: `access denied, role "REBELLION" required`, Locations: []gqlerrors.Location{{Line: 10, Column: 3}}, Path: []interface{}{"hero"}},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(
+				`directive @hasRole(role: String!) on FIELD_DEFINITION
+
+				`+strings.ReplaceAll(
+					starwars.Schema,
+					"starships: [Starship]",
+					`starships: [Starship] @hasRole(role: "REBELLION")`,
+				),
+				&starwars.Resolver{},
+				graphql.Directives(&HasRoleDirective{}),
+			),
+			Context: context.WithValue(context.Background(), RoleKey, "EMPIRE"),
+			Query: `
+				query HeroesOfTheRebellion($episode: Episode!) {
+					hero(episode: $episode) {
+						id name
+						... on Human { starships { id name } }
+						... on Droid { primaryFunction }
+					}
+				}
+			`,
+			Variables:      map[string]interface{}{"episode": "NEWHOPE"},
+			ExpectedResult: "null",
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{Message: `access denied, role "REBELLION" required`, Locations: []gqlerrors.Location{{Line: 68, Column: 3}}, Path: []interface{}{"hero", "starships"}},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(
+				`directive @restrictImperialUnits on FIELD_DEFINITION
+
+				`+strings.ReplaceAll(
+					starwars.Schema,
+					"height(unit: LengthUnit = METER): Float!",
+					`height(unit: LengthUnit = METER): Float! @restrictImperialUnits`,
+				),
+				&starwars.Resolver{},
+				graphql.Directives(&restrictImperialUnitsDirective{}),
+			),
+			Context: context.WithValue(context.Background(), RoleKey, "REBELLION"),
+			Query: `
+				query HeroesOfTheRebellion($episode: Episode!) {
+					hero(episode: $episode) {
+						id name
+						... on Human { height(unit: FOOT) }
+					}
+				}
+			`,
+			Variables:      map[string]interface{}{"episode": "NEWHOPE"},
+			ExpectedResult: "null",
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{Message: `rebels cannot request imperial units`, Locations: []gqlerrors.Location{{Line: 58, Column: 3}}, Path: []interface{}{"hero", "height"}},
+			},
+		},
+	})
+}
+
+type restrictImperialUnitsDirective struct{}
+
+func (d *restrictImperialUnitsDirective) ImplementsDirective() string {
+	return "restrictImperialUnits"
+}
+
+func (d *restrictImperialUnitsDirective) Validate(ctx context.Context, args interface{}) error {
+	if ctx.Value(RoleKey) == "EMPIRE" {
+		return nil
+	}
+
+	v, ok := args.(struct {
+		Unit string
+	})
+	if ok && v.Unit == "FOOT" {
+		return fmt.Errorf("rebels cannot request imperial units")
+	}
+
+	return nil
 }
 
 func TestCustomDirectiveStructFieldResolver(t *testing.T) {
