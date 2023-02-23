@@ -54,6 +54,13 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *ast.Ope
 		default:
 			panic("unknown query operation")
 		}
+
+		if errs := validateSelections(ctx, sels, nil, s); errs != nil {
+			r.Errs = errs
+			out.Write([]byte("null"))
+			return
+		}
+
 		r.execSelections(ctx, sels, nil, s, resolver, &out, op.Type == query.Mutation)
 	}()
 
@@ -62,6 +69,11 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *ast.Ope
 	}
 
 	return out.Bytes(), r.Errs
+}
+
+type fieldToValidate struct {
+	field *selected.SchemaField
+	sels  []selected.Selection
 }
 
 type fieldToExec struct {
