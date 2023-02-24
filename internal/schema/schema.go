@@ -570,16 +570,18 @@ func parseExtension(s *ast.Schema, l *common.Lexer) {
 	loc := l.Location()
 	switch x := l.ConsumeIdent(); x {
 	case "schema":
-		l.ConsumeToken('{')
 		s.SchemaDefinition.Present = true
 		s.SchemaDefinition.Directives = append(s.SchemaDefinition.Directives, common.ParseDirectives(l)...)
-		for l.Peek() != '}' {
-			name := l.ConsumeIdent()
-			l.ConsumeToken(':')
-			typ := l.ConsumeIdent()
-			s.EntryPointNames[name] = typ
+		if l.Peek() == '{' { // in schema extensions the body is optional
+			l.ConsumeToken('{')
+			for l.Peek() != '}' {
+				name := l.ConsumeIdent()
+				l.ConsumeToken(':')
+				typ := l.ConsumeIdent()
+				s.EntryPointNames[name] = typ
+			}
+			l.ConsumeToken('}')
 		}
-		l.ConsumeToken('}')
 
 	case "type":
 		obj := parseObjectDef(l)

@@ -5589,3 +5589,48 @@ func TestSeparateResolvers(t *testing.T) {
 		})
 	}
 }
+
+func TestSchemaExtension(t *testing.T) {
+	t.Parallel()
+
+	sdl := `
+	directive @awesome on SCHEMA
+
+	schema {
+		query: Query
+	}
+
+	type Query {
+		hello: String!
+	}
+	
+	extend schema @awesome
+	`
+	schema := graphql.MustParseSchema(sdl, &helloResolver{})
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: schema,
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!"
+				}
+			`,
+		},
+	})
+
+	ast := schema.AST()
+	dirs := ast.SchemaDefinition.Directives
+	if len(dirs) != 1 {
+		t.Fatalf("expected 1 schema directive, got %d", len(dirs))
+	}
+	name := dirs[0].Name.Name
+	if name != "awesome" {
+		t.Fatalf(`expected an "awesome" schema directive, got %q`, dirs[0].Name.Name)
+	}
+}
