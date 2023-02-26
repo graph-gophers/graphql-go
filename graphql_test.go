@@ -3732,7 +3732,7 @@ type recursive struct {
 }
 
 func (r *inputResolver) Recursive(args struct{ Value *recursive }) int32 {
-	n := int32(0)
+	var n int32
 	v := args.Value
 	for v != nil {
 		v = v.Next
@@ -3769,7 +3769,7 @@ func TestInput(t *testing.T) {
 			nullableIntEnumValue(value: IntEnum): IntEnum
 			intEnum(value: IntEnum!): IntEnum!
 			nullableIntEnum(value: IntEnum): IntEnum
-			recursive(value: RecursiveInput!): Int!
+			recursive(value: RecursiveInput): Int!
 			id(value: ID!): ID!
 		}
 
