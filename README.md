@@ -2,9 +2,9 @@
 
 <p align="center"><img src="docs/img/logo.png" width="300"></p>
 
-The goal of this project is to provide full support of the [GraphQL draft specification](https://facebook.github.io/graphql/draft) with a set of idiomatic, easy to use Go packages.
+The goal of this project is to provide full support of the [October 2021 GraphQL specification](https://spec.graphql.org/October2021/) with a set of idiomatic, easy to use Go packages.
 
-While still under development (`internal` and `directives` APIs are almost certainly subject to change), this library is safe for production use.
+While still under development (`internal` APIs are almost certainly subject to change), this library is safe for production use.
 
 ## Features
 
