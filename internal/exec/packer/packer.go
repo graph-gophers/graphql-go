@@ -199,6 +199,12 @@ func (b *Builder) MakeStructPacker(values []*ast.InputValueDefinition, typ refle
 		if sf.PkgPath != "" {
 			return nil, fmt.Errorf("field %q must be exported", sf.Name)
 		}
+		if _, ok := v.Type.(*ast.NonNull); ok {
+			if sf.Type.Kind() == reflect.Ptr {
+				return nil, fmt.Errorf("field %q must be a non-pointer since the parameter is required", sf.Name)
+			}
+		}
+
 		fe.index = sf.Index
 
 		ft := v.Type
