@@ -81,12 +81,12 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 
 			switch field.Name.Name {
 			case "__typename":
-				if !r.DisableIntrospection {
-					flattenedSels = append(flattenedSels, &TypenameField{
-						Object: *e,
-						Alias:  field.Alias.Name,
-					})
-				}
+				// __typename is available even though r.DisableIntrospection == true
+				// because it is necessary when using union types and interfaces: https://graphql.org/learn/schema/#union-types
+				flattenedSels = append(flattenedSels, &TypenameField{
+					Object: *e,
+					Alias:  field.Alias.Name,
+				})
 
 			case "__schema":
 				if !r.DisableIntrospection {
@@ -173,16 +173,39 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 }
 
 func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag *query.Fragment) []Selection {
-	if frag.On.Name != "" && frag.On.Name != e.Name {
-		a, ok := e.TypeAssertions[frag.On.Name]
-		if !ok {
-			panic(fmt.Errorf("%q does not implement %q", frag.On, e.Name)) // TODO proper error handling
-		}
+	if frag.On.Name != e.Name {
+		t := r.Schema.Resolve(frag.On.Name)
+		face, ok := t.(*schema.Interface)
+		if !ok && frag.On.Name != "" {
+			a, ok := e.TypeAssertions[frag.On.Name]
+			if !ok {
+				panic(fmt.Errorf("%q does not implement %q", frag.On, e.Name)) // TODO proper error handling
+			}
 
-		return []Selection{&TypeAssertion{
-			TypeAssertion: *a,
-			Sels:          applySelectionSet(r, s, a.TypeExec.(*resolvable.Object), frag.Selections),
-		}}
+			return []Selection{&TypeAssertion{
+				TypeAssertion: *a,
+				Sels:          applySelectionSet(r, s, a.TypeExec.(*resolvable.Object), frag.Selections),
+			}}
+		}
+		if ok && len(face.PossibleTypes) > 0 {
+			sels := []Selection{}
+			for _, t := range face.PossibleTypes {
+				if t.Name == e.Name {
+					return applySelectionSet(r, s, e, frag.Selections)
+				}
+
+				if a, ok := e.TypeAssertions[t.Name]; ok {
+					sels = append(sels, &TypeAssertion{
+						TypeAssertion: *a,
+						Sels:          applySelectionSet(r, s, a.TypeExec.(*resolvable.Object), frag.Selections),
+					})
+				}
+			}
+			if len(sels) == 0 {
+				panic(fmt.Errorf("%q does not implement %q", e.Name, frag.On)) // TODO proper error handling
+			}
+			return sels
+		}
 	}
 	return applySelectionSet(r, s, e, frag.Selections)
 }
