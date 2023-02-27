@@ -2529,7 +2529,7 @@ func TestInlineFragments(t *testing.T) {
 		},
 
 		{
-			Schema: socialSchema,
+			Schema: graphql.MustParseSchema(social.Schema, &social.Resolver{}, graphql.UseFieldResolvers()),
 			Query: `
 				query {
 					admin(id: "0x01") {
@@ -5633,4 +5633,52 @@ func TestSchemaExtension(t *testing.T) {
 	if name != "awesome" {
 		t.Fatalf(`expected an "awesome" schema directive, got %q`, dirs[0].Name.Name)
 	}
+}
+
+func TestGraphqlNames(t *testing.T) {
+	t.Parallel()
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				type Query {
+					_hello: String!
+					hello: String!
+					Hello: String!
+					HELLO: String!
+				}`,
+				func() interface{} {
+					type helloTagResolver struct {
+						Hello           string
+						HelloUnderscore string `graphql:"_hello"`
+						HelloLower      string `graphql:"hello"`
+						HelloTitle      string `graphql:"Hello"`
+						HelloUpper      string `graphql:"HELLO"`
+					}
+					return &helloTagResolver{
+						Hello:           "This field will not be used during query execution!",
+						HelloLower:      "Hello, graphql!",
+						HelloTitle:      "Hello, GraphQL!",
+						HelloUnderscore: "Hello, _!",
+						HelloUpper:      "Hello, GRAPHQL!",
+					}
+				}(),
+				graphql.UseFieldResolvers()),
+			Query: `
+				{
+					_hello
+					hello
+					Hello
+					HELLO
+				}
+			`,
+			ExpectedResult: `
+				{
+					"_hello": "Hello, _!",
+				    "hello": "Hello, graphql!",
+				    "Hello": "Hello, GraphQL!",
+				    "HELLO": "Hello, GRAPHQL!"
+				}
+			`,
+		},
+	})
 }
