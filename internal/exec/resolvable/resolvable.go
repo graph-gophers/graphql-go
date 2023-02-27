@@ -455,7 +455,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinitio
 			fieldIndex = findField(rt, f.Name, []int{})
 		}
 		if methodIndex == -1 && len(fieldIndex) == 0 {
-			hint := ""
+			var hint string
 			if findMethod(reflect.PtrTo(resolverType), f.Name) != -1 {
 				hint = " (hint: the method exists on the pointer type)"
 			}
@@ -529,9 +529,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinitio
 var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
 
-func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m reflect.Method, sf reflect.StructField,
-	methodIndex int, fieldIndex []int, methodHasReceiver bool) (*Field, error) {
-
+func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m reflect.Method, sf reflect.StructField, methodIndex int, fieldIndex []int, methodHasReceiver bool) (*Field, error) {
 	var argsPacker *packer.StructPacker
 	var hasError bool
 	var hasContext bool
@@ -673,6 +671,12 @@ func findField(t reflect.Type, name string, index []int) []int {
 			}
 		}
 
+		if gt, ok := field.Tag.Lookup("graphql"); ok {
+			if strings.EqualFold(name, gt) {
+				return append(index, i)
+			}
+		}
+
 		if strings.EqualFold(stripUnderscore(name), stripUnderscore(field.Name)) {
 			return append(index, i)
 		}
@@ -682,6 +686,7 @@ func findField(t reflect.Type, name string, index []int) []int {
 }
 
 // fieldCount helps resolve ambiguity when more than one embedded struct contains fields with the same name.
+// or when a field has a `graphql` reflect tag with the same name as some other field causing name collision.
 func fieldCount(t reflect.Type, count map[string]int) map[string]int {
 	if t.Kind() != reflect.Struct {
 		return nil
@@ -689,7 +694,12 @@ func fieldCount(t reflect.Type, count map[string]int) map[string]int {
 
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
-		fieldName := strings.ToLower(stripUnderscore(field.Name))
+		var fieldName string
+		if gt, ok := field.Tag.Lookup("graphql"); ok && gt != "" {
+			fieldName = gt
+		} else {
+			fieldName = strings.ToLower(stripUnderscore(field.Name))
+		}
 
 		if field.Type.Kind() == reflect.Struct && field.Anonymous {
 			count = fieldCount(field.Type, count)
