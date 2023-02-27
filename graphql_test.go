@@ -5635,36 +5635,34 @@ func TestSchemaExtension(t *testing.T) {
 	}
 }
 
-type helloTagResolver struct {
-	// Hello           string
-	HelloUnderscore string `graphql:"_hello"`
-	HelloLower      string `graphql:"hello"`
-	HelloTitle      string `graphql:"Hello"`
-	HelloUpper      string `graphql:"HELLO"`
-}
-
 func TestGraphqlNames(t *testing.T) {
 	t.Parallel()
-
-	sdl := `
-	type Query {
-		_hello: String!
-		hello: String!
-		Hello: String!
-		HELLO: String!
-	}`
-
-	resolverTags := &helloTagResolver{
-		// Hello:           "Unused field!",
-		HelloLower:      "Hello, graphql!",
-		HelloTitle:      "Hello, GraphQL!",
-		HelloUnderscore: "Hello, _!",
-		HelloUpper:      "Hello, GRAPHQL!",
-	}
-
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
-			Schema: graphql.MustParseSchema(sdl, resolverTags, graphql.UseFieldResolvers()),
+			Schema: graphql.MustParseSchema(`
+				type Query {
+					_hello: String!
+					hello: String!
+					Hello: String!
+					HELLO: String!
+				}`,
+				func() interface{} {
+					type helloTagResolver struct {
+						Hello           string
+						HelloUnderscore string `graphql:"_hello"`
+						HelloLower      string `graphql:"hello"`
+						HelloTitle      string `graphql:"Hello"`
+						HelloUpper      string `graphql:"HELLO"`
+					}
+					return &helloTagResolver{
+						Hello:           "This field will not be used during query execution!",
+						HelloLower:      "Hello, graphql!",
+						HelloTitle:      "Hello, GraphQL!",
+						HelloUnderscore: "Hello, _!",
+						HelloUpper:      "Hello, GRAPHQL!",
+					}
+				}(),
+				graphql.UseFieldResolvers()),
 			Query: `
 				{
 					_hello
