@@ -433,3 +433,59 @@ func ExampleUseStringDescriptions() {
 	//   field: "title", description: ""
 	//   field: "tags", description: "Tags of the post."
 }
+
+// ExampleFieldTag demonstrates the use of the graphql field tag.
+func Example_resolverFieldTag() {
+	type resolver struct {
+		Hello           string
+		HelloUnderscore string `graphql:"_hello"`
+		HelloLower      string `graphql:"hello"`
+		HelloTitle      string `graphql:"Hello"`
+		HelloUpper      string `graphql:"HELLO"`
+	}
+
+	sdl := `
+	type Query {
+		_hello: String!
+		hello: String!
+		Hello: String!
+		HELLO: String!
+	}`
+
+	r := &resolver{
+		Hello:           "This field is not used during query execution!",
+		HelloLower:      "Hello, graphql!",
+		HelloTitle:      "Hello, GraphQL!",
+		HelloUnderscore: "Hello, _!",
+		HelloUpper:      "Hello, GRAPHQL!",
+	}
+
+	query := `
+	{
+		_hello
+		hello
+		Hello
+		HELLO
+	}
+	`
+
+	schema := graphql.MustParseSchema(sdl, r, graphql.UseFieldResolvers())
+	res := schema.Exec(context.Background(), query, "", nil)
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	err := enc.Encode(res)
+	if err != nil {
+		panic(err)
+	}
+
+	// output:
+	// {
+	//   "data": {
+	//     "_hello": "Hello, _!",
+	//     "hello": "Hello, graphql!",
+	//     "Hello": "Hello, GraphQL!",
+	//     "HELLO": "Hello, GRAPHQL!"
+	//   }
+	// }
+}
