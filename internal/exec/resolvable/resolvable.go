@@ -47,6 +47,7 @@ type Field struct {
 	FieldIndex  []int
 	HasContext  bool
 	HasError    bool
+	IsFieldFunc bool
 	ArgsPacker  *packer.StructPacker
 	Visitors    *FieldVisitors
 	ValueExec   Resolvable
@@ -59,7 +60,7 @@ type FieldVisitors struct {
 }
 
 func (f *Field) UseMethodResolver() bool {
-	return len(f.FieldIndex) == 0
+	return f.MethodIndex != -1 || f.IsFieldFunc
 }
 
 func (f *Field) Resolve(ctx context.Context, resolver reflect.Value, args interface{}) (output interface{}, err error) {
@@ -126,7 +127,15 @@ func (f *Field) resolve(ctx context.Context, resolver reflect.Value, args interf
 		in = append(in, reflect.ValueOf(args))
 	}
 
-	callOut = resolver.Method(f.MethodIndex).Call(in)
+	if f.IsFieldFunc { // resolver is a struct field of type func
+		res := resolver
+		if res.Kind() == reflect.Pointer {
+			res = resolver.Elem()
+		}
+		callOut = res.FieldByIndex(f.FieldIndex).Call(in)
+	} else {
+		callOut = resolver.Method(f.MethodIndex).Call(in)
+	}
 	result := callOut[0]
 
 	if f.HasError && !callOut[1].IsNil() {
@@ -537,9 +546,17 @@ func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m r
 	var argsPacker *packer.StructPacker
 	var hasError bool
 	var hasContext bool
+	var isFieldFunc bool
 
+	if methodIndex == -1 && len(fieldIndex) > 0 {
+		if sf.Type.Kind() == reflect.Func {
+			m.Type = sf.Type
+			methodHasReceiver = false
+			isFieldFunc = true
+		}
+	}
 	// Validate resolver method only when there is one
-	if methodIndex != -1 {
+	if methodIndex != -1 || isFieldFunc {
 		in := make([]reflect.Type, m.Type.NumIn())
 		for i := range in {
 			in[i] = m.Type.In(i)
@@ -596,6 +613,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m r
 		TypeName:        typeName,
 		MethodIndex:     methodIndex,
 		FieldIndex:      fieldIndex,
+		IsFieldFunc:     isFieldFunc,
 		HasContext:      hasContext,
 		ArgsPacker:      argsPacker,
 		Visitors:        visitors,
@@ -604,7 +622,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m r
 	}
 
 	var out reflect.Type
-	if methodIndex != -1 {
+	if methodIndex != -1 || isFieldFunc {
 		out = m.Type.Out(0)
 		sub, ok := b.schema.RootOperationTypes["subscription"]
 		if ok && typeName == sub.TypeName() && out.Kind() == reflect.Chan {
