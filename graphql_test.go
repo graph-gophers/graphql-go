@@ -2529,7 +2529,7 @@ func TestInlineFragments(t *testing.T) {
 		},
 
 		{
-			Schema: socialSchema,
+			Schema: graphql.MustParseSchema(social.Schema, &social.Resolver{}, graphql.UseFieldResolvers()),
 			Query: `
 				query {
 					admin(id: "0x01") {
@@ -5633,4 +5633,69 @@ func TestSchemaExtension(t *testing.T) {
 	if name != "awesome" {
 		t.Fatalf(`expected an "awesome" schema directive, got %q`, dirs[0].Name.Name)
 	}
+}
+
+func TestGraphqlNames(t *testing.T) {
+	t.Parallel()
+
+	sdl1 := `
+	type Query {
+		hello: String!
+	}
+	`
+	type invalidResolver1 struct {
+		Field1 string `graphql:"hello"`
+		Field2 string `graphql:"hello"`
+	}
+
+	wantErr := fmt.Errorf(`*graphql_test.invalidResolver1 does not resolve "Query": multiple fields have a graphql reflect tag "hello"`)
+	_, err := graphql.ParseSchema(sdl1, &invalidResolver1{}, graphql.UseFieldResolvers())
+	if err == nil || err.Error() != wantErr.Error() {
+		t.Fatalf("want err %q, got %q", wantErr, err)
+	}
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				type Query {
+					_hello: String!
+					hello: String!
+					Hello: String!
+					HELLO: String!
+				}`,
+				func() interface{} {
+					type helloTagResolver struct {
+						Hello           string
+						HelloUnderscore string `graphql:"_hello"`
+						HelloLower      string `graphql:"hello"`
+						HelloTitle      string `graphql:"Hello"`
+						HelloUpper      string `graphql:"HELLO"`
+					}
+					return &helloTagResolver{
+						Hello:           "This field will not be used during query execution!",
+						HelloLower:      "Hello, graphql!",
+						HelloTitle:      "Hello, GraphQL!",
+						HelloUnderscore: "Hello, _!",
+						HelloUpper:      "Hello, GRAPHQL!",
+					}
+				}(),
+				graphql.UseFieldResolvers()),
+			Query: `
+				{
+					_hello
+					hello
+					Hello
+					HELLO
+				}
+			`,
+			ExpectedResult: `
+				{
+					"_hello": "Hello, _!",
+				    "hello": "Hello, graphql!",
+				    "Hello": "Hello, GraphQL!",
+				    "HELLO": "Hello, GRAPHQL!"
+				}
+			`,
+		},
+	})
 }

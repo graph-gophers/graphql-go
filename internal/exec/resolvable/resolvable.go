@@ -444,18 +444,22 @@ func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinitio
 
 	Fields := make(map[string]*Field)
 	rt := unwrapPtr(resolverType)
-	fieldsCount := fieldCount(rt, map[string]int{})
+	fieldsCount, fieldTagsCount := fieldCount(rt, map[string]int{}, map[string]int{})
 	for _, f := range fields {
 		var fieldIndex []int
 		methodIndex := findMethod(resolverType, f.Name)
 		if b.useFieldResolvers && methodIndex == -1 {
-			if fieldsCount[strings.ToLower(stripUnderscore(f.Name))] > 1 {
+			// If a resolver field is ambiguous thrown an error unless there is exactly one field with the given graphql
+			// reflect tag. In that case use the field with the reflect tag.
+			if fieldTagsCount[f.Name] > 1 {
+				return nil, fmt.Errorf("%s does not resolve %q: multiple fields have a graphql reflect tag %q", resolverType, typeName, f.Name)
+			} else if fieldsCount[strings.ToLower(stripUnderscore(f.Name))] > 1 && fieldTagsCount[f.Name] != 1 {
 				return nil, fmt.Errorf("%s does not resolve %q: ambiguous field %q", resolverType, typeName, f.Name)
 			}
-			fieldIndex = findField(rt, f.Name, []int{})
+			fieldIndex = findField(rt, f.Name, []int{}, fieldTagsCount)
 		}
 		if methodIndex == -1 && len(fieldIndex) == 0 {
-			hint := ""
+			var hint string
 			if findMethod(reflect.PtrTo(resolverType), f.Name) != -1 {
 				hint = " (hint: the method exists on the pointer type)"
 			}
@@ -529,9 +533,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinitio
 var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
 
-func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m reflect.Method, sf reflect.StructField,
-	methodIndex int, fieldIndex []int, methodHasReceiver bool) (*Field, error) {
-
+func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m reflect.Method, sf reflect.StructField, methodIndex int, fieldIndex []int, methodHasReceiver bool) (*Field, error) {
 	var argsPacker *packer.StructPacker
 	var hasError bool
 	var hasContext bool
@@ -662,15 +664,27 @@ func findMethod(t reflect.Type, name string) int {
 	return -1
 }
 
-func findField(t reflect.Type, name string, index []int) []int {
+func findField(t reflect.Type, name string, index []int, matchingTagsCount map[string]int) []int {
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 
 		if field.Type.Kind() == reflect.Struct && field.Anonymous {
-			newIndex := findField(field.Type, name, []int{i})
+			newIndex := findField(field.Type, name, []int{i}, matchingTagsCount)
 			if len(newIndex) > 1 {
 				return append(index, newIndex...)
 			}
+		}
+
+		if gt, ok := field.Tag.Lookup("graphql"); ok {
+			if name == gt {
+				return append(index, i)
+			}
+		}
+
+		// The current field's tag didn't match, however, if the tag of another field matches,
+		// then skip the name matching until we find the desired field with the correct tag.
+		if matchingTagsCount[name] > 0 {
+			continue
 		}
 
 		if strings.EqualFold(stripUnderscore(name), stripUnderscore(field.Name)) {
@@ -682,26 +696,40 @@ func findField(t reflect.Type, name string, index []int) []int {
 }
 
 // fieldCount helps resolve ambiguity when more than one embedded struct contains fields with the same name.
-func fieldCount(t reflect.Type, count map[string]int) map[string]int {
+// or when a field has a `graphql` reflect tag with the same name as some other field causing name collision.
+func fieldCount(t reflect.Type, count, tagsCount map[string]int) (map[string]int, map[string]int) {
 	if t.Kind() != reflect.Struct {
-		return nil
+		return nil, nil
 	}
 
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
-		fieldName := strings.ToLower(stripUnderscore(field.Name))
+		var fieldName, gt string
+		var hasTag bool
+		if gt, hasTag = field.Tag.Lookup("graphql"); hasTag && gt != "" {
+			fieldName = gt
+		} else {
+			fieldName = strings.ToLower(stripUnderscore(field.Name))
+		}
 
 		if field.Type.Kind() == reflect.Struct && field.Anonymous {
-			count = fieldCount(field.Type, count)
+			count, tagsCount = fieldCount(field.Type, count, tagsCount)
 		} else {
 			if _, ok := count[fieldName]; !ok {
 				count[fieldName] = 0
 			}
 			count[fieldName]++
+			if !hasTag {
+				continue
+			}
+			if _, ok := count[gt]; !ok {
+				tagsCount[gt] = 0
+			}
+			tagsCount[gt]++
 		}
 	}
 
-	return count
+	return count, tagsCount
 }
 
 func unwrapNonNull(t ast.Type) (ast.Type, bool) {
