@@ -5,21 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
-	"strings"
-	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
-	"sync"
-	"testing"
-	"time"
-
 	"github.com/graph-gophers/graphql-go"
 	"github.com/graph-gophers/graphql-go/directives"
 	gqlerrors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/example/social"
 	"github.com/graph-gophers/graphql-go/example/starwars"
 	"github.com/graph-gophers/graphql-go/gqltesting"
+	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"github.com/graph-gophers/graphql-go/introspection"
 	"github.com/graph-gophers/graphql-go/trace/tracer"
+	"strings"
+	"sync"
+	"testing"
+	"time"
 )
 
 type helloWorldResolver1 struct{}

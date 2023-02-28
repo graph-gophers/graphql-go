@@ -94,8 +94,6 @@ type Schema struct {
 	subscribeResolverTimeout time.Duration
 	middlewares              []Middleware
 	useFieldResolvers        bool
-	visitors                 map[string]directives.Visitor
-	middlewares              []Middleware
 }
 
 // AST returns the abstract syntax tree of the GraphQL schema definition.
@@ -143,13 +141,6 @@ func MaxDepth(n int) SchemaOpt {
 func MaxParallelism(n int) SchemaOpt {
 	return func(s *Schema) {
 		s.maxParallelism = n
-	}
-}
-
-// RateLimiter is used to rate limit queries.
-func RateLimiter(r ratelimit.RateLimiter) SchemaOpt {
-	return func(s *Schema) {
-		s.rateLimiter = r
 	}
 }
 
