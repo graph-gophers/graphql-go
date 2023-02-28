@@ -451,10 +451,10 @@ func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinitio
 		if b.useFieldResolvers && methodIndex == -1 {
 			// If a resolver field is ambiguous thrown an error unless there is exactly one field with the given graphql
 			// reflect tag. In that case use the field with the reflect tag.
-			if fieldsCount[strings.ToLower(stripUnderscore(f.Name))] > 1 && fieldTagsCount[f.Name] != 1 {
-				return nil, fmt.Errorf("%s does not resolve %q: ambiguous field %q", resolverType, typeName, f.Name)
-			} else if fieldTagsCount[f.Name] > 1 {
+			if fieldTagsCount[f.Name] > 1 {
 				return nil, fmt.Errorf("%s does not resolve %q: multiple fields have a graphql reflect tag %q", resolverType, typeName, f.Name)
+			} else if fieldsCount[strings.ToLower(stripUnderscore(f.Name))] > 1 && fieldTagsCount[f.Name] != 1 {
+				return nil, fmt.Errorf("%s does not resolve %q: ambiguous field %q", resolverType, typeName, f.Name)
 			}
 			fieldIndex = findField(rt, f.Name, []int{}, fieldTagsCount)
 		}

@@ -5648,7 +5648,7 @@ func TestGraphqlNames(t *testing.T) {
 		Field2 string `graphql:"hello"`
 	}
 
-	wantErr := fmt.Errorf(`*graphql_test.invalidResolver1 does not resolve "Query": ambiguous field "hello"`)
+	wantErr := fmt.Errorf(`*graphql_test.invalidResolver1 does not resolve "Query": multiple fields have a graphql reflect tag "hello"`)
 	_, err := graphql.ParseSchema(sdl1, &invalidResolver1{}, graphql.UseFieldResolvers())
 	if err == nil || err.Error() != wantErr.Error() {
 		t.Fatalf("want err %q, got %q", wantErr, err)
