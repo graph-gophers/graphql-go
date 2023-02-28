@@ -5637,6 +5637,23 @@ func TestSchemaExtension(t *testing.T) {
 
 func TestGraphqlNames(t *testing.T) {
 	t.Parallel()
+
+	sdl1 := `
+	type Query {
+		hello: String!
+	}
+	`
+	type invalidResolver1 struct {
+		Field1 string `graphql:"hello"`
+		Field2 string `graphql:"hello"`
+	}
+
+	wantErr := fmt.Errorf(`*graphql_test.invalidResolver1 does not resolve "Query": ambiguous field "hello"`)
+	_, err := graphql.ParseSchema(sdl1, &invalidResolver1{}, graphql.UseFieldResolvers())
+	if err == nil || err.Error() != wantErr.Error() {
+		t.Fatalf("want err %q, got %q", wantErr, err)
+	}
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
