@@ -5699,3 +5699,63 @@ func TestGraphqlNames(t *testing.T) {
 		},
 	})
 }
+
+func Test_fieldFunc(t *testing.T) {
+	sdl := `
+		type Query {
+			hello(name: String!): String!
+		}
+	`
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(sdl,
+				func() interface{} {
+					type helloTagResolver struct {
+						Hello func(args struct{ Name string }) string
+					}
+					fn := func(args struct{ Name string }) string {
+						return "Hello, " + args.Name + "!"
+					}
+					return &helloTagResolver{
+						Hello: fn,
+					}
+				}(),
+				graphql.UseFieldResolvers()),
+			Query: `
+				{
+					hello(name: "GraphQL")
+				}
+			`,
+			ExpectedResult: `
+				{
+				    "hello": "Hello, GraphQL!"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(sdl,
+				func() interface{} {
+					type helloTagResolver struct {
+						Greet func(ctx context.Context, args struct{ Name string }) (string, error) `graphql:"hello"`
+					}
+					fn := func(_ context.Context, args struct{ Name string }) (string, error) {
+						return "Hello, " + args.Name + "!", nil
+					}
+					return &helloTagResolver{
+						Greet: fn,
+					}
+				}(),
+				graphql.UseFieldResolvers()),
+			Query: `
+				{
+					hello(name: "GraphQL")
+				}
+			`,
+			ExpectedResult: `
+				{
+				    "hello": "Hello, GraphQL!"
+				}
+			`,
+		},
+	})
+}
