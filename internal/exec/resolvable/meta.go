@@ -34,12 +34,6 @@ func newMeta(s *ast.Schema) *Meta {
 		panic(err)
 	}
 
-	metaService := s.Types["_Service"].(*ast.ObjectTypeDefinition)
-	sv, err := b.makeObjectExec(metaService.Name, metaService.Fields, nil, nil, false, reflect.TypeOf(&introspection.Service{}))
-	if err != nil {
-		panic(err)
-	}
-
 	if err := b.finish(); err != nil {
 		panic(err)
 	}
@@ -68,21 +62,11 @@ func newMeta(s *ast.Schema) *Meta {
 		TraceLabel: "GraphQL field: __type",
 	}
 
-	fieldService := Field{
-		FieldDefinition: ast.FieldDefinition{
-			Name: "_service",
-			Type: s.Types["_Service"],
-		},
-		TraceLabel: "GraphQL field: _service",
-	}
-
 	return &Meta{
 		FieldSchema:   fieldSchema,
 		FieldTypename: fieldTypename,
 		FieldType:     fieldType,
-		FieldService:  fieldService,
 		Schema:        so,
 		Type:          t,
-		Service:       sv,
 	}
 }
