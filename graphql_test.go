@@ -2918,7 +2918,6 @@ func TestIntrospection(t *testing.T) {
 							{ "name": "SearchResult" },
 							{ "name": "Starship" },
 							{ "name": "String" },
-							{ "name": "_Service" },
 							{ "name": "__Directive" },
 							{ "name": "__DirectiveLocation" },
 							{ "name": "__EnumValue" },
@@ -5250,39 +5249,6 @@ func TestMaxQueryLength(t *testing.T) {
 			ExpectedErrors: []*gqlerrors.QueryError{{
 				Message: `query length 91 exceeds the maximum allowed query length of 75 bytes`,
 			}},
-		},
-	})
-}
-
-func TestQueryService(t *testing.T) {
-	t.Parallel()
-
-	schemaString := `
-	schema {
-		query: Query
-	}
-
-	type Query {
-		hello: String!
-	}`
-
-	gqltesting.RunTests(t, []*gqltesting.Test{
-		{
-			Schema: graphql.MustParseSchema(schemaString, &helloWorldResolver1{}),
-			Query: `
-				{
-					_service{
-						sdl
-					}
-				}
-			`,
-			ExpectedResult: `
-				{
-					"_service": {
-						"sdl": "\n\tschema {\n\t\tquery: Query\n\t}\n\n\ttype Query {\n\t\thello: String!\n\t}"
-					}
-				}
-			`,
 		},
 	})
 }
