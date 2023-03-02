@@ -55,4 +55,4 @@ directive @interfaceObject on OBJECT
 # GraphQL's built-in `extend` keyword
 directive @extends on OBJECT | INTERFACE
 
-extend schema @link(url: "https://specs.apollo.dev/federation/v2.0", import: ["@key"])
+extend schema @link(url: "https://specs.apollo.dev/federation/v2.3", import: ["@key"])
