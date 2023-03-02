@@ -11,6 +11,11 @@ import (
 var sdl = `
 	type Query {
 		hi: String!
+		_service: Service!
+	}
+
+	type Service {
+		sdl: String!
 	}
 `
 
