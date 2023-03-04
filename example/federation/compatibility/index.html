@@ -23,7 +23,7 @@
     <script>
       ReactDOM.render(
         React.createElement(GraphiQL, {
-          fetcher: GraphiQL.createFetcher({url: '/query'}),
+          fetcher: GraphiQL.createFetcher({url: '/graphql'}),
           defaultEditorToolsVisibility: true,
         }),
         document.getElementById('graphiql'),
