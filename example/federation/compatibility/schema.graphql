@@ -1,0 +1,125 @@
+type Product @custom @key(fields: "id") @key(fields: "sku package") @key(fields: "sku variation { id }") {
+  id: ID!
+  sku: String
+  package: String
+  variation: ProductVariation
+  dimensions: ProductDimension
+  createdBy: User @provides(fields: "totalProductsCreated")
+  notes: String @tag(name: "internal")
+  research: [ProductResearch!]!
+}
+
+type DeprecatedProduct @key(fields: "sku package") {
+  sku: String!
+  package: String!
+  reason: String
+  createdBy: User
+}
+
+type ProductVariation {
+  id: ID!
+}
+
+type ProductResearch @key(fields: "study { caseNumber }") {
+  study: CaseStudy!
+  outcome: String
+}
+
+type CaseStudy {
+  caseNumber: ID!
+  description: String
+}
+
+type ProductDimension @shareable {
+  size: String
+  weight: Float
+  unit: String @inaccessible
+}
+
+type Query {
+  product(id: ID!): Product
+  deprecatedProduct(sku: String!, package: String!): DeprecatedProduct @deprecated(reason: "Use product query instead")
+}
+
+type User @extends @key(fields: "email") {
+  averageProductsCreatedPerYear: Int @requires(fields: "totalProductsCreated yearsOfEmployment")
+  email: ID! @external
+  name: String @override(from: "users")
+  totalProductsCreated: Int @external
+  yearsOfEmployment: Int! @external
+}
+
+type Inventory @interfaceObject @key(fields: "id") {
+  id: ID!
+  deprecatedProducts: [DeprecatedProduct!]!
+}
+
+#
+# Apollo Federation schema
+#
+
+scalar FieldSet
+scalar link__Import
+scalar _Any
+
+union _Entity = Product | DeprecatedProduct | ProductResearch | User | Inventory
+
+enum link__Purpose {
+    """
+    `SECURITY` features provide metadata necessary to securely resolve fields.
+    """
+    SECURITY
+
+    """
+    `EXECUTIO`N features provide metadata necessary for operation execution.
+    """
+    EXECUTION
+}
+
+type _Service {
+    sdl: String!
+}
+
+extend type Query {
+    _service: _Service!
+    _entities(representations: [_Any!]!): [_Entity]!
+}
+
+directive @composeDirective(name: String!) repeatable on SCHEMA
+directive @external on FIELD_DEFINITION | OBJECT
+directive @inaccessible on FIELD_DEFINITION | OBJECT | INTERFACE | UNION | ARGUMENT_DEFINITION | SCALAR | ENUM | ENUM_VALUE | INPUT_OBJECT | INPUT_FIELD_DEFINITION
+directive @interfaceObject on OBJECT
+directive @key(fields: FieldSet!, resolvable: Boolean = true) repeatable on OBJECT | INTERFACE
+directive @link(url: String!, as: String, for: link__Purpose, import: [link__Import]) repeatable on SCHEMA
+directive @override(from: String!) on FIELD_DEFINITION
+directive @provides(fields: FieldSet!) on FIELD_DEFINITION
+directive @requires(fields: FieldSet!) on FIELD_DEFINITION
+directive @shareable repeatable on OBJECT | FIELD_DEFINITION
+directive @tag(name: String!) repeatable on FIELD_DEFINITION | INTERFACE | OBJECT | UNION | ARGUMENT_DEFINITION | SCALAR | ENUM | ENUM_VALUE | INPUT_OBJECT | INPUT_FIELD_DEFINITION
+
+# This definition is required only for libraries that don't support
+# GraphQL's built-in `extend` keyword
+directive @extends on OBJECT | INTERFACE
+
+directive @custom on OBJECT
+
+extend schema
+  @link(
+    url: "https://specs.apollo.dev/federation/v2.3",
+    import: [
+      "@composeDirective",
+      "@extends",
+      "@external",
+      "@inaccessible",
+      "@interfaceObject",
+      "@key",
+      "@override",
+      "@provides",
+      "@requires",
+      "@shareable",
+      "@tag",
+      "FieldSet"
+    ]
+  )
+  @link(url: "https://myspecs.dev/myCustomDirective/v1.0", import: ["@custom"])
+  @composeDirective(name: "@custom")
