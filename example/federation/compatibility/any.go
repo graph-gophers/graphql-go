@@ -65,35 +65,35 @@ func (a *Any) UnmarshalJSON(d []byte) error {
 		var p DepProdKey
 		err := json.Unmarshal(d, &p)
 		if err != nil {
-			return fmt.Errorf("failed to unmarshal deprecated product key: %w")
+			return fmt.Errorf("failed to unmarshal deprecated product key: %w", err)
 		}
 		(*a).Key = p
 	case "Inventory":
 		var i InvKey
 		err := json.Unmarshal(d, &i)
 		if err != nil {
-			return fmt.Errorf("failed to unmarshal inventory key: %w")
+			return fmt.Errorf("failed to unmarshal inventory key: %w", err)
 		}
 		(*a).Key = i
 	case "Product":
 		var p ProdKey
 		err := json.Unmarshal(d, &p)
 		if err != nil {
-			return fmt.Errorf("failed to unmarshal product key: %w")
+			return fmt.Errorf("failed to unmarshal product key: %w", err)
 		}
 		(*a).Key = p
 	case "ProductResearch":
 		var r ProdResKey
 		err := json.Unmarshal(d, &r)
 		if err != nil {
-			return fmt.Errorf("failed to unmarshal product research key: %w")
+			return fmt.Errorf("failed to unmarshal product research key: %w", err)
 		}
 		(*a).Key = r
 	case "User":
 		var u UserKey
 		err := json.Unmarshal(d, &u)
 		if err != nil {
-			return fmt.Errorf("failed to unmarshal product key: %w")
+			return fmt.Errorf("failed to unmarshal product key: %w", err)
 		}
 		(*a).Key = u
 	default:

@@ -229,20 +229,6 @@ type Service struct {
 	SDL string
 }
 
-func main() {
-	sdl, err := generateEntities(sdl)
-	if err != nil {
-		log.Fatalf("failed to generate entities: %v\n", err)
-	}
-	r := populateResolver(sdl)
-	opts := []graphql.SchemaOpt{graphql.UseStringDescriptions(), graphql.UseFieldResolvers()}
-	schema := graphql.MustParseSchema(sdl, r, opts...)
-	http.HandleFunc("/graphiql", func(w http.ResponseWriter, r *http.Request) { w.Write(page) })
-	http.Handle("/", &relay.Handler{Schema: schema})
-
-	log.Fatal(http.ListenAndServe(":4001", nil))
-}
-
 func populateResolver(sdl string) *resolver {
 	defaultUser := &User{
 		Email:                         graphql.ID("support@apollographql.com"),
@@ -324,6 +310,18 @@ func populateResolver(sdl string) *resolver {
 	}
 }
 
+func intptr(i int32) *int32 {
+	return &i
+}
+
+func strptr(s string) *string {
+	return &s
+}
+
+func floatptr(f float64) *float64 {
+	return &f
+}
+
 func generateEntities(sdl string) (string, error) {
 	s := graphql.MustParseSchema(sdl, nil)
 	ast := s.AST()
@@ -347,7 +345,6 @@ union _Entity = {{ range $i, $t :=  . }}{{ if ne $i 0 }}{{ printf " | " }}{{ end
 extend type Query {
     _entities(representations: [_Any!]!): [_Entity]!
 }
-
 `
 	tpl, err := template.New("enum").Parse(entitiesSDL)
 	if err != nil {
@@ -368,14 +365,16 @@ extend type Query {
 	return buf.String(), nil
 }
 
-func intptr(i int32) *int32 {
-	return &i
-}
+func main() {
+	sdl, err := generateEntities(sdl)
+	if err != nil {
+		log.Fatalf("failed to generate entities: %v\n", err)
+	}
+	r := populateResolver(sdl)
+	opts := []graphql.SchemaOpt{graphql.UseStringDescriptions(), graphql.UseFieldResolvers()}
+	schema := graphql.MustParseSchema(sdl, r, opts...)
+	http.HandleFunc("/graphiql", func(w http.ResponseWriter, r *http.Request) { w.Write(page) })
+	http.Handle("/", &relay.Handler{Schema: schema})
 
-func strptr(s string) *string {
-	return &s
-}
-
-func floatptr(f float64) *float64 {
-	return &f
+	log.Fatal(http.ListenAndServe(":4001", nil))
 }

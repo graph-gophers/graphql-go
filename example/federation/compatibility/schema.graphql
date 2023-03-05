@@ -36,7 +36,7 @@ type ProductDimension @shareable {
   unit: String @inaccessible
 }
 
-type Query @extends {
+type Query {
   product(id: ID!): Product
   deprecatedProduct(sku: String!, package: String!): DeprecatedProduct @deprecated(reason: "Use product query instead")
 }
