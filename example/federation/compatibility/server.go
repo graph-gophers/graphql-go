@@ -1,12 +1,10 @@
 package main
 
 import (
-	"bytes"
 	_ "embed"
 	"fmt"
 	"log"
 	"net/http"
-	"text/template"
 
 	"github.com/graph-gophers/graphql-go"
 	"github.com/graph-gophers/graphql-go/relay"
@@ -322,54 +320,7 @@ func floatptr(f float64) *float64 {
 	return &f
 }
 
-func generateEntities(sdl string) (string, error) {
-	s := graphql.MustParseSchema(sdl, nil)
-	ast := s.AST()
-	var ent []string
-	for _, o := range ast.Objects {
-		for _, d := range o.Directives {
-			if d.Name.Name == "key" {
-				ent = append(ent, o.Name)
-				break
-			}
-		}
-	}
-
-	entitiesSDL := `
-scalar _Any
-
-union _Entity = {{ range $i, $t :=  . }}{{ if ne $i 0 }}{{ printf " | " }}{{ end }}
-	{{- $t }}
-{{- end }}
-
-extend type Query {
-    _entities(representations: [_Any!]!): [_Entity]!
-}
-`
-	tpl, err := template.New("enum").Parse(entitiesSDL)
-	if err != nil {
-		panic(err)
-	}
-
-	var buf bytes.Buffer
-	_, err = buf.WriteString(sdl)
-	if err != nil {
-		return "", fmt.Errorf("filed to write schema to buffer: %w", err)
-	}
-
-	err = tpl.Execute(&buf, ent)
-	if err != nil {
-		return "", fmt.Errorf("filed to write entities to buffer: %w", err)
-	}
-
-	return buf.String(), nil
-}
-
 func main() {
-	sdl, err := generateEntities(sdl)
-	if err != nil {
-		log.Fatalf("failed to generate entities: %v\n", err)
-	}
 	r := populateResolver(sdl)
 	opts := []graphql.SchemaOpt{graphql.UseStringDescriptions(), graphql.UseFieldResolvers()}
 	schema := graphql.MustParseSchema(sdl, r, opts...)

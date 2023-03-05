@@ -60,6 +60,9 @@ type Inventory @interfaceObject @key(fields: "id") {
 
 scalar FieldSet
 scalar link__Import
+scalar _Any
+
+union _Entity = Product | DeprecatedProduct | ProductResearch | User | Inventory
 
 enum link__Purpose {
     """
@@ -79,6 +82,7 @@ type _Service {
 
 extend type Query {
     _service: _Service!
+    _entities(representations: [_Any!]!): [_Entity]!
 }
 
 directive @composeDirective(name: String!) repeatable on SCHEMA
