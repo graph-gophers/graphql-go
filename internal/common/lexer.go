@@ -30,7 +30,11 @@ func NewLexer(s string, useStringDescriptions bool) *Lexer {
 	}
 	sc.Init(strings.NewReader(s))
 
-	return &Lexer{sc: sc, useStringDescriptions: useStringDescriptions}
+
+	l := Lexer{sc: sc, useStringDescriptions: useStringDescriptions}
+	l.sc.Error = l.CatchScannerError
+
+	return &l
 }
 
 func (l *Lexer) CatchSyntaxError(f func()) (errRes *errors.QueryError) {
@@ -218,4 +222,8 @@ func (l *Lexer) consumeComment() {
 		}
 		l.comment.WriteRune(next)
 	}
+}
+
+func (l *Lexer) CatchScannerError(s *scanner.Scanner, msg string) {
+	l.SyntaxError(msg)
 }
