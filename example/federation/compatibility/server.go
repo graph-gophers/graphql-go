@@ -232,7 +232,8 @@ func populateResolver(sdl string) *resolver {
 		Email:                         graphql.ID("support@apollographql.com"),
 		Name:                          strptr("Jane Smith"),
 		TotalProductsCreated:          intptr(1337),
-		AverageProductsCreatedPerYear: intptr(0),
+		AverageProductsCreatedPerYear: intptr(134),
+		YearsOfEmployment:             10,
 	}
 	users := map[graphql.ID]User{
 		defaultUser.Email: *defaultUser,
