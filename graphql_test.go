@@ -2,19 +2,22 @@ package graphql_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/directives"
+	gqlerrors "github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/example/social"
+	"github.com/graph-gophers/graphql-go/example/starwars"
+	"github.com/graph-gophers/graphql-go/gqltesting"
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
+	"github.com/graph-gophers/graphql-go/introspection"
+	"github.com/graph-gophers/graphql-go/trace/tracer"
+	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/graph-gophers/graphql-go"
-	gqlerrors "github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/example/starwars"
-	"github.com/graph-gophers/graphql-go/gqltesting"
-	"github.com/graph-gophers/graphql-go/introspection"
-	"github.com/graph-gophers/graphql-go/trace/tracer"
 )
 
 type helloWorldResolver1 struct{}
@@ -47,6 +50,62 @@ func (r *helloSnakeResolver2) HelloHTML(ctx context.Context) (string, error) {
 
 func (r *helloSnakeResolver2) SayHello(ctx context.Context, args struct{ FullName string }) (string, error) {
 	return "Hello " + args.FullName + "!", nil
+}
+
+type structFieldResolver struct {
+	Hello string
+}
+
+// customInvalidDirective lacks any valid directive functions.
+type customInvalidDirective struct {
+	CustomAttribute *string
+}
+
+func (c customInvalidDirective) ImplementsDirective() string {
+	return "customDirective"
+}
+
+type customDirectiveVisitor struct {
+	CustomAttribute *string
+}
+
+func (v *customDirectiveVisitor) ImplementsDirective() string {
+	return "customDirective"
+}
+
+func (v *customDirectiveVisitor) Resolve(ctx context.Context, args interface{}, next directives.Resolver) (output interface{}, err error) {
+	output, err = next.Resolve(ctx, args)
+	if err != nil {
+		return output, err
+	}
+
+	if v.CustomAttribute != nil {
+		return fmt.Sprintf("Directive (with arg '%s') modified result: %s", *v.CustomAttribute, output.(string)), nil
+	}
+	return fmt.Sprintf("Directive modified result: %s", output.(string)), nil
+}
+
+type cachedDirectiveVisitor struct {
+	Key string
+}
+
+func (v *cachedDirectiveVisitor) ImplementsDirective() string {
+	return "cached"
+}
+
+func (v *cachedDirectiveVisitor) Resolve(context.Context, interface{}, directives.Resolver) (output interface{}, err error) {
+	// Bypasses resolver, returns a "cached" value directly
+	return "valueFromCache", nil
+}
+
+type cachedDirectiveResolver struct {
+	t *testing.T
+}
+
+func (r *cachedDirectiveResolver) Hello(ctx context.Context, args struct{ FullName string }) string {
+	r.t.Error("expected cached resolver to not be called, but it was")
+
+	return ""
 }
 
 type theNumberResolver struct {
@@ -97,21 +156,12 @@ func (e resolverNotFoundError) Extensions() map[string]interface{} {
 	}
 }
 
-type findDroidResolver struct{}
-
-func (r *findDroidResolver) FindDroid(ctx context.Context) (string, error) {
-	return "", resolverNotFoundError{
-		Code:    "NotFound",
-		Message: "This is not the droid you are looking for",
-	}
-}
-
 var (
 	droidNotFoundError = resolverNotFoundError{
 		Code:    "NotFound",
 		Message: "This is not the droid you are looking for",
 	}
-	quoteError = errors.New("Bleep bloop")
+	errQuote = errors.New("bleep bloop")
 
 	r2d2          = &droidResolver{name: "R2-D2"}
 	c3po          = &droidResolver{name: "C-3PO"}
@@ -154,7 +204,7 @@ func (d *droidResolver) Name() (string, error) {
 func (d *droidResolver) Quotes() ([]string, error) {
 	switch d.name {
 	case r2d2.name:
-		return nil, quoteError
+		return nil, errQuote
 	case c3po.name:
 		return []string{"We're doomed!", "R2-D2, where are you?"}, nil
 	}
@@ -192,7 +242,6 @@ func TestHelloWorld(t *testing.T) {
 				}
 			`,
 		},
-
 		{
 			Schema: graphql.MustParseSchema(`
 				schema {
@@ -215,6 +264,630 @@ func TestHelloWorld(t *testing.T) {
 			`,
 		},
 	})
+}
+
+func TestHelloWorldStructFieldResolver(t *testing.T) {
+	t.Parallel()
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String!
+				}
+			`,
+				&structFieldResolver{Hello: "Hello world!"},
+				graphql.UseFieldResolvers()),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!"
+				}
+			`,
+		},
+	})
+}
+
+type wrapDirective struct {
+	Prefix string
+	Suffix string
+}
+
+func (w *wrapDirective) ImplementsDirective() string {
+	return "wrap"
+}
+
+func (w *wrapDirective) Resolve(ctx context.Context, in interface{}, next directives.Resolver) (out interface{}, err error) {
+	out, err = next.Resolve(ctx, in)
+	if err != nil {
+		return out, err
+	}
+
+	// only alter output in case prefix or suffix are present
+	if w.Prefix == "" && w.Suffix == "" {
+		return out, err
+	}
+
+	// only modify string outputs
+	switch val := out.(type) {
+	case string:
+		return w.Prefix + val + w.Suffix, nil
+	default:
+		return nil, fmt.Errorf("expected string output, got %T", val)
+	}
+}
+
+func TestCustomDirective(t *testing.T) {
+	t.Parallel()
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @customDirective on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello_html: String! @customDirective
+				}
+			`, &helloSnakeResolver1{},
+				graphql.Directives(&customDirectiveVisitor{})),
+			Query: `
+				{
+					hello_html
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello_html": "Directive modified result: Hello snake!"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @customDirective(
+					customAttribute: String
+			    ) on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					say_hello(full_name: String!): String! @customDirective(customAttribute: "hi")
+				}
+			`, &helloSnakeResolver1{},
+				graphql.Directives(&customDirectiveVisitor{})),
+			Query: `
+				{
+					say_hello(full_name: "Johnny")
+				}
+			`,
+			ExpectedResult: `
+				{
+					"say_hello": "Directive (with arg 'hi') modified result: Hello Johnny!"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @cached(
+					key: String!
+			    ) on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello(full_name: String!): String! @cached(key: "notcheckedintest")
+				}
+			`, &cachedDirectiveResolver{t: t},
+				graphql.Directives(&cachedDirectiveVisitor{})),
+			Query: `
+				{
+					hello(full_name: "Full Name")
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "valueFromCache"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @wrap(prefix: String!, suffix: String!) repeatable on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String! @wrap(prefix: "[", suffix: "]") @wrap(prefix: "{", suffix: "}")
+				}`,
+				&helloResolver{},
+				graphql.Directives(&wrapDirective{}),
+			),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "{[Hello world!]}"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @wrap(prefix: String!, suffix: String!) on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String! @wrap(prefix: "~*", suffix: "*~") @deprecated(reason: "Testing a custom directive together with @deprecated.")
+				}`,
+				&helloResolver{},
+				graphql.Directives(&wrapDirective{}),
+			),
+			Query: `
+				{
+					hello @skip(if: false)
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "~*Hello world!*~"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				# this test ensures that directives without a Go visitor counterpart are allowed
+				directive @awesome on FIELD_DEFINITION
+
+				type Query {
+					hello: String! @awesome
+				}`,
+				&helloResolver{},
+			),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!"
+				}
+			`,
+		},
+	})
+}
+
+func TestCustomValidatingDirective(t *testing.T) {
+	t.Parallel()
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @hasRole(role: String!) on FIELD_DEFINITION
+		
+				schema {
+					query: Query
+				}
+		
+				type Query {
+					hello: String! @hasRole(role: "ADMIN")
+				}`,
+				&helloResolver{},
+				graphql.Directives(&HasRoleDirective{}),
+			),
+			Context: context.WithValue(context.Background(), RoleKey, "USER"),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: "null",
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{Message: `access denied, role "ADMIN" required`, Locations: []gqlerrors.Location{{Line: 9, Column: 6}}, Path: []interface{}{"hello"}},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @hasRole(role: String!) on FIELD_DEFINITION
+		
+				schema {
+					query: Query
+				}
+		
+				type Query {
+					hello: String! @hasRole(role: "ADMIN")
+				}`,
+				&helloResolver{},
+				graphql.Directives(&HasRoleDirective{}),
+			),
+			Context: context.WithValue(context.Background(), RoleKey, "ADMIN"),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(
+				`directive @hasRole(role: String!) on FIELD_DEFINITION
+
+				`+strings.ReplaceAll(
+					social.Schema,
+					"role: Role!",
+					`role: Role! @hasRole(role: "ADMIN")`,
+				),
+				&social.Resolver{},
+				graphql.Directives(&HasRoleDirective{}),
+				graphql.UseFieldResolvers(),
+			),
+			Context: context.WithValue(context.Background(), RoleKey, "ADMIN"),
+			Query: `
+				query {
+					user(id: "0x01") {
+						role
+						... on User {
+							email
+						}
+						... on Person {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"user": {
+						"role": "ADMIN",
+						"email": "Albus@hogwarts.com",
+						"name": "Albus Dumbledore"
+					}
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(
+				`directive @hasRole(role: String!) on FIELD_DEFINITION
+
+				`+strings.ReplaceAll(
+					starwars.Schema,
+					"hero(episode: Episode = NEWHOPE): Character",
+					`hero(episode: Episode = NEWHOPE): Character @hasRole(role: "REBELLION")`,
+				),
+				&starwars.Resolver{},
+				graphql.Directives(&HasRoleDirective{}),
+			),
+			Context: context.WithValue(context.Background(), RoleKey, "EMPIRE"),
+			Query: `
+				query HeroesOfTheRebellion($episode: Episode!) {
+					hero(episode: $episode) {
+						id name
+						... on Human { starships { id name } }
+						... on Droid { primaryFunction }
+					}
+				}
+			`,
+			Variables:      map[string]interface{}{"episode": "NEWHOPE"},
+			ExpectedResult: "null",
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{Message: `access denied, role "REBELLION" required`, Locations: []gqlerrors.Location{{Line: 10, Column: 3}}, Path: []interface{}{"hero"}},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(
+				`directive @hasRole(role: String!) on FIELD_DEFINITION
+
+				`+strings.ReplaceAll(
+					starwars.Schema,
+					"starships: [Starship]",
+					`starships: [Starship] @hasRole(role: "REBELLION")`,
+				),
+				&starwars.Resolver{},
+				graphql.Directives(&HasRoleDirective{}),
+			),
+			Context: context.WithValue(context.Background(), RoleKey, "EMPIRE"),
+			Query: `
+				query HeroesOfTheRebellion($episode: Episode!) {
+					hero(episode: $episode) {
+						id name
+						... on Human { starships { id name } }
+						... on Droid { primaryFunction }
+					}
+				}
+			`,
+			Variables:      map[string]interface{}{"episode": "NEWHOPE"},
+			ExpectedResult: "null",
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{Message: `access denied, role "REBELLION" required`, Locations: []gqlerrors.Location{{Line: 68, Column: 3}}, Path: []interface{}{"hero", "starships"}},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(
+				`directive @restrictImperialUnits on FIELD_DEFINITION
+
+				`+strings.ReplaceAll(
+					starwars.Schema,
+					"height(unit: LengthUnit = METER): Float!",
+					`height(unit: LengthUnit = METER): Float! @restrictImperialUnits`,
+				),
+				&starwars.Resolver{},
+				graphql.Directives(&restrictImperialUnitsDirective{}),
+			),
+			Context: context.WithValue(context.Background(), RoleKey, "REBELLION"),
+			Query: `
+				query HeroesOfTheRebellion($episode: Episode!) {
+					hero(episode: $episode) {
+						id name
+						... on Human { height(unit: FOOT) }
+					}
+				}
+			`,
+			Variables:      map[string]interface{}{"episode": "NEWHOPE"},
+			ExpectedResult: "null",
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{Message: `rebels cannot request imperial units`, Locations: []gqlerrors.Location{{Line: 58, Column: 3}}, Path: []interface{}{"hero", "height"}},
+			},
+		},
+	})
+}
+
+type restrictImperialUnitsDirective struct{}
+
+func (d *restrictImperialUnitsDirective) ImplementsDirective() string {
+	return "restrictImperialUnits"
+}
+
+func (d *restrictImperialUnitsDirective) Validate(ctx context.Context, args interface{}) error {
+	if ctx.Value(RoleKey) == "EMPIRE" {
+		return nil
+	}
+
+	v, ok := args.(struct {
+		Unit string
+	})
+	if ok && v.Unit == "FOOT" {
+		return fmt.Errorf("rebels cannot request imperial units")
+	}
+
+	return nil
+}
+
+func TestCustomDirectiveStructFieldResolver(t *testing.T) {
+	t.Parallel()
+
+	schemaOpt := []graphql.SchemaOpt{
+		graphql.Directives(&customDirectiveVisitor{}),
+		graphql.UseFieldResolvers(),
+	}
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @customDirective on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String! @customDirective
+				}
+			`, &structFieldResolver{Hello: "Hello world!"}, schemaOpt...),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Directive modified result: Hello world!"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @customDirective(
+					customAttribute: String
+			    ) on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String! @customDirective(customAttribute: "hi")
+				}
+			`, &structFieldResolver{Hello: "Hello world!"}, schemaOpt...),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Directive (with arg 'hi') modified result: Hello world!"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @wrap(prefix: String!, suffix: String!) repeatable on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String! @wrap(prefix: "[", suffix: "]") @wrap(prefix: "{", suffix: "}")
+				}`,
+				&structFieldResolver{Hello: "Hello world!"},
+				graphql.Directives(&wrapDirective{}),
+				graphql.UseFieldResolvers(),
+			),
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "{[Hello world!]}"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @wrap(prefix: String!, suffix: String!) on FIELD_DEFINITION
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					hello: String! @wrap(prefix: "~*", suffix: "*~") @deprecated(reason: "Testing a custom directive together with @deprecated.")
+				}`,
+				&structFieldResolver{Hello: "Hello world!"},
+				graphql.Directives(&wrapDirective{}),
+				graphql.UseFieldResolvers(),
+			),
+			Query: `
+				{
+					hello @include(if: true)
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "~*Hello world!*~"
+				}
+			`,
+		},
+		{
+			Schema: graphql.MustParseSchema(`
+				directive @customDirective on FIELD_DEFINITION | INPUT_FIELD_DEFINITION
+				directive @upper on ARGUMENT_DEFINITION | SCALAR | ENUM | ENUM_VALUE
+				directive @join on OBJECT | INTERFACE | UNION 
+				directive @polite on FIELD | FRAGMENT_SPREAD
+
+				schema {
+					query: Query
+				}
+
+				type Query {
+					sayHello(fullName: String! @upper): String! @customDirective
+				}`,
+				&helloSnakeResolver1{},
+				graphql.Directives(&customDirectiveVisitor{}),
+			),
+			Query: `
+				{
+					sayHello(fullName: "friend") @polite
+				}
+			`,
+			ExpectedResult: `
+				{
+					"sayHello": "Directive modified result: Hello friend!"
+				}
+			`,
+		},
+	})
+}
+
+func TestParseSchemaWithInvalidCustomDirectives(t *testing.T) {
+	t.Parallel()
+
+	type args struct {
+		Directives []directives.Directive
+		Resolver   interface{}
+		Schema     string
+	}
+
+	type want struct {
+		Error string
+	}
+
+	testTable := map[string]struct {
+		Args args
+		Want want
+	}{
+
+		"Duplicate directive implementations": {
+			Args: args{
+				Directives: []directives.Directive{&customDirectiveVisitor{}, &customInvalidDirective{}},
+				Resolver:   &helloSnakeResolver1{},
+				Schema: `
+					directive @customDirective on FIELD_DEFINITION
+	
+					schema {
+						query: Query
+					}
+	
+					type Query {
+						hello_html: String! @customDirective
+					}
+				`,
+			},
+			Want: want{Error: `multiple implementations registered for directive "customDirective". Implementation types *graphql_test.customDirectiveVisitor and *graphql_test.customInvalidDirective`},
+		},
+		"Missing directive visitor function": {
+			Args: args{
+				Directives: []directives.Directive{&customInvalidDirective{}},
+				Resolver:   &helloSnakeResolver1{},
+				Schema: `
+					directive @customDirective on FIELD_DEFINITION
+	
+					schema {
+						query: Query
+					}
+	
+					type Query {
+						hello_html: String! @customDirective
+					}
+				`,
+			},
+			Want: want{Error: `directive "customDirective" (implemented by *graphql_test.customInvalidDirective) does not implement a valid directive visitor function`},
+		},
+	}
+
+	for name, tt := range testTable {
+		tt := tt
+
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := graphql.ParseSchema(tt.Args.Schema, tt.Args.Resolver, graphql.Directives(tt.Args.Directives...))
+			if err == nil || err.Error() != tt.Want.Error {
+				t.Logf("got:  %v", err)
+				t.Logf("want: %s", tt.Want.Error)
+				t.Fail()
+			}
+		})
+	}
 }
 
 func TestHelloSnake(t *testing.T) {
@@ -587,7 +1260,7 @@ func TestBasic(t *testing.T) {
 
 type testEmbeddedStructResolver struct{}
 
-func (_ *testEmbeddedStructResolver) Course() courseResolver {
+func (*testEmbeddedStructResolver) Course() courseResolver {
 	return courseResolver{
 		CourseMeta: CourseMeta{
 			Name:       "Biology",
@@ -627,7 +1300,7 @@ func TestEmbeddedStruct(t *testing.T) {
 				type Query {
 					course: Course!
 				}
-				
+
 				type Course {
 					name: String!
 					createdAt: String!
@@ -908,8 +1581,8 @@ func TestErrorPropagationInLists(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:       quoteError.Error(),
-					ResolverError: quoteError,
+					Message:       errQuote.Error(),
+					ResolverError: errQuote,
 					Path:          []interface{}{"findDroids", 0, "quotes"},
 				},
 			},
@@ -943,8 +1616,8 @@ func TestErrorPropagationInLists(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:       quoteError.Error(),
-					ResolverError: quoteError,
+					Message:       errQuote.Error(),
+					ResolverError: errQuote,
 					Path:          []interface{}{"findNilDroids", 0, "quotes"},
 				},
 				{
@@ -1176,6 +1849,37 @@ func TestFragments(t *testing.T) {
 								"name": "Leia Organa"
 							}
 						]
+					}
+				}
+			`,
+		},
+		{
+			Schema: starwarsSchema,
+			Query: `
+				query {
+					human(id: "1000") {
+						id
+						mass
+						...characterInfo
+					}
+				}
+				fragment characterInfo on Character {
+					name
+					...on Droid {
+						primaryFunction
+					}
+					...on Human {
+						height
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"human": {
+						"id": "1000",
+						"mass": 77,
+						"name": "Luke Skywalker",
+						"height": 1.72
 					}
 				}
 			`,
@@ -1495,6 +2199,40 @@ func TestDeprecatedDirective(t *testing.T) {
 	})
 }
 
+func TestSpecifiedByDirective(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+			schema {
+				query: Query
+			}
+			type Query {
+			}
+			scalar UUID @specifiedBy(
+				url: "https://tools.ietf.org/html/rfc4122"
+			)
+			`, &struct{}{}),
+			Query: `
+				query {
+					__type(name: "UUID") {
+						name
+						specifiedByURL
+					}
+				}
+			`,
+			Variables: map[string]interface{}{},
+			ExpectedResult: `
+				{
+					"__type": {
+						"name": "UUID",
+						"specifiedByURL": "https://tools.ietf.org/html/rfc4122"
+					}
+				}
+			`,
+		},
+	})
+}
+
 type testBadEnumResolver struct{}
 
 func (r *testBadEnumResolver) Hero() *testBadEnumCharacterResolver {
@@ -1509,6 +2247,24 @@ func (r *testBadEnumCharacterResolver) Name() string {
 
 func (r *testBadEnumCharacterResolver) AppearsIn() []string {
 	return []string{"STAR_TREK"}
+}
+
+func TestUnknownType(t *testing.T) {
+	gqltesting.RunTest(t, &gqltesting.Test{
+		Schema: starwarsSchema,
+		Query: `
+			query TypeInfo {
+				__type(name: "unknown-type") {
+					name
+				}
+			}
+		`,
+		ExpectedResult: `
+			{
+				"__type": null
+			}
+		`,
+	})
 }
 
 func TestEnums(t *testing.T) {
@@ -1648,6 +2404,23 @@ func TestEnums(t *testing.T) {
 			},
 		},
 	})
+}
+
+type testDeprecatedArgsResolver struct{}
+
+func (r *testDeprecatedArgsResolver) A(args struct{ B *string }) int32 {
+	return 0
+}
+
+func TestDeprecatedArgs(t *testing.T) {
+	graphql.MustParseSchema(`
+		schema {
+			query: Query
+		}
+		type Query {
+			a(b: String @deprecated): Int!
+		}
+	`, &testDeprecatedArgsResolver{})
 }
 
 func TestInlineFragments(t *testing.T) {
@@ -1855,11 +2628,11 @@ func TestTypeName(t *testing.T) {
 						}
 					}
 				}
-				
+
 				fragment Droid on Droid {
 					name
 					__typename
-				}			  
+				}
 			`,
 			RawResponse:    true,
 			ExpectedResult: `{"hero":{"__typename":"Droid","name":"R2-D2"}}`,
@@ -2423,7 +3196,8 @@ func TestIntrospection(t *testing.T) {
 									"description": "Marks an element of a GraphQL schema as no longer supported.",
 									"locations": [
 										"FIELD_DEFINITION",
-										"ENUM_VALUE"
+										"ENUM_VALUE",
+										"ARGUMENT_DEFINITION"
 									],
 									"args": [
 										{
@@ -2475,6 +3249,26 @@ func TestIntrospection(t *testing.T) {
 												"ofType": {
 													"kind": "SCALAR",
 													"name": "Boolean"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "specifiedBy",
+									"description": "Provides a scalar specification URL for specifying the behavior of custom scalar types.",
+									"locations": [
+										"SCALAR"
+									],
+									"args": [
+										{
+											"name": "url",
+											"description": "The URL should point to a human-readable specification of the data format, serialization, and coercion rules.",
+											"type": {
+												"kind": "NON_NULL",
+												"ofType": {
+													"kind": "SCALAR",
+													"name": "String"
 												}
 											}
 										}
@@ -2770,7 +3564,7 @@ func TestTime(t *testing.T) {
 
 type resolverWithUnexportedMethod struct{}
 
-func (r *resolverWithUnexportedMethod) changeTheNumber(args struct{ NewNumber int32 }) int32 {
+func (r *resolverWithUnexportedMethod) changeTheNumber(args struct{ NewNumber int32 }) int32 { //lint:ignore U1000 ingore this for now
 	return args.NewNumber
 }
 
@@ -2938,7 +3732,7 @@ type recursive struct {
 }
 
 func (r *inputResolver) Recursive(args struct{ Value *recursive }) int32 {
-	n := int32(0)
+	var n int32
 	v := args.Value
 	for v != nil {
 		v = v.Next
@@ -2975,7 +3769,7 @@ func TestInput(t *testing.T) {
 			nullableIntEnumValue(value: IntEnum): IntEnum
 			intEnum(value: IntEnum!): IntEnum!
 			nullableIntEnum(value: IntEnum): IntEnum
-			recursive(value: RecursiveInput!): Int!
+			recursive(value: RecursiveInput): Int!
 			id(value: ID!): ID!
 		}
 
@@ -3320,7 +4114,7 @@ func TestComposedFragments(t *testing.T) {
 }
 
 var (
-	exampleError = fmt.Errorf("This is an error")
+	errExample = fmt.Errorf("this is an error")
 
 	nilChildErrorString = `graphql: got nil for non-null "Child"`
 )
@@ -3328,7 +4122,7 @@ var (
 type childResolver struct{}
 
 func (r *childResolver) TriggerError() (string, error) {
-	return "This will never be returned to the client", exampleError
+	return "This will never be returned to the client", errExample
 }
 func (r *childResolver) NoError() string {
 	return "no error"
@@ -3366,8 +4160,8 @@ func TestErrorPropagation(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:       exampleError.Error(),
-					ResolverError: exampleError,
+					Message:       errExample.Error(),
+					ResolverError: errExample,
 					Path:          []interface{}{"triggerError"},
 				},
 			},
@@ -3405,8 +4199,8 @@ func TestErrorPropagation(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:       exampleError.Error(),
-					ResolverError: exampleError,
+					Message:       errExample.Error(),
+					ResolverError: errExample,
 					Path:          []interface{}{"child", "triggerError"},
 				},
 			},
@@ -3448,8 +4242,8 @@ func TestErrorPropagation(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:       exampleError.Error(),
-					ResolverError: exampleError,
+					Message:       errExample.Error(),
+					ResolverError: errExample,
 					Path:          []interface{}{"child", "child", "triggerError"},
 				},
 			},
@@ -3494,8 +4288,8 @@ func TestErrorPropagation(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:       exampleError.Error(),
-					ResolverError: exampleError,
+					Message:       errExample.Error(),
+					ResolverError: errExample,
 					Path:          []interface{}{"child", "child", "triggerError"},
 				},
 			},
@@ -3619,8 +4413,8 @@ func TestErrorPropagation(t *testing.T) {
 					Path:    []interface{}{"child", "child", "child", "nilChild"},
 				},
 				{
-					Message:       exampleError.Error(),
-					ResolverError: exampleError,
+					Message:       errExample.Error(),
+					ResolverError: errExample,
 					Path:          []interface{}{"child", "child", "triggerError"},
 				},
 			},
@@ -3801,7 +4595,7 @@ func TestPanicAmbiguity(t *testing.T) {
 			name: String!
 			university: University!
 		}
-		
+
 		type University {
 			name: String!
 		}
@@ -4347,11 +5141,11 @@ func TestQueryVariablesValidation(t *testing.T) {
 			  	required: String!
 			  	optional: String
 			}
-			
+
 			type SearchResults {
 				match: String
 			}
-			
+
 			type Query {
 				search(filter: SearchFilter!): [SearchResults!]!
 			}`, &queryVarResolver{}, graphql.UseFieldResolvers()),
@@ -4372,11 +5166,11 @@ func TestQueryVariablesValidation(t *testing.T) {
 				required: String!
 				optional: String
 			}
-			
+
 			type SearchResults {
 				match: String
 			}
-			
+
 			type Query {
 				search(filter: SearchFilter!): [SearchResults!]!
 			}`, &queryVarResolver{}, graphql.UseFieldResolvers()),
@@ -4475,6 +5269,37 @@ func TestCircularFragmentMaxDepth(t *testing.T) {
 	})
 }
 
+func TestMaxQueryLength(t *testing.T) {
+	withMaxQueryLen := graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.MaxQueryLength(75))
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: withMaxQueryLen,
+			// Query length is 69 bytes
+			Query: `
+				query {
+					hero(episode: EMPIRE) {
+						name
+					}
+				}
+			`,
+			ExpectedResult: `{"hero":{"name":"Luke Skywalker"}}`,
+		},
+		{
+			Schema: withMaxQueryLen,
+			Query: `
+				query HeroForEpisode {
+					hero(episode: WRATH_OF_KHAN) {
+						name
+					}
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{{
+				Message: `query length 91 exceeds the maximum allowed query length of 75 bytes`,
+			}},
+		},
+	})
+}
+
 func TestQueryService(t *testing.T) {
 	t.Parallel()
 
@@ -4506,4 +5331,352 @@ func TestQueryService(t *testing.T) {
 			`,
 		},
 	})
+}
+
+type RootResolver struct{}
+type QueryResolver struct{}
+type MutationResolver struct{}
+type SubscriptionResolver struct {
+	err      error
+	upstream <-chan *helloEventResolver
+}
+
+func (r *RootResolver) Query() *QueryResolver {
+	return &QueryResolver{}
+}
+
+func (r *RootResolver) Mutation() *MutationResolver {
+	return &MutationResolver{}
+}
+
+type helloEventResolver struct {
+	msg string
+	err error
+}
+
+func (r *helloEventResolver) Msg() (string, error) {
+	return r.msg, r.err
+}
+
+func closedHelloEventUpstream(rr ...*helloEventResolver) <-chan *helloEventResolver {
+	c := make(chan *helloEventResolver, len(rr))
+	for _, r := range rr {
+		c <- r
+	}
+	close(c)
+	return c
+}
+
+func (r *RootResolver) Subscription() *SubscriptionResolver {
+	return &SubscriptionResolver{
+		upstream: closedHelloEventUpstream(
+			&helloEventResolver{msg: "Hello subscription!"},
+			&helloEventResolver{err: errors.New("resolver error")},
+			&helloEventResolver{msg: "Hello again!"},
+		),
+	}
+}
+
+func (qr *QueryResolver) Hello() string {
+	return "Hello query!"
+}
+
+func (mr *MutationResolver) Hello() string {
+	return "Hello mutation!"
+}
+
+func (sr *SubscriptionResolver) Hello(ctx context.Context) (chan *helloEventResolver, error) {
+	if sr.err != nil {
+		return nil, sr.err
+	}
+
+	c := make(chan *helloEventResolver)
+	go func() {
+		for r := range sr.upstream {
+			select {
+			case <-ctx.Done():
+				close(c)
+				return
+			case c <- r:
+			}
+		}
+		close(c)
+	}()
+
+	return c, nil
+}
+
+type errRootResolver1 struct {
+	RootResolver
+}
+
+// Query is invalid because it doesn't have a return value.
+func (*errRootResolver1) Query() {}
+
+type errRootResolver2 struct {
+	RootResolver
+}
+
+// Query is invalid because it has more than 1 return value
+func (*errRootResolver2) Query() (*QueryResolver, error) {
+	return nil, nil
+}
+
+type errRootResolver3 struct {
+	RootResolver
+}
+
+// Mutation is invalid because it returns nil
+func (*errRootResolver3) Mutation() *MutationResolver {
+	return nil
+}
+
+type errRootResolver4 struct {
+	RootResolver
+}
+
+// Query is invalid because it doesn't return a pointer.
+func (*errRootResolver4) Query() MutationResolver {
+	return MutationResolver{}
+}
+
+type errRootResolver5 struct {
+	RootResolver
+}
+
+// Query is invalid because it returns *[]int instead of a resolver.
+func (*errRootResolver5) Query() *[]int {
+	return &[]int{1, 2}
+}
+
+type errRootResolver6 struct {
+	RootResolver
+}
+
+// Mutation is invalid because it returns a map[string]int instead of a resolver.
+func (*errRootResolver6) Mutation() map[string]int {
+	return map[string]int{"key": 3}
+}
+
+type errRootResolver7 struct {
+	RootResolver
+}
+
+// Subscription is invalid because it returns an invalid resolver.
+func (*errRootResolver7) Subscription() interface{} {
+	a := struct {
+		Name string
+	}{Name: "invalid"}
+	return &a
+}
+
+type errRootResolver8 struct {
+	RootResolver
+}
+
+// Query is invalid because it accepts arguments.
+func (*errRootResolver8) Query(ctx context.Context) *QueryResolver {
+	return &QueryResolver{}
+}
+
+// TestSeparateResolvers ensures that a field with the same name is allowed in different operations
+func TestSeparateResolvers(t *testing.T) {
+	helloEverywhere := `
+		schema {
+			query: Query
+			mutation: Mutation
+			subscription: Subscription
+		}
+
+		type Query {
+			hello: String!
+		}
+
+		type Mutation {
+			hello: String!
+		}
+
+		type Subscription {
+			hello: HelloEvent!
+		}
+
+		type HelloEvent {
+			msg: String!
+		}
+	`
+
+	separateSchema := graphql.MustParseSchema(helloEverywhere, &RootResolver{})
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: separateSchema,
+			Query: `
+				query {
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello query!"
+				}
+			`,
+		},
+		{
+			Schema: separateSchema,
+			Query: `
+				mutation {
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello mutation!"
+				}
+			`,
+		},
+	})
+
+	gqltesting.RunSubscribes(t, []*gqltesting.TestSubscription{
+		{
+			Name:   "ok",
+			Schema: separateSchema,
+			Query: `
+				subscription {
+					hello {
+						msg
+					}
+				}
+			`,
+			ExpectedResults: []gqltesting.TestResponse{
+				{
+					Data: json.RawMessage(`
+						{
+							"hello": {
+								"msg": "Hello subscription!"
+							}
+						}
+					`),
+				},
+				{
+					// null propagates all the way up because msg is non-null
+					Data:   json.RawMessage(`null`),
+					Errors: []*gqlerrors.QueryError{gqlerrors.Errorf("%s", errResolver)},
+				},
+				{
+					Data: json.RawMessage(`
+						{
+							"hello": {
+								"msg": "Hello again!"
+							}
+						}
+					`),
+				},
+			},
+		},
+	})
+
+	// test errors with invalid resolvers
+	tests := []struct {
+		name     string
+		resolver interface{}
+		opts     []graphql.SchemaOpt
+		wantErr  string
+	}{
+		{
+			name:     "query_method_has_no_return_val",
+			resolver: &errRootResolver1{},
+			wantErr:  "method \"Query\" of *graphql_test.errRootResolver1 must have 1 return value, got 0",
+		},
+		{
+			name:     "query_method_returns_too_many_vals",
+			resolver: &errRootResolver2{},
+			wantErr:  "method \"Query\" of *graphql_test.errRootResolver2 must have 1 return value, got 2",
+		},
+		{
+			name:     "mutation_method_returns_nil",
+			resolver: &errRootResolver3{},
+			wantErr:  "method \"Mutation\" of *graphql_test.errRootResolver3 must return a non-nil result, got <nil>",
+		},
+		{
+			name:     "query_method_does_not_return_a_pointer",
+			resolver: &errRootResolver4{},
+			wantErr:  "method \"Query\" of *graphql_test.errRootResolver4 must return an interface or a pointer, got graphql_test.MutationResolver",
+		},
+		{
+			name:     "query_method_returns_invalid_resolver_type",
+			resolver: &errRootResolver5{},
+			wantErr:  "*[]int does not resolve \"Query\": missing method for field \"hello\"",
+		},
+		{
+			name:     "mutation_method_returns_invalid_resolver_type",
+			resolver: &errRootResolver6{},
+			wantErr:  "method \"Mutation\" of *graphql_test.errRootResolver6 must return an interface or a pointer, got map[string]int",
+		},
+		{
+			name:     "query_subscription_returns_invalid_resolver_type",
+			resolver: &errRootResolver7{},
+			wantErr:  "*struct { Name string } does not resolve \"Subscription\": missing method for field \"hello\"",
+		},
+		{
+			name:     "mutation_method_returns_invalid_resolver_type",
+			resolver: &errRootResolver8{},
+			wantErr:  "method \"Query\" of *graphql_test.errRootResolver8 must not accept any arguments, got 1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := graphql.ParseSchema(helloEverywhere, tt.resolver, tt.opts...)
+			if err == nil {
+				t.Fatalf("want err: %q, got: <nil>", tt.wantErr)
+			}
+			if err.Error() != tt.wantErr {
+				t.Fatalf("want err: %q, got: %q", tt.wantErr, err.Error())
+			}
+		})
+	}
+}
+
+func TestSchemaExtension(t *testing.T) {
+	t.Parallel()
+
+	sdl := `
+	directive @awesome on SCHEMA
+
+	schema {
+		query: Query
+	}
+
+	type Query {
+		hello: String!
+	}
+	
+	extend schema @awesome
+	`
+	schema := graphql.MustParseSchema(sdl, &helloResolver{})
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: schema,
+			Query: `
+				{
+					hello
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hello": "Hello world!"
+				}
+			`,
+		},
+	})
+
+	ast := schema.AST()
+	dirs := ast.SchemaDefinition.Directives
+	if len(dirs) != 1 {
+		t.Fatalf("expected 1 schema directive, got %d", len(dirs))
+	}
+	name := dirs[0].Name.Name
+	if name != "awesome" {
+		t.Fatalf(`expected an "awesome" schema directive, got %q`, dirs[0].Name.Name)
+	}
 }

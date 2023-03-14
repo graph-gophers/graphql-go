@@ -1,11 +1,10 @@
-# graphql-go [![Sourcegraph](https://sourcegraph.com/github.com/graph-gophers/graphql-go/-/badge.svg)](https://sourcegraph.com/github.com/graph-gophers/graphql-go?badge) [![Build Status](https://graph-gophers.semaphoreci.com/badges/graphql-go/branches/master.svg?style=shields)](https://graph-gophers.semaphoreci.com/projects/graphql-go) [![GoDoc](https://godoc.org/github.com/graph-gophers/graphql-go?status.svg)](https://godoc.org/github.com/graph-gophers/graphql-go)
+# graphql-go [![Sourcegraph](https://sourcegraph.com/github.com/graph-gophers/graphql-go/-/badge.svg)](https://sourcegraph.com/github.com/graph-gophers/graphql-go?badge) [![Build Status](https://graph-gophers.semaphoreci.com/badges/graphql-go/branches/master.svg?style=shields)](https://graph-gophers.semaphoreci.com/projects/graphql-go) [![Go Report](https://goreportcard.com/badge/github.com/graph-gophers/graphql-go)](https://goreportcard.com/report/github.com/graph-gophers/graphql-go) [![GoDoc](https://godoc.org/github.com/graph-gophers/graphql-go?status.svg)](https://godoc.org/github.com/graph-gophers/graphql-go)
 
 <p align="center"><img src="docs/img/logo.png" width="300"></p>
 
-The goal of this project is to provide full support of the [GraphQL draft specification](https://facebook.github.io/graphql/draft) with a set of idiomatic, easy to use Go packages.
+The goal of this project is to provide full support of the [October 2021 GraphQL specification](https://spec.graphql.org/October2021/) with a set of idiomatic, easy to use Go packages.
 
-While still under heavy development (`internal` APIs are almost certainly subject to change), this library is
-safe for production use.
+While still under development (`internal` APIs are almost certainly subject to change), this library is safe for production use.
 
 ## Features
 
@@ -17,14 +16,10 @@ safe for production use.
 - handles panics in resolvers
 - parallel execution of resolvers
 - subscriptions
-   - [sample WS transport](https://github.com/graph-gophers/graphql-transport-ws)
+  - [sample WS transport](https://github.com/graph-gophers/graphql-transport-ws)
+- directive visitors on fields (the API is subject to change in future versions)
 
-## Roadmap
-
-We're trying out the GitHub Project feature to manage `graphql-go`'s [development roadmap](https://github.com/graph-gophers/graphql-go/projects/1).
-Feedback is welcome and appreciated.
-
-## (Some) Documentation
+## (Some) Documentation [![GoDoc](https://godoc.org/github.com/graph-gophers/graphql-go?status.svg)](https://godoc.org/github.com/graph-gophers/graphql-go)
 
 ### Getting started
 
@@ -102,6 +97,55 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 }
 ```
 
+### Separate resolvers for different operations
+> **NOTE**: This feature is not in the stable release yet. In order to use it you need to run `go get github.com/graph-gophers/graphql-go@master` and in your `go.mod` file you will have something like:
+>  ```
+>  v1.5.1-0.20230216224648-5aa631d05992
+>  ```
+> It is expected to be released in `v1.6.0` soon.
+
+The GraphQL specification allows for fields with the same name defined in different query types. For example, the schema below is a valid schema definition:
+```graphql
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+type Query {
+  hello: String!
+}
+
+type Mutation {
+  hello: String!
+}
+```
+The above schema would result in name collision if we use a single resolver struct because fields from both operations correspond to methods in the root resolver (the same Go struct). In order to resolve this issue, the library allows resolvers for query, mutation and subscription operations to be separated using the `Query`, `Mutation` and `Subscription` methods of the root resolver. These special methods are optional and if defined return the resolver for each opeartion. For example, the following is a resolver corresponding to the schema definition above. Note that there is a field named `hello` in both the query and the mutation definitions:
+
+```go
+type RootResolver struct{}
+type QueryResolver struct{}
+type MutationResolver struct{}
+
+func(r *RootResolver) Query() *QueryResolver {
+  return &QueryResolver{}
+}
+
+func(r *RootResolver) Mutation() *MutationResolver {
+  return &MutationResolver{}
+}
+
+func (*QueryResolver) Hello() string {
+	return "Hello query!"
+}
+
+func (*MutationResolver) Hello() string {
+	return "Hello mutation!"
+}
+
+schema := graphql.MustParseSchema(sdl, &RootResolver{}, nil)
+...
+```
+
 ### Schema Options
 
 - `UseStringDescriptions()` enables the usage of double quoted and triple quoted. When this is not enabled, comments are parsed as descriptions instead.
@@ -112,6 +156,7 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 - `Logger(logger log.Logger)` is used to log panics during query execution. It defaults to `exec.DefaultLogger`.
 - `PanicHandler(panicHandler errors.PanicHandler)` is used to transform panics into errors during query execution. It defaults to `errors.DefaultPanicHandler`.
 - `DisableIntrospection()` disables introspection queries.
+- `DirectiveVisitors()` adds directive visitor implementations to the schema. See examples/directives/authorization for an example.
 
 ### Custom Errors
 

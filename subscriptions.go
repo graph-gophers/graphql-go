@@ -20,10 +20,10 @@ import (
 // further resolvers will be called. The context error will be returned as soon
 // as possible (not immediately).
 func (s *Schema) Subscribe(ctx context.Context, queryString string, operationName string, variables map[string]interface{}) (<-chan interface{}, error) {
-	if !s.res.Resolver.IsValid() {
+	if !s.res.SubscriptionResolver.IsValid() {
 		return nil, errors.New("schema created without resolver, can not subscribe")
 	}
-	if _, ok := s.schema.EntryPoints["subscription"]; !ok {
+	if _, ok := s.schema.RootOperationTypes["subscription"]; !ok {
 		return nil, errors.New("no subscriptions are offered by the schema")
 	}
 	return s.subscribe(ctx, queryString, operationName, variables, s.res), nil

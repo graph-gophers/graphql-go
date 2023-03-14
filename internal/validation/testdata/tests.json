@@ -1526,6 +1526,13 @@
       ]
     },
     {
+      "name": "Validate: Default Float variable set to zero",
+      "rule": "DefaultValuesOfCorrectType",
+      "schema": 0,
+      "query": "\n      query Foo($a: Float = 0.0) {\n       field(a: $a)\n     }\n     ",
+      "errors": []
+    },
+    {
       "name": "Validate: No invalid default Float variable values/value out of range",
       "rule": "DefaultValuesOfCorrectType",
       "schema": 0,

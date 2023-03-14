@@ -8,11 +8,11 @@ import (
 
 	"encoding/json"
 
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/query"
 	"github.com/graph-gophers/graphql-go/internal/schema"
 	"github.com/graph-gophers/graphql-go/internal/validation"
-	"github.com/graph-gophers/graphql-go/types"
 )
 
 type Test struct {
@@ -38,7 +38,7 @@ func TestValidate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	schemas := make([]*types.Schema, len(testData.Schemas))
+	schemas := make([]*ast.Schema, len(testData.Schemas))
 	for i, schemaStr := range testData.Schemas {
 		schemas[i] = schema.New()
 		err := schema.Parse(schemas[i], schemaStr, false)

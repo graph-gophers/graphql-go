@@ -35,7 +35,7 @@ func (s *NullString) UnmarshalGraphQL(input interface{}) error {
 
 func (s *NullString) Nullable() {}
 
-// NullBool is a string that can be null. Use it in input structs to
+// NullBool is a boolean that can be null. Use it in input structs to
 // differentiate a value explicitly set to null from an omitted value.
 // When the value is defined (either null or a value) Set is true.
 type NullBool struct {
@@ -65,7 +65,7 @@ func (s *NullBool) UnmarshalGraphQL(input interface{}) error {
 
 func (s *NullBool) Nullable() {}
 
-// NullInt is a string that can be null. Use it in input structs to
+// NullInt is an int that can be null. Use it in input structs to
 // differentiate a value explicitly set to null from an omitted value.
 // When the value is defined (either null or a value) Set is true.
 type NullInt struct {
@@ -102,7 +102,7 @@ func (s *NullInt) UnmarshalGraphQL(input interface{}) error {
 
 func (s *NullInt) Nullable() {}
 
-// NullFloat is a string that can be null. Use it in input structs to
+// NullFloat is a float that can be null. Use it in input structs to
 // differentiate a value explicitly set to null from an omitted value.
 // When the value is defined (either null or a value) Set is true.
 type NullFloat struct {
@@ -140,7 +140,7 @@ func (s *NullFloat) UnmarshalGraphQL(input interface{}) error {
 
 func (s *NullFloat) Nullable() {}
 
-// NullTime is a string that can be null. Use it in input structs to
+// NullTime is a time value that can be null. Use it in input structs to
 // differentiate a value explicitly set to null from an omitted value.
 // When the value is defined (either null or a value) Set is true.
 type NullTime struct {

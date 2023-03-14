@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go"
 	"github.com/graph-gophers/graphql-go/decode"
 )
 
@@ -18,11 +18,11 @@ func TestTime_ImplementsUnmarshaler(t *testing.T) {
 	}()
 
 	// assert *Time implements decode.Unmarshaler interface
-	var _ decode.Unmarshaler = (*Time)(nil)
+	var _ decode.Unmarshaler = (*graphql.Time)(nil)
 }
 
 func TestTime_ImplementsGraphQLType(t *testing.T) {
-	gt := &Time{}
+	gt := &graphql.Time{}
 
 	if gt.ImplementsGraphQLType("foobar") {
 		t.Error("Type *Time must not claim to implement GraphQL type 'foobar'")
@@ -43,7 +43,7 @@ func TestTime_MarshalJSON(t *testing.T) {
 		return
 	}
 
-	if b2, err = json.Marshal(Time{Time: ref}); err != nil {
+	if b2, err = json.Marshal(graphql.Time{Time: ref}); err != nil {
 		t.Errorf("MarshalJSON() error = %v", err)
 		return
 	}
@@ -80,7 +80,7 @@ func TestTime_UnmarshalGraphQL(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				gt := new(Time)
+				gt := &graphql.Time{}
 				if err := gt.UnmarshalGraphQL(tt.args.input); err != nil {
 					if err.Error() != tt.wantErr {
 						t.Errorf("UnmarshalGraphQL() error = %v, want = %s", err, tt.wantErr)
@@ -152,7 +152,7 @@ func TestTime_UnmarshalGraphQL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gt := &Time{}
+			gt := &graphql.Time{}
 			if err := gt.UnmarshalGraphQL(tt.args.input); err != nil {
 				t.Errorf("UnmarshalGraphQL() error = %v", err)
 				return

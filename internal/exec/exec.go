@@ -9,13 +9,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"github.com/graph-gophers/graphql-go/internal/exec/selected"
 	"github.com/graph-gophers/graphql-go/internal/query"
 	"github.com/graph-gophers/graphql-go/log"
 	"github.com/graph-gophers/graphql-go/trace/tracer"
-	"github.com/graph-gophers/graphql-go/types"
 )
 
 type Request struct {
@@ -38,12 +38,30 @@ type extensionser interface {
 	Extensions() map[string]interface{}
 }
 
-func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *types.OperationDefinition) ([]byte, []*errors.QueryError) {
+func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *ast.OperationDefinition) ([]byte, []*errors.QueryError) {
 	var out bytes.Buffer
 	func() {
 		defer r.handlePanic(ctx)
 		sels := selected.ApplyOperation(&r.Request, s, op)
-		r.execSelections(ctx, sels, nil, s, s.Resolver, &out, op.Type == query.Mutation)
+		var resolver reflect.Value
+		switch op.Type {
+		case query.Query:
+			resolver = s.QueryResolver
+		case query.Mutation:
+			resolver = s.MutationResolver
+		case query.Subscription:
+			resolver = s.SubscriptionResolver
+		default:
+			panic("unknown query operation")
+		}
+
+		if errs := validateSelections(ctx, sels, nil, s); errs != nil {
+			r.Errs = errs
+			out.Write([]byte("null"))
+			return
+		}
+
+		r.execSelections(ctx, sels, nil, s, resolver, &out, op.Type == query.Mutation)
 	}()
 
 	if err := ctx.Err(); err != nil {
@@ -53,11 +71,20 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *types.O
 	return out.Bytes(), r.Errs
 }
 
+type fieldToValidate struct {
+	field *selected.SchemaField
+	sels  []selected.Selection
+}
+
 type fieldToExec struct {
 	field    *selected.SchemaField
 	sels     []selected.Selection
 	resolver reflect.Value
 	out      *bytes.Buffer
+}
+
+func (f *fieldToExec) resolve(ctx context.Context) (output interface{}, err error) {
+	return f.field.Resolve(ctx, f.resolver)
 }
 
 func resolvedToNull(b *bytes.Buffer) bool {
@@ -94,7 +121,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 		// If a non-nullable child resolved to null, an error was added to the
 		// "errors" list in the response, so this field resolves to null.
 		// If this field is non-nullable, the error is propagated to its parent.
-		if _, ok := f.field.Type.(*types.NonNull); ok && resolvedToNull(f.out) {
+		if _, ok := f.field.Type.(*ast.NonNull); ok && resolvedToNull(f.out) {
 			out.Reset()
 			out.Write([]byte("null"))
 			return
@@ -199,34 +226,19 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			return errors.Errorf("%s", err) // don't execute any more resolvers if context got cancelled
 		}
 
-		res := f.resolver
-		if f.field.UseMethodResolver() {
-			var in []reflect.Value
-			if f.field.HasContext {
-				in = append(in, reflect.ValueOf(traceCtx))
+		res, resolverErr := f.resolve(ctx)
+		if resolverErr != nil {
+			err := errors.Errorf("%s", resolverErr)
+			err.Path = path.toSlice()
+			err.ResolverError = resolverErr
+			if ex, ok := resolverErr.(extensionser); ok {
+				err.Extensions = ex.Extensions()
 			}
-			if f.field.ArgsPacker != nil {
-				in = append(in, f.field.PackedArgs)
-			}
-			callOut := res.Method(f.field.MethodIndex).Call(in)
-			result = callOut[0]
-			if f.field.HasError && !callOut[1].IsNil() {
-				resolverErr := callOut[1].Interface().(error)
-				err := errors.Errorf("%s", resolverErr)
-				err.Path = path.toSlice()
-				err.ResolverError = resolverErr
-				if ex, ok := callOut[1].Interface().(extensionser); ok {
-					err.Extensions = ex.Extensions()
-				}
-				return err
-			}
-		} else {
-			// TODO extract out unwrapping ptr logic to a common place
-			if res.Kind() == reflect.Ptr {
-				res = res.Elem()
-			}
-			result = res.FieldByIndex(f.field.FieldIndex)
+			return err
 		}
+
+		result = reflect.ValueOf(res)
+
 		return nil
 	}()
 
@@ -245,7 +257,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 	r.execSelectionSet(traceCtx, f.sels, f.field.Type, path, s, result, f.out)
 }
 
-func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selection, typ types.Type, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *bytes.Buffer) {
+func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selection, typ ast.Type, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *bytes.Buffer) {
 	t, nonNull := unwrapNonNull(typ)
 
 	// a reflect.Value of a nil interface will show up as an Invalid value
@@ -263,7 +275,7 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 	}
 
 	switch t.(type) {
-	case *types.ObjectTypeDefinition, *types.InterfaceTypeDefinition, *types.Union:
+	case *ast.ObjectTypeDefinition, *ast.InterfaceTypeDefinition, *ast.Union:
 		r.execSelections(ctx, sels, path, s, resolver, out, false)
 		return
 	}
@@ -275,10 +287,10 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 	}
 
 	switch t := t.(type) {
-	case *types.List:
+	case *ast.List:
 		r.execList(ctx, sels, t, path, s, resolver, out)
 
-	case *types.ScalarTypeDefinition:
+	case *ast.ScalarTypeDefinition:
 		v := resolver.Interface()
 		data, err := json.Marshal(v)
 		if err != nil {
@@ -286,7 +298,7 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 		}
 		out.Write(data)
 
-	case *types.EnumTypeDefinition:
+	case *ast.EnumTypeDefinition:
 		var stringer fmt.Stringer = resolver
 		if s, ok := resolver.Interface().(fmt.Stringer); ok {
 			stringer = s
@@ -315,7 +327,7 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 	}
 }
 
-func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *types.List, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *bytes.Buffer) {
+func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *ast.List, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *bytes.Buffer) {
 	l := resolver.Len()
 	entryouts := make([]bytes.Buffer, l)
 
@@ -341,7 +353,7 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 		}
 	}
 
-	_, listOfNonNull := typ.OfType.(*types.NonNull)
+	_, listOfNonNull := typ.OfType.(*ast.NonNull)
 
 	out.WriteByte('[')
 	for i, entryout := range entryouts {
@@ -361,8 +373,8 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 	out.WriteByte(']')
 }
 
-func unwrapNonNull(t types.Type) (types.Type, bool) {
-	if nn, ok := t.(*types.NonNull); ok {
+func unwrapNonNull(t ast.Type) (ast.Type, bool) {
+	if nn, ok := t.(*ast.NonNull); ok {
 		return nn.OfType, true
 	}
 	return t, false
