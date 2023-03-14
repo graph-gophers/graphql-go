@@ -629,12 +629,12 @@ func TestCustomValidatingDirective(t *testing.T) {
 		},
 		{
 			Schema: graphql.MustParseSchema(
-				`directive @restrictImperialUnits on FIELD_DEFINITION
+				`directive @restrictImperialUnits on ARGUMENT_DEFINITION
 
 				`+strings.ReplaceAll(
 					starwars.Schema,
 					"height(unit: LengthUnit = METER): Float!",
-					`height(unit: LengthUnit = METER): Float! @restrictImperialUnits`,
+					`height(unit: LengthUnit = METER @restrictImperialUnits): Float!`,
 				),
 				&starwars.Resolver{},
 				graphql.Directives(&restrictImperialUnitsDirective{}),
@@ -654,6 +654,37 @@ func TestCustomValidatingDirective(t *testing.T) {
 				{Message: `rebels cannot request imperial units`, Locations: []gqlerrors.Location{{Line: 58, Column: 3}}, Path: []interface{}{"hero", "height"}},
 			},
 		},
+		{
+			Schema: graphql.MustParseSchema(
+				`directive @gg_length(
+					max: Int
+					min: Int
+				) on ARGUMENT_DEFINITION
+
+				`+strings.ReplaceAll(
+					starwars.Schema,
+					"search(text: String!): [SearchResult]!",
+					`search(text: String! @gg_length(min: 3)): [SearchResult]!`,
+				),
+				&starwars.Resolver{},
+				graphql.Directives(&lengthDirective{}),
+			),
+			Query: `
+				query Search($text: String!) {
+					search(text: $text) {
+						... on Human { id name }
+						... on Droid { id name }
+						... on Starship { id name }
+					}
+				}
+			`,
+			Variables:      map[string]interface{}{"text": "Lu"},
+			ExpectedResult: "null",
+			ExpectedErrors: []*gqlerrors.QueryError{
+				// FIXME: would be helpful to include the name of the field? The context of the type / query around that also??
+				{Message: `length of input "Lu" is less than the minimum of 3`, Locations: []gqlerrors.Location{{Line: 15, Column: 3}}, Path: []interface{}{"search"}},
+			},
+		},
 	})
 }
 
@@ -663,16 +694,42 @@ func (d *restrictImperialUnitsDirective) ImplementsDirective() string {
 	return "restrictImperialUnits"
 }
 
-func (d *restrictImperialUnitsDirective) Validate(ctx context.Context, args interface{}) error {
+func (d *restrictImperialUnitsDirective) ValidateArg(ctx context.Context, value interface{}) error {
 	if ctx.Value(RoleKey) == "EMPIRE" {
 		return nil
 	}
 
-	v, ok := args.(struct {
-		Unit string
-	})
-	if ok && v.Unit == "FOOT" {
+	v, ok := value.(string)
+	if ok && v == "FOOT" {
 		return fmt.Errorf("rebels cannot request imperial units")
+	}
+
+	return nil
+}
+
+type lengthDirective struct {
+	Max *int32
+	Min *int32
+}
+
+func (d *lengthDirective) ImplementsDirective() string {
+	return "gg_length"
+}
+
+func (d *lengthDirective) ValidateArg(_ context.Context, value interface{}) error {
+	v, ok := value.(string)
+	if !ok {
+		return fmt.Errorf("length validation cannot be applied to values of type %T", value)
+	}
+
+	l := int32(len(v))
+
+	if d.Min != nil && l < *d.Min {
+		return fmt.Errorf("length of input %q is less than the minimum of %d", v, *d.Min)
+	}
+
+	if d.Max != nil && l > *d.Max {
+		return fmt.Errorf("length of input %q is greater than the maximum of %d", v, *d.Max)
 	}
 
 	return nil

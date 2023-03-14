@@ -55,8 +55,9 @@ type Field struct {
 }
 
 type FieldVisitors struct {
-	Interceptors []directives.ResolverInterceptor
-	Validators   []directives.Validator
+	ArgValidators map[string][]directives.InputValidator
+	Interceptors  []directives.ResolverInterceptor
+	Validators    []directives.Validator
 }
 
 func (f *Field) UseMethodResolver() bool {
@@ -86,7 +87,7 @@ func (f *Field) Resolve(ctx context.Context, resolver reflect.Value, args interf
 	return wrapResolver(ctx, args)
 }
 
-func (f *Field) Validate(ctx context.Context, args interface{}) []error {
+func (f *Field) Validate(ctx context.Context, rawArgs map[string]interface{}, args interface{}) []error {
 	d := f.Visitors
 	if d == nil {
 		// Meta schema fields don't include directives on those fields
@@ -94,6 +95,16 @@ func (f *Field) Validate(ctx context.Context, args interface{}) []error {
 	}
 
 	var errs []error
+
+	for name, vs := range d.ArgValidators {
+		a := rawArgs[name]
+
+		for _, v := range vs {
+			if err := v.ValidateArg(ctx, a); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
 
 	for _, v := range d.Validators {
 		if err := v.Validate(ctx, args); err != nil {
@@ -270,13 +281,12 @@ func buildDirectivePackers(s *ast.Schema, visitors map[string]directives.Directi
 
 		v, ok := visitors[n]
 		if !ok {
-			// Directives which need visitors have already been checked
-			// Anything without a visitor now is a built-in directive without a packer.
+			// Not all directives have or need a packer, e.g. built-in directives like @deprecated
 			continue
 		}
 
 		switch v.(type) {
-		case directives.ResolverInterceptor, directives.Validator:
+		case directives.ResolverInterceptor, directives.Validator, directives.InputValidator:
 			// Accepted directive type
 		default:
 			// Directive doesn't apply at field resolution time, skip it
@@ -312,7 +322,7 @@ func applyDirectives(s *ast.Schema, visitors []directives.Directive) (map[string
 
 		// At least 1 of the optional directive functions must be defined for each directive.
 		switch v.(type) {
-		case directives.ResolverInterceptor, directives.Validator:
+		case directives.ResolverInterceptor, directives.Validator, directives.InputValidator:
 			byName[name] = v
 		default:
 			return nil, fmt.Errorf("directive %q (implemented by %T) does not implement a valid directive visitor function", name, v)
@@ -603,7 +613,7 @@ func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m r
 		}
 	}
 
-	visitors, err := packDirectives(f.Directives, b.directivePackers)
+	visitors, err := packDirectives(f, b.directivePackers)
 	if err != nil {
 		return nil, err
 	}
@@ -638,30 +648,21 @@ func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m r
 	return fe, nil
 }
 
-func packDirectives(ds ast.DirectiveList, packers map[string]*packer.StructPacker) (*FieldVisitors, error) {
+func packDirectives(f *ast.FieldDefinition, packers map[string]*packer.StructPacker) (*FieldVisitors, error) {
 	var resolvers []directives.ResolverInterceptor
 	var validators []directives.Validator
+	argValidators := map[string][]directives.InputValidator{}
 
-	for _, d := range ds {
+	for _, d := range f.Directives {
 		dp, ok := packers[d.Name.Name]
 		if !ok {
 			continue // skip directives without packers
 		}
 
-		args := make(map[string]interface{})
-		for _, arg := range d.Arguments {
-			if arg.Value == nil {
-				continue
-			}
-			args[arg.Name.Name] = arg.Value.Deserialize(nil)
-		}
-
-		p, err := dp.Pack(args)
+		v, err := packDirective(d, dp)
 		if err != nil {
 			return nil, err
 		}
-
-		v := p.Interface()
 
 		// Visitors can implement any of these types optionally, and may implement multiple
 		if v, ok := v.(directives.ResolverInterceptor); ok {
@@ -673,7 +674,42 @@ func packDirectives(ds ast.DirectiveList, packers map[string]*packer.StructPacke
 		}
 	}
 
-	return &FieldVisitors{Interceptors: resolvers, Validators: validators}, nil
+	for _, a := range f.Arguments {
+		for _, d := range a.Directives {
+			dp, ok := packers[d.Name.Name]
+			if !ok {
+				continue // skip directives without packers
+			}
+
+			v, err := packDirective(d, dp)
+			if err != nil {
+				return nil, err
+			}
+
+			if v, ok := v.(directives.InputValidator); ok {
+				argValidators[a.Name.Name] = append(argValidators[a.Name.Name], v)
+			}
+		}
+	}
+
+	return &FieldVisitors{ArgValidators: argValidators, Interceptors: resolvers, Validators: validators}, nil
+}
+
+func packDirective(d *ast.Directive, dp *packer.StructPacker) (interface{}, error) {
+	args := make(map[string]interface{})
+	for _, arg := range d.Arguments {
+		if arg.Value == nil {
+			continue
+		}
+		args[arg.Name.Name] = arg.Value.Deserialize(nil)
+	}
+
+	p, err := dp.Pack(args)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.Interface(), nil
 }
 
 func findMethod(t reflect.Type, name string) int {

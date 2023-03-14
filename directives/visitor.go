@@ -28,3 +28,8 @@ type ResolverInterceptor interface {
 type Validator interface {
 	Validate(ctx context.Context, args interface{}) error
 }
+
+// InputValidator directive which executes before anything is resolved, allowing the request to be rejected.
+type InputValidator interface {
+	ValidateArg(ctx context.Context, value interface{}) error
+}
