@@ -19,11 +19,15 @@ type HasRoleDirective struct {
 	Role string
 }
 
+func (h *HasRoleDirective) AllowLocation(l string) bool {
+	return l == "FIELD_DEFINITION"
+}
+
 func (h *HasRoleDirective) ImplementsDirective() string {
 	return "hasRole"
 }
 
-func (h *HasRoleDirective) Validate(ctx context.Context, _ interface{}) error {
+func (h *HasRoleDirective) Validate(ctx context.Context, _, _ interface{}) error {
 	if ctx.Value(RoleKey) != h.Role {
 		return fmt.Errorf("access denied, role %q required", h.Role)
 	}
@@ -44,6 +48,10 @@ func (_ *WithNullableArgumentDirective) ImplementsDirective() string {
 }
 
 type UpperDirective struct{}
+
+func (d *UpperDirective) AllowLocation(l string) bool {
+	return l == "FIELD_DEFINITION"
+}
 
 func (d *UpperDirective) ImplementsDirective() string {
 	return "upper"
