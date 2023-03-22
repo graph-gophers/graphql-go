@@ -43,7 +43,8 @@ func validateFieldSelection(ctx context.Context, s *resolvable.Schema, f *fieldT
 		args = f.field.PackedArgs.Interface()
 	}
 
-	vErrs := f.field.Validate(ctx, f.field.Args, args)
+	vErrs := f.field.ValidateArgs(ctx, f.field.Args)
+	vErrs = append(vErrs, f.field.Validate(ctx, args)...)
 
 	if l := len(vErrs); l > 0 {
 		errs := make([]*errors.QueryError, l)

@@ -87,7 +87,7 @@ func (f *Field) Resolve(ctx context.Context, resolver reflect.Value, args interf
 	return wrapResolver(ctx, args)
 }
 
-func (f *Field) Validate(ctx context.Context, rawArgs map[string]interface{}, args interface{}) []error {
+func (f *Field) ValidateArgs(ctx context.Context, rawArgs map[string]interface{}) []error {
 	d := f.Visitors
 	if d == nil {
 		// Meta schema fields don't include directives on those fields
@@ -97,14 +97,26 @@ func (f *Field) Validate(ctx context.Context, rawArgs map[string]interface{}, ar
 	var errs []error
 
 	for name, vs := range d.ArgValidators {
-		a := rawArgs[name]
+		arg := rawArgs[name]
 
 		for _, v := range vs {
-			if err := v.ValidateArg(ctx, a); err != nil {
+			if err := v.ValidateArg(ctx, arg); err != nil {
 				errs = append(errs, err)
 			}
 		}
 	}
+
+	return errs
+}
+
+func (f *Field) Validate(ctx context.Context, args interface{}) []error {
+	d := f.Visitors
+	if d == nil {
+		// Meta schema fields don't include directives on those fields
+		return nil
+	}
+
+	var errs []error
 
 	for _, v := range d.Validators {
 		if err := v.Validate(ctx, args); err != nil {
@@ -699,8 +711,10 @@ func packDirective(d *ast.Directive, dp *packer.StructPacker) (interface{}, erro
 	args := make(map[string]interface{})
 	for _, arg := range d.Arguments {
 		if arg.Value == nil {
+			args[arg.Name.Name] = nil
 			continue
 		}
+
 		args[arg.Name.Name] = arg.Value.Deserialize(nil)
 	}
 
