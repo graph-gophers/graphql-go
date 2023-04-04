@@ -148,6 +148,8 @@ var metaSrc = `
 		type: __Type!
 		# A GraphQL-formatted string representing the default value for this input value.
 		defaultValue: String
+		isDeprecated: Boolean!
+		deprecationReason: String
 	}
 
 	# A GraphQL Schema defines the capabilities of a GraphQL server. It exposes all

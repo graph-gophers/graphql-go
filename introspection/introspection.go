@@ -270,6 +270,19 @@ func (r *InputValue) DefaultValue() *string {
 	return &s
 }
 
+func (r *InputValue) IsDeprecated() bool {
+	return r.value.Directives.Get("deprecated") != nil
+}
+
+func (r *InputValue) DeprecationReason() *string {
+	d := r.value.Directives.Get("deprecated")
+	if d == nil {
+		return nil
+	}
+	reason := d.Arguments.MustGet("reason").Deserialize(nil).(string)
+	return &reason
+}
+
 type EnumValue struct {
 	value *ast.EnumValueDefinition
 }
