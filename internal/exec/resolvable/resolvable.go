@@ -650,6 +650,9 @@ func packDirectives(ds ast.DirectiveList, packers map[string]*packer.StructPacke
 
 		args := make(map[string]interface{})
 		for _, arg := range d.Arguments {
+			if arg.Value == nil {
+				continue
+			}
 			args[arg.Name.Name] = arg.Value.Deserialize(nil)
 		}
 

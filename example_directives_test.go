@@ -30,6 +30,19 @@ func (h *HasRoleDirective) Validate(ctx context.Context, _ interface{}) error {
 	return nil
 }
 
+// NullableDirective
+type WithNullableArgumentDirective struct {
+	ANullableArgument *string
+}
+
+func (_ *WithNullableArgumentDirective) Validate(_ context.Context, _ interface{}) error {
+	return nil
+}
+
+func (_ *WithNullableArgumentDirective) ImplementsDirective() string {
+	return "withNullableArgument"
+}
+
 type UpperDirective struct{}
 
 func (d *UpperDirective) ImplementsDirective() string {
@@ -55,6 +68,9 @@ type authResolver struct{}
 func (*authResolver) Greet(ctx context.Context, args struct{ Name string }) string {
 	return fmt.Sprintf("Hello, %s!", args.Name)
 }
+func (*authResolver) NullableDirective() string {
+	return "nullableDirective"
+}
 
 // ExampleDirectives demonstrates the use of the Directives schema option.
 func ExampleDirectives() {
@@ -65,13 +81,15 @@ func ExampleDirectives() {
 
 		directive @hasRole(role: String!) on FIELD_DEFINITION
 		directive @upper on FIELD_DEFINITION
+		directive @withNullableArgument(aNullableArgument: String) on FIELD_DEFINITION
 
 		type Query {
 			greet(name: String!): String! @hasRole(role: "admin") @upper
+			nullableDirective: String! @withNullableArgument()
 		}
 	`
 	opts := []graphql.SchemaOpt{
-		graphql.Directives(&HasRoleDirective{}, &UpperDirective{}),
+		graphql.Directives(&HasRoleDirective{}, &UpperDirective{}, &WithNullableArgumentDirective{}),
 		// other options go here
 	}
 	schema := graphql.MustParseSchema(s, &authResolver{}, opts...)
@@ -111,7 +129,7 @@ func ExampleDirectives() {
 	//       "message": "access denied, role \"admin\" required",
 	//       "locations": [
 	//         {
-	//           "line": 10,
+	//           "line": 11,
 	//           "column": 4
 	//         }
 	//       ],
