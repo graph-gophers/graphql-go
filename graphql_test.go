@@ -1747,6 +1747,25 @@ func TestArguments(t *testing.T) {
 				}
 			`,
 		},
+
+		// NOTE: Test for nullable argument with defaults
+		{
+			Schema: starwarsSchema,
+			Query: `
+				{
+					hero(episode: null) {
+						name
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"hero": {
+						"name": "Luke Skywalker"
+					}
+				}
+			`,
+		},
 	})
 }
 
