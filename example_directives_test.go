@@ -39,7 +39,11 @@ type WithNullableArgumentDirective struct {
 	ANullableArgument *string
 }
 
-func (_ *WithNullableArgumentDirective) Validate(_ context.Context, _ interface{}) error {
+func (_ *WithNullableArgumentDirective) AllowLocation(l string) bool {
+	return l == "FIELD_DEFINITION"
+}
+
+func (_ *WithNullableArgumentDirective) Validate(_ context.Context, _, _ interface{}) error {
 	return nil
 }
 
