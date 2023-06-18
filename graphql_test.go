@@ -1747,6 +1747,122 @@ func TestArguments(t *testing.T) {
 				}
 			`,
 		},
+		{
+			Schema: starwarsSchema,
+			Query: `
+				{
+					search(text: null) {
+						... on Human {
+							id
+						}
+						... on Droid {
+							name
+						}
+						... on Starship {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"search": []
+				}
+			`,
+		},
+		{
+			Schema: starwarsSchema,
+			Query: `
+				{
+					search {
+						... on Human {
+							id
+						}
+						... on Droid {
+							name
+						}
+						... on Starship {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"search": [
+						{ "id": "1000" },
+						{ "id": "1001" },
+						{ "id": "1002" },
+						{ "id": "1003" },
+						{ "id": "1004" },
+						{ "name": "C-3PO" },
+						{ "name":"R2-D2" },
+						{ "name": "Millennium Falcon" },
+						{ "name": "X-Wing" },
+						{ "name": "TIE Advanced x1" },
+						{ "name": "Imperial shuttle" }
+					]
+				} `,
+		},
+		{
+			Schema: starwarsSchema,
+			Query: `
+				{
+					search(mass: 1) {
+						... on Human {
+							id
+						}
+						... on Droid {
+							name
+						}
+						... on Starship {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"search": [
+						{ "id": "1000" },
+						{ "id": "1001" },
+						{ "id": "1002" },
+						{ "id": "1003" },
+						{ "name": "C-3PO" },
+						{ "name":"R2-D2" },
+						{ "name": "Millennium Falcon" },
+						{ "name": "X-Wing" },
+						{ "name": "TIE Advanced x1" },
+						{ "name": "Imperial shuttle" }
+					]
+				}
+			`,
+		},
+		{
+			Schema: starwarsSchema,
+			Query: `
+				{
+					search(text: "1", mass: 1) {
+						... on Human {
+							id
+						}
+						... on Droid {
+							name
+						}
+						... on Starship {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"search": [
+						{ "name": "TIE Advanced x1" }
+					]
+				}
+			`,
+		},
 	})
 }
 

@@ -48,11 +48,41 @@ func (b *Builder) Finish() error {
 		p.defaultStruct = reflect.New(p.structType).Elem()
 		for _, f := range p.fields {
 			if defaultVal := f.def; defaultVal != nil {
-				v, err := f.packer.Pack(defaultVal.Deserialize(nil))
+				field := p.defaultStruct.FieldByIndex(f.index)
+				s := defaultVal.Deserialize(nil)
+
+				v, err := f.packer.Pack(s)
 				if err != nil {
 					return err
 				}
-				p.defaultStruct.FieldByIndex(f.index).Set(v)
+
+				if field.Kind() != reflect.Ptr {
+					field.Set(v)
+					continue
+				}
+
+				switch field.Type().Elem().Kind() {
+				case reflect.String:
+					coerced, err := castString(s)
+					if err != nil {
+						return err
+					}
+					field.Set(reflect.ValueOf(&coerced))
+
+				case reflect.Int32:
+					coerced, err := castInt32(s)
+					if err != nil {
+						return err
+					}
+					field.Set(reflect.ValueOf(&coerced))
+
+				case reflect.Float64:
+					coerced, err := castFloat64(s)
+					if err != nil {
+						return err
+					}
+					field.Set(reflect.ValueOf(&coerced))
+				}
 			}
 		}
 	}
@@ -253,10 +283,17 @@ func (p *StructPacker) Pack(value interface{}) (reflect.Value, error) {
 	v.Elem().Set(p.defaultStruct)
 	for _, f := range p.fields {
 		if value, ok := values[f.name]; ok {
+			if value == nil && f.def != nil {
+				t := v.Elem().FieldByIndex(f.index).Type()
+				v.Elem().FieldByIndex(f.index).Set(reflect.Zero(t))
+				continue
+			}
+
 			packed, err := f.packer.Pack(value)
 			if err != nil {
 				return reflect.Value{}, err
 			}
+
 			v.Elem().FieldByIndex(f.index).Set(packed)
 		}
 	}
@@ -352,31 +389,38 @@ func unmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
 
 	switch typ.Kind() {
 	case reflect.Int32:
-		switch input := input.(type) {
-		case int:
-			if input < math.MinInt32 || input > math.MaxInt32 {
-				return nil, fmt.Errorf("not a 32-bit integer")
-			}
-			return int32(input), nil
-		case float64:
-			coerced := int32(input)
-			if input < math.MinInt32 || input > math.MaxInt32 || float64(coerced) != input {
-				return nil, fmt.Errorf("not a 32-bit integer")
-			}
-			return coerced, nil
-		}
+		return castInt32(input)
 
 	case reflect.Float64:
-		switch input := input.(type) {
-		case int32:
-			return float64(input), nil
-		case int:
-			return float64(input), nil
-		}
+		return castFloat64(input)
 
 	case reflect.String:
 		if reflect.TypeOf(input).ConvertibleTo(typ) {
 			return reflect.ValueOf(input).Convert(typ).Interface(), nil
+		}
+
+	case reflect.Pointer:
+		switch typ.Elem().Kind() {
+		case reflect.String:
+			coerced, err := castString(input)
+			if err != nil {
+				return nil, err
+			}
+			return &coerced, nil
+
+		case reflect.Int32:
+			coerced, err := castInt32(input)
+			if err != nil {
+				return nil, err
+			}
+			return &coerced, nil
+
+		case reflect.Float64:
+			coerced, err := castFloat64(input)
+			if err != nil {
+				return nil, err
+			}
+			return &coerced, nil
 		}
 	}
 
@@ -403,4 +447,42 @@ type NullUnmarshaller interface {
 func isNullable(t reflect.Type) bool {
 	_, ok := reflect.New(t).Interface().(NullUnmarshaller)
 	return ok
+}
+
+func castString(value interface{}) (string, error) {
+	switch value := value.(type) {
+	case string:
+		return value, nil
+	default:
+		return "", fmt.Errorf("incompatible type: %s", reflect.TypeOf(value))
+	}
+}
+
+func castInt32(value interface{}) (int32, error) {
+	switch value := value.(type) {
+	case int:
+		if value < math.MinInt32 || value > math.MaxInt32 {
+			return 0, fmt.Errorf("not a 32-bit integer")
+		}
+		return int32(value), nil
+	case float64:
+		coerced := int32(value)
+		if value < math.MinInt32 || value > math.MaxInt32 || float64(coerced) != value {
+			return 0, fmt.Errorf("not a 32-bit integer")
+		}
+		return coerced, nil
+	default:
+		return 0, fmt.Errorf("incompatible type: %s", reflect.TypeOf(value))
+	}
+}
+
+func castFloat64(value interface{}) (float64, error) {
+	switch value := value.(type) {
+	case int32:
+		return float64(value), nil
+	case int:
+		return float64(value), nil
+	default:
+		return 0, fmt.Errorf("incompatible type: %s", reflect.TypeOf(value))
+	}
 }

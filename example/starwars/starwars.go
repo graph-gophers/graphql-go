@@ -21,7 +21,7 @@ var Schema = `
 	type Query {
 		hero(episode: Episode = NEWHOPE): Character
 		reviews(episode: Episode!): [Review]!
-		search(text: String!): [SearchResult]!
+		search(text: String = "", mass: Float = 0): [SearchResult]!
 		character(id: ID!): Character
 		droid(id: ID!): Droid
 		human(id: ID!): Human
@@ -307,20 +307,28 @@ func (r *QueryResolver) Reviews(args struct{ Episode string }) []*reviewResolver
 	return l
 }
 
-func (r *QueryResolver) Search(args struct{ Text string }) []*searchResultResolver {
+func (r *QueryResolver) Search(args struct {
+	Text *string
+	Mass *float64
+}) []*searchResultResolver {
 	var l []*searchResultResolver
+
+	if args.Text == nil || args.Mass == nil {
+		return l
+	}
+
 	for _, h := range humans {
-		if strings.Contains(h.Name, args.Text) {
+		if strings.Contains(h.Name, *args.Text) && float64(h.Mass) >= *args.Mass {
 			l = append(l, &searchResultResolver{&humanResolver{h}})
 		}
 	}
 	for _, d := range droids {
-		if strings.Contains(d.Name, args.Text) {
+		if strings.Contains(d.Name, *args.Text) {
 			l = append(l, &searchResultResolver{&droidResolver{d}})
 		}
 	}
 	for _, s := range starships {
-		if strings.Contains(s.Name, args.Text) {
+		if strings.Contains(s.Name, *args.Text) {
 			l = append(l, &searchResultResolver{&starshipResolver{s}})
 		}
 	}
