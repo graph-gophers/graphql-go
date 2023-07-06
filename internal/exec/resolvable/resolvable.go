@@ -167,9 +167,9 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *ast.Schema, resolver interface{}, dirs []directives.Directive, useFieldResolvers bool) (*Schema, error) {
+func ApplyResolver(s *ast.Schema, resolver interface{}, dirs []directives.Directive, useFieldResolvers, allowNullableZeroValues bool) (*Schema, error) {
 	if resolver == nil {
-		return &Schema{Meta: newMeta(s), Schema: *s}, nil
+		return &Schema{Meta: newMeta(s, allowNullableZeroValues), Schema: *s}, nil
 	}
 
 	ds, err := applyDirectives(s, dirs)
@@ -182,7 +182,7 @@ func ApplyResolver(s *ast.Schema, resolver interface{}, dirs []directives.Direct
 		return nil, err
 	}
 
-	b := newBuilder(s, directivePackers, useFieldResolvers)
+	b := newBuilder(s, directivePackers, useFieldResolvers, allowNullableZeroValues)
 
 	var query, mutation, subscription Resolvable
 
@@ -248,7 +248,7 @@ func ApplyResolver(s *ast.Schema, resolver interface{}, dirs []directives.Direct
 	}
 
 	return &Schema{
-		Meta:                 newMeta(s),
+		Meta:                 newMeta(s, allowNullableZeroValues),
 		Schema:               *s,
 		QueryResolver:        reflect.ValueOf(resolvers[Query]),
 		MutationResolver:     reflect.ValueOf(resolvers[Mutation]),
@@ -328,6 +328,8 @@ type execBuilder struct {
 	directivePackers  map[string]*packer.StructPacker
 	packerBuilder     *packer.Builder
 	useFieldResolvers bool
+
+	allowNullableZeroValues bool
 }
 
 type typePair struct {
@@ -340,13 +342,15 @@ type resMapEntry struct {
 	targets []*Resolvable
 }
 
-func newBuilder(s *ast.Schema, directives map[string]*packer.StructPacker, useFieldResolvers bool) *execBuilder {
+func newBuilder(s *ast.Schema, directives map[string]*packer.StructPacker, useFieldResolvers, allowNullableZeroValues bool) *execBuilder {
 	return &execBuilder{
 		schema:            s,
 		resMap:            make(map[typePair]*resMapEntry),
 		directivePackers:  directives,
 		packerBuilder:     packer.NewBuilder(),
 		useFieldResolvers: useFieldResolvers,
+
+		allowNullableZeroValues: allowNullableZeroValues,
 	}
 }
 
@@ -391,10 +395,17 @@ func (b *execBuilder) makeExec(t ast.Type, resolverType reflect.Type) (Resolvabl
 		return b.makeObjectExec(t.Name, nil, t.UnionMemberTypes, nil, nonNull, resolverType)
 	}
 
-	if !nonNull {
-		if resolverType.Kind() != reflect.Ptr {
+	// If we have not enabled support for nullable default values, enforce pointer expectations
+	if !b.allowNullableZeroValues {
+		// If the field is optional, is must be resolved by a pointer
+		if !nonNull && resolverType.Kind() != reflect.Ptr {
 			return nil, fmt.Errorf("%s is not a pointer", resolverType)
 		}
+	}
+
+	// If it's a pointer, dereference it before continuing. All resolvers below
+	// expect concrete types.
+	if resolverType.Kind() == reflect.Ptr {
 		resolverType = resolverType.Elem()
 	}
 
@@ -425,6 +436,8 @@ func makeScalarExec(t *ast.ScalarTypeDefinition, resolverType reflect.Type) (Res
 	switch r := reflect.New(resolverType).Interface().(type) {
 	case *int32:
 		implementsType = t.Name == "Int"
+	case *int64:
+		implementsType = t.Name == "Long"
 	case *float64:
 		implementsType = t.Name == "Float"
 	case *string:
@@ -442,7 +455,8 @@ func makeScalarExec(t *ast.ScalarTypeDefinition, resolverType reflect.Type) (Res
 }
 
 func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinition, possibleTypes []*ast.ObjectTypeDefinition,
-	interfaces []*ast.InterfaceTypeDefinition, nonNull bool, resolverType reflect.Type) (*Object, error) {
+	interfaces []*ast.InterfaceTypeDefinition, nonNull bool, resolverType reflect.Type,
+) (*Object, error) {
 	if !nonNull {
 		if resolverType.Kind() != reflect.Ptr && resolverType.Kind() != reflect.Interface {
 			return nil, fmt.Errorf("%s is not a pointer or interface", resolverType)
@@ -539,8 +553,10 @@ func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinitio
 	}, nil
 }
 
-var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
-var errorType = reflect.TypeOf((*error)(nil)).Elem()
+var (
+	contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
+	errorType   = reflect.TypeOf((*error)(nil)).Elem()
+)
 
 func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m reflect.Method, sf reflect.StructField, methodIndex int, fieldIndex []int, methodHasReceiver bool) (*Field, error) {
 	var argsPacker *packer.StructPacker

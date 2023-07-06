@@ -16,11 +16,17 @@ type Meta struct {
 	Schema        *Object
 	Type          *Object
 	Service       *Object
+
+	allowNullableZeroValues bool
 }
 
-func newMeta(s *ast.Schema) *Meta {
+func (m *Meta) AllowNullableZeroValues() bool {
+	return m.allowNullableZeroValues
+}
+
+func newMeta(s *ast.Schema, allowNullableZeroValues bool) *Meta {
 	var err error
-	b := newBuilder(s, nil, false)
+	b := newBuilder(s, nil, false, allowNullableZeroValues)
 
 	metaSchema := s.Types["__Schema"].(*ast.ObjectTypeDefinition)
 	so, err := b.makeObjectExec(metaSchema.Name, metaSchema.Fields, nil, nil, false, reflect.TypeOf(&introspection.Schema{}))
@@ -68,5 +74,7 @@ func newMeta(s *ast.Schema) *Meta {
 		FieldType:     fieldType,
 		Schema:        so,
 		Type:          t,
+
+		allowNullableZeroValues: allowNullableZeroValues,
 	}
 }

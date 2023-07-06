@@ -458,7 +458,6 @@ func parseObjectDef(l *common.Lexer) *ast.ObjectTypeDefinition {
 	l.ConsumeToken('}')
 
 	return object
-
 }
 
 func parseInterfaceDef(l *common.Lexer) *ast.InterfaceTypeDefinition {
@@ -528,6 +527,7 @@ func parseEnumDef(l *common.Lexer) *ast.EnumTypeDefinition {
 	l.ConsumeToken('}')
 	return enum
 }
+
 func parseDirectiveDef(l *common.Lexer) *ast.DirectiveDefinition {
 	l.ConsumeToken('@')
 	loc := l.Location()

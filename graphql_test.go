@@ -1399,6 +1399,58 @@ func TestNilInterface(t *testing.T) {
 	})
 }
 
+type (
+	testNullableZeroValuesResolver         struct{}
+	testNullableZeroValuesInternalResolver struct {
+		Z int32
+	}
+)
+
+func (r *testNullableZeroValuesResolver) A() *testNullableZeroValuesInternalResolver {
+	return &testNullableZeroValuesInternalResolver{
+		Z: 10,
+	}
+}
+
+func (r *testNullableZeroValuesResolver) B() *testNullableZeroValuesInternalResolver {
+	return &testNullableZeroValuesInternalResolver{
+		Z: 0,
+	}
+}
+
+func TestNullableZeroValues(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				schema {
+					query: Query
+				}
+
+				type Query {
+					a: T
+					b: T
+				}
+
+				type T {
+					z: Int
+				}
+			`, &testNullableZeroValuesResolver{}, graphql.AllowNullableZeroValues(), graphql.UseFieldResolvers()),
+			Query: `
+				{
+					a { z }
+					b { z }
+				}
+			`,
+			ExpectedResult: `
+			{
+				"a": { "z": 10 },
+				"b": { "z": null }
+			}
+			`,
+		},
+	})
+}
+
 func TestErrorPropagationInLists(t *testing.T) {
 	t.Parallel()
 
@@ -1504,7 +1556,7 @@ func TestErrorPropagationInLists(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message: `graphql: got nil for non-null "Droid"`,
+					Message: `got nil for non-null "Droid"`,
 					Path:    []interface{}{"findNilDroids", 1},
 				},
 			},
@@ -1621,7 +1673,7 @@ func TestErrorPropagationInLists(t *testing.T) {
 					Path:          []interface{}{"findNilDroids", 0, "quotes"},
 				},
 				{
-					Message: `graphql: got nil for non-null "Droid"`,
+					Message: `got nil for non-null "Droid"`,
 					Path:    []interface{}{"findNilDroids", 1},
 				},
 			},
@@ -4115,7 +4167,7 @@ func TestComposedFragments(t *testing.T) {
 var (
 	errExample = fmt.Errorf("this is an error")
 
-	nilChildErrorString = `graphql: got nil for non-null "Child"`
+	nilChildErrorString = `got nil for non-null "Child"`
 )
 
 type childResolver struct{}
@@ -4123,12 +4175,15 @@ type childResolver struct{}
 func (r *childResolver) TriggerError() (string, error) {
 	return "This will never be returned to the client", errExample
 }
+
 func (r *childResolver) NoError() string {
 	return "no error"
 }
+
 func (r *childResolver) Child() *childResolver {
 	return &childResolver{}
 }
+
 func (r *childResolver) NilChild() *childResolver {
 	return nil
 }
@@ -4734,7 +4789,7 @@ func TestPointerReturnForNonNull(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message: `graphql: got nil for non-null "Hello"`,
+					Message: `got nil for non-null "Hello"`,
 					Path:    []interface{}{"pointerReturn", "value"},
 				},
 			},
@@ -4758,8 +4813,7 @@ type nullableResult struct {
 	Float  string
 }
 
-type nullableResolver struct {
-}
+type nullableResolver struct{}
 
 func (r *nullableResolver) TestNullables(args struct {
 	Input *nullableInput
@@ -5074,11 +5128,14 @@ func stringsEqual(want, have string) string {
 	return ""
 }
 
-type queryVarResolver struct{}
-type filterArgs struct {
-	Required string
-	Optional *string
-}
+type (
+	queryVarResolver struct{}
+	filterArgs       struct {
+		Required string
+		Optional *string
+	}
+)
+
 type filterSearchResults struct {
 	Match *string
 }
@@ -5142,12 +5199,14 @@ func TestQueryVariablesValidation(t *testing.T) {
 	}})
 }
 
-type interfaceImplementingInterfaceResolver struct{}
-type interfaceImplementingInterfaceExample struct {
-	A string
-	B string
-	C bool
-}
+type (
+	interfaceImplementingInterfaceResolver struct{}
+	interfaceImplementingInterfaceExample  struct {
+		A string
+		B string
+		C bool
+	}
+)
 
 func (r *interfaceImplementingInterfaceResolver) Hey() *interfaceImplementingInterfaceExample {
 	return &interfaceImplementingInterfaceExample{
