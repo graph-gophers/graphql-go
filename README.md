@@ -28,27 +28,28 @@ In order to run a simple GraphQL server locally create a `main.go` file with the
 package main
 
 import (
-        "log"
-        "net/http"
+	"log"
+	"net/http"
 
-        graphql "github.com/graph-gophers/graphql-go"
-        "github.com/graph-gophers/graphql-go/relay"
+	graphql "github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/relay"
 )
 
 type query struct{}
 
-func (_ *query) Hello() string { return "Hello, world!" }
+func (query) Hello() string { return "Hello, world!" }
 
 func main() {
-        s := `
-                type Query {
-                        hello: String!
-                }
-        `
-        schema := graphql.MustParseSchema(s, &query{})
-        http.Handle("/query", &relay.Handler{Schema: schema})
-        log.Fatal(http.ListenAndServe(":8080", nil))
+	s := `
+        type Query {
+                hello: String!
+        }
+    `
+	schema := graphql.MustParseSchema(s, &query{})
+	http.Handle("/query", &relay.Handler{Schema: schema})
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
+
 ```
 Then run the file with `go run main.go`. To test:
 	    
