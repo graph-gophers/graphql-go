@@ -69,7 +69,6 @@ func parseOperation(l *common.Lexer, opType ast.OperationType) *ast.OperationDef
 	if l.Peek() == scanner.Ident {
 		op.Name = l.ConsumeIdentWithLoc()
 	}
-	op.Directives = common.ParseDirectives(l)
 	if l.Peek() == '(' {
 		l.ConsumeToken('(')
 		for l.Peek() != ')' {
@@ -81,6 +80,7 @@ func parseOperation(l *common.Lexer, opType ast.OperationType) *ast.OperationDef
 		}
 		l.ConsumeToken(')')
 	}
+	op.Directives = common.ParseDirectives(l)
 	op.Selections = parseSelectionSet(l)
 	return op
 }
