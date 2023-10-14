@@ -23,9 +23,9 @@ type Request struct {
 	AllowIntrospection bool
 }
 
-func (r *Request) AddError(err *errors.QueryError) {
+func (r *Request) AddError(errs ...*errors.QueryError) {
 	r.Mu.Lock()
-	r.Errs = append(r.Errs, err)
+	r.Errs = append(r.Errs, errs...)
 	r.Mu.Unlock()
 }
 

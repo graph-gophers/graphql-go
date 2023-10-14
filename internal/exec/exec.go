@@ -201,55 +201,71 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 	}
 
 	var result reflect.Value
-	var err *errors.QueryError
+	var errs []*errors.QueryError
 
 	traceCtx, finish := r.Tracer.TraceField(ctx, f.field.TraceLabel, f.field.TypeName, f.field.Name, !f.field.Async, f.field.Args)
 	defer func() {
-		finish(err)
+		if len(errs) > 0 {
+			finish(errs[0]) // unfortunately the signature of finish is not flexible enough to allow us to pass multiple errors
+			return
+		}
+		finish(nil)
 	}()
 
-	err = func() (err *errors.QueryError) {
+	newError := func(resolverErr error) *errors.QueryError {
+		err := errors.Errorf("%s", resolverErr)
+		err.Path = path.toSlice()
+		err.ResolverError = resolverErr
+		if ex, ok := resolverErr.(extensionser); ok {
+			err.Extensions = ex.Extensions()
+		}
+		return err
+	}
+
+	func() {
 		defer func() {
 			if panicValue := recover(); panicValue != nil {
 				r.Logger.LogPanic(ctx, panicValue)
-				err = r.PanicHandler.MakePanicError(ctx, panicValue)
+				err := r.PanicHandler.MakePanicError(ctx, panicValue)
 				err.Path = path.toSlice()
+				errs = append(errs, err)
 			}
 		}()
 
 		if f.field.FixedResult.IsValid() {
 			result = f.field.FixedResult
-			return nil
+			return
 		}
 
 		if err := traceCtx.Err(); err != nil {
-			return errors.Errorf("%s", err) // don't execute any more resolvers if context got cancelled
+			errs = append(errs, errors.Errorf("%s", err))
+			return
 		}
 
 		res, resolverErr := f.resolve(ctx)
 		if resolverErr != nil {
-			err := errors.Errorf("%s", resolverErr)
-			err.Path = path.toSlice()
-			err.ResolverError = resolverErr
-			if ex, ok := resolverErr.(extensionser); ok {
-				err.Extensions = ex.Extensions()
+			switch v := resolverErr.(type) {
+			case interface{ Unwrap() []error }:
+				for _, err := range v.Unwrap() {
+					errs = append(errs, newError(err))
+				}
+			default:
+				errs = append(errs, newError(resolverErr))
 			}
-			return err
+			return
 		}
 
 		result = reflect.ValueOf(res)
-
-		return nil
 	}()
 
 	if applyLimiter {
 		<-r.Limiter
 	}
 
-	if err != nil {
+	if len(errs) > 0 {
 		// If an error occurred while resolving a field, it should be treated as though the field
 		// returned null, and an error must be added to the "errors" list in the response.
-		r.AddError(err)
+		r.AddError(errs...)
 		f.out.WriteString("null")
 		return
 	}
