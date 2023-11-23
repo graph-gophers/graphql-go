@@ -76,10 +76,14 @@ func (s *Schema) subscribe(ctx context.Context, queryString string, operationNam
 	responses := r.Subscribe(ctx, res, op)
 	c := make(chan interface{})
 	go func() {
+	Loop:
 		for resp := range responses {
-			c <- &Response{
-				Data:   resp.Data,
-				Errors: resp.Errors,
+			select {
+			case c <- &Response{Data: resp.Data, Errors: resp.Errors}:
+				continue
+
+			case <-ctx.Done():
+				break Loop
 			}
 		}
 		close(c)
