@@ -9,7 +9,7 @@ import (
 // differentiate a value explicitly set to null from an omitted value.
 // When the value is defined (either null or a value) Set is true.
 type NullID struct {
-	Value *string
+	Value *ID
 	Set   bool
 }
 
@@ -24,13 +24,8 @@ func (s *NullID) UnmarshalGraphQL(input interface{}) error {
 		return nil
 	}
 
-	switch v := input.(type) {
-	case string:
-		s.Value = &v
-		return nil
-	default:
-		return fmt.Errorf("wrong type for ID: %T", v)
-	}
+	s.Value = new(ID)
+	return s.Value.UnmarshalGraphQL(input)
 }
 
 func (s *NullID) Nullable() {}

@@ -24,7 +24,7 @@ func TestNullID_UnmarshalGraphQL(t *testing.T) {
 		input interface{}
 	}
 
-	good := "1234"
+	good := graphql.ID("1234")
 	ref := graphql.NullID{
 		Value: &good,
 		Set:   true,
@@ -72,7 +72,7 @@ func TestNullID_UnmarshalGraphQL(t *testing.T) {
 		{
 			name: "string",
 			args: args{
-				input: good,
+				input: string(good),
 			},
 			wantEq: ref,
 		},
