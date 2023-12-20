@@ -8,6 +8,91 @@ import (
 	"github.com/graph-gophers/graphql-go/decode"
 )
 
+func TestNullID_ImplementsUnmarshaler(t *testing.T) {
+	defer func() {
+		if err := recover(); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	// assert *NullID implements decode.Unmarshaler interface
+	var _ decode.Unmarshaler = (*graphql.NullID)(nil)
+}
+
+func TestNullID_UnmarshalGraphQL(t *testing.T) {
+	type args struct {
+		input interface{}
+	}
+
+	good := graphql.ID("1234")
+	ref := graphql.NullID{
+		Value: &good,
+		Set:   true,
+	}
+
+	t.Run("invalid", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			args    args
+			wantErr string
+		}{
+			{
+				name:    "boolean",
+				args:    args{input: true},
+				wantErr: "wrong type for ID: bool",
+			},
+			{
+				name:    "int",
+				args:    args{input: 1},
+				wantErr: "wrong type for ID: int",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				gt := &graphql.NullID{}
+				if err := gt.UnmarshalGraphQL(tt.args.input); err != nil {
+					if err.Error() != tt.wantErr {
+						t.Errorf("UnmarshalGraphQL() error = %v, want = %s", err, tt.wantErr)
+					}
+
+					return
+				}
+
+				t.Error("UnmarshalGraphQL() expected error not raised")
+			})
+		}
+	})
+
+	tests := []struct {
+		name   string
+		args   args
+		wantEq graphql.NullID
+	}{
+		{
+			name: "string",
+			args: args{
+				input: string(good),
+			},
+			wantEq: ref,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gt := new(graphql.NullID)
+			if err := gt.UnmarshalGraphQL(tt.args.input); err != nil {
+				t.Errorf("UnmarshalGraphQL() error = %v", err)
+				return
+			}
+
+			if *gt.Value != *tt.wantEq.Value {
+				t.Errorf("UnmarshalGraphQL() got = %v, want = %v", *gt.Value, *tt.wantEq.Value)
+			}
+		})
+	}
+}
+
 func TestNullInt_ImplementsUnmarshaler(t *testing.T) {
 	defer func() {
 		if err := recover(); err != nil {

@@ -5,6 +5,31 @@ import (
 	"math"
 )
 
+// NullID is an ID that can be null. Use it in input structs to
+// differentiate a value explicitly set to null from an omitted value.
+// When the value is defined (either null or a value) Set is true.
+type NullID struct {
+	Value *ID
+	Set   bool
+}
+
+func (NullID) ImplementsGraphQLType(name string) bool {
+	return name == "ID"
+}
+
+func (s *NullID) UnmarshalGraphQL(input interface{}) error {
+	s.Set = true
+
+	if input == nil {
+		return nil
+	}
+
+	s.Value = new(ID)
+	return s.Value.UnmarshalGraphQL(input)
+}
+
+func (s *NullID) Nullable() {}
+
 // NullString is a string that can be null. Use it in input structs to
 // differentiate a value explicitly set to null from an omitted value.
 // When the value is defined (either null or a value) Set is true.
