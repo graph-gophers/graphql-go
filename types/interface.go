@@ -1,6 +1,6 @@
 package types
 
-import "github.com/graph-gophers/graphql-go/errors"
+import "github.com/tribunadigital/graphql-go/errors"
 
 // InterfaceTypeDefinition represents a list of named fields and their arguments.
 //

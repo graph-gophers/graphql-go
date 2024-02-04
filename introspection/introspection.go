@@ -3,7 +3,7 @@ package introspection
 import (
 	"sort"
 
-	"github.com/graph-gophers/graphql-go/types"
+	"github.com/tribunadigital/graphql-go/types"
 )
 
 type Schema struct {

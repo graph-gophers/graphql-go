@@ -1,6 +1,6 @@
 package types
 
-import "github.com/graph-gophers/graphql-go/errors"
+import "github.com/tribunadigital/graphql-go/errors"
 
 // EnumTypeDefinition defines a set of possible enum values.
 //
