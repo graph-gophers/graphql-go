@@ -102,6 +102,12 @@ func checkErrors(t *testing.T, want, got []*errors.QueryError) {
 	sortErrors(want)
 	sortErrors(got)
 
+	// Clear the underlying error before the DeepEqual check.  It's too
+	// much to ask the tester to include the raw failing error.
+	for _, err := range got {
+		err.Err = nil
+	}
+
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected error: got %+v, want %+v", got, want)
 	}

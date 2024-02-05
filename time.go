@@ -31,6 +31,10 @@ func (t *Time) UnmarshalGraphQL(input interface{}) error {
 		var err error
 		t.Time, err = time.Parse(time.RFC3339, input)
 		return err
+	case []byte:
+		var err error
+		t.Time, err = time.Parse(time.RFC3339, string(input))
+		return err
 	case int32:
 		t.Time = time.Unix(int64(input), 0)
 		return nil
