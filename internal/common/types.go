@@ -1,8 +1,8 @@
 package common
 
 import (
-	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/types"
+	"github.com/tribunadigital/graphql-go/errors"
+	"github.com/tribunadigital/graphql-go/types"
 )
 
 func ParseType(l *Lexer) types.Type {

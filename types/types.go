@@ -1,7 +1,7 @@
 package types
 
 import (
-	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/tribunadigital/graphql-go/errors"
 )
 
 // TypeName is a base building block for GraphQL type references.

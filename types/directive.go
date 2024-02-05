@@ -1,6 +1,6 @@
 package types
 
-import "github.com/graph-gophers/graphql-go/errors"
+import "github.com/tribunadigital/graphql-go/errors"
 
 // Directive is a representation of the GraphQL Directive.
 //
