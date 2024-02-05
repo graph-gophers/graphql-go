@@ -22,7 +22,7 @@ func TestParseInterfaceDef(t *testing.T) {
 		definition:  "Greeting { field: String }",
 		expected: &types.InterfaceTypeDefinition{
 			Name:   "Greeting",
-			Loc:    errors.Location{1, 1},
+			Loc:    errors.Location{Line: 1, Column: 1},
 			Fields: types.FieldsDefinition{&types.FieldDefinition{Name: "field"}}},
 	}}
 
@@ -53,19 +53,19 @@ func TestParseObjectDef(t *testing.T) {
 	tests := []testCase{{
 		description: "Parses type inheriting single interface",
 		definition:  "Hello implements World { field: String }",
-		expected:    &types.ObjectTypeDefinition{Name: "Hello", Loc: errors.Location{1, 1}, InterfaceNames: []string{"World"}},
+		expected:    &types.ObjectTypeDefinition{Name: "Hello", Loc: errors.Location{Line: 1, Column: 1}, InterfaceNames: []string{"World"}},
 	}, {
 		description: "Parses type inheriting multiple interfaces",
 		definition:  "Hello implements Wo & rld { field: String }",
-		expected:    &types.ObjectTypeDefinition{Name: "Hello", Loc: errors.Location{1, 1}, InterfaceNames: []string{"Wo", "rld"}},
+		expected:    &types.ObjectTypeDefinition{Name: "Hello", Loc: errors.Location{Line: 1, Column: 1}, InterfaceNames: []string{"Wo", "rld"}},
 	}, {
 		description: "Parses type inheriting multiple interfaces with leading ampersand",
 		definition:  "Hello implements & Wo & rld { field: String }",
-		expected:    &types.ObjectTypeDefinition{Name: "Hello", Loc: errors.Location{1, 1}, InterfaceNames: []string{"Wo", "rld"}},
+		expected:    &types.ObjectTypeDefinition{Name: "Hello", Loc: errors.Location{Line: 1, Column: 1}, InterfaceNames: []string{"Wo", "rld"}},
 	}, {
 		description: "Allows legacy SDL interfaces",
 		definition:  "Hello implements Wo, rld { field: String }",
-		expected:    &types.ObjectTypeDefinition{Name: "Hello", Loc: errors.Location{1, 1}, InterfaceNames: []string{"Wo", "rld"}},
+		expected:    &types.ObjectTypeDefinition{Name: "Hello", Loc: errors.Location{Line: 1, Column: 1}, InterfaceNames: []string{"Wo", "rld"}},
 	}}
 
 	for _, test := range tests {
@@ -97,7 +97,7 @@ func TestParseUnionDef(t *testing.T) {
 			expected: &types.Union{
 				Name:      "Foo",
 				TypeNames: []string{"Bar", "Qux", "Quux"},
-				Loc:       errors.Location{1, 1},
+				Loc:       errors.Location{Line: 1, Column: 1},
 			},
 		},
 	}
@@ -133,14 +133,14 @@ func TestParseEnumDef(t *testing.T) {
 				EnumValuesDefinition: []*types.EnumValueDefinition{
 					{
 						EnumValue: "BAR",
-						Loc:       errors.Location{1, 7},
+						Loc:       errors.Location{Line: 1, Column: 7},
 					},
 					{
 						EnumValue: "QUX",
-						Loc:       errors.Location{1, 11},
+						Loc:       errors.Location{Line: 1, Column: 11},
 					},
 				},
-				Loc: errors.Location{1, 1},
+				Loc: errors.Location{Line: 1, Column: 1},
 			},
 		},
 		{
@@ -154,14 +154,14 @@ func TestParseEnumDef(t *testing.T) {
 				EnumValuesDefinition: []*types.EnumValueDefinition{
 					{
 						EnumValue: "BAR",
-						Loc:       errors.Location{2, 5},
+						Loc:       errors.Location{Line: 2, Column: 5},
 					},
 					{
 						EnumValue: "QUX",
-						Loc:       errors.Location{3, 5},
+						Loc:       errors.Location{Line: 3, Column: 5},
 					},
 				},
-				Loc: errors.Location{1, 1},
+				Loc: errors.Location{Line: 1, Column: 1},
 			},
 		},
 	}
@@ -194,7 +194,7 @@ func TestParseDirectiveDef(t *testing.T) {
 			definition:  "@Foo on FIELD",
 			expected: &types.DirectiveDefinition{
 				Name:      "Foo",
-				Loc:       errors.Location{1, 2},
+				Loc:       errors.Location{Line: 1, Column: 2},
 				Locations: []string{"FIELD"},
 			},
 		},
@@ -229,7 +229,7 @@ func TestParseInputDef(t *testing.T) {
 			expected: &types.InputObject{
 				Name:   "Foo",
 				Values: nil,
-				Loc:    errors.Location{1, 1},
+				Loc:    errors.Location{Line: 1, Column: 1},
 			},
 		},
 	}

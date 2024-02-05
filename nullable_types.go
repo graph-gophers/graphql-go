@@ -2,6 +2,7 @@ package graphql
 
 import (
 	"fmt"
+	"math"
 )
 
 // NullString is a string that can be null. Use it in input structs to
@@ -87,6 +88,13 @@ func (s *NullInt) UnmarshalGraphQL(input interface{}) error {
 	case int32:
 		s.Value = &v
 		return nil
+	case float64:
+		coerced := int32(v)
+		if v < math.MinInt32 || v > math.MaxInt32 || float64(coerced) != v {
+			return fmt.Errorf("not a 32-bit integer")
+		}
+		s.Value = &coerced
+		return nil
 	default:
 		return fmt.Errorf("wrong type for Int: %T", v)
 	}
@@ -116,6 +124,14 @@ func (s *NullFloat) UnmarshalGraphQL(input interface{}) error {
 	switch v := input.(type) {
 	case float64:
 		s.Value = &v
+		return nil
+	case int32:
+		coerced := float64(v)
+		s.Value = &coerced
+		return nil
+	case int:
+		coerced := float64(v)
+		s.Value = &coerced
 		return nil
 	default:
 		return fmt.Errorf("wrong type for Float: %T", v)

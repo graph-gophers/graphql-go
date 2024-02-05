@@ -24,22 +24,19 @@ type Request struct {
 	Limiter                  chan struct{}
 	Tracer                   trace.Tracer
 	Logger                   log.Logger
+	PanicHandler             errors.PanicHandler
 	SubscribeResolverTimeout time.Duration
 }
 
 func (r *Request) handlePanic(ctx context.Context) {
 	if value := recover(); value != nil {
 		r.Logger.LogPanic(ctx, value)
-		r.AddError(makePanicError(value))
+		r.AddError(r.PanicHandler.MakePanicError(ctx, value))
 	}
 }
 
 type extensionser interface {
 	Extensions() map[string]interface{}
-}
-
-func makePanicError(value interface{}) *errors.QueryError {
-	return errors.Errorf("panic occurred: %v", value)
 }
 
 func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *types.OperationDefinition) ([]byte, []*errors.QueryError) {
@@ -131,11 +128,16 @@ func collectFieldsToResolve(sels []selected.Selection, s *resolvable.Schema, res
 		case *selected.TypenameField:
 			_, ok := fieldByAlias[sel.Alias]
 			if !ok {
+				res := reflect.ValueOf(typeOf(sel, resolver))
+				f := s.FieldTypename
+				f.TypeName = res.String()
+
 				sf := &selected.SchemaField{
-					Field:       s.Meta.FieldTypename,
+					Field:       f,
 					Alias:       sel.Alias,
-					FixedResult: reflect.ValueOf(typeOf(sel, resolver)),
+					FixedResult: res,
 				}
+
 				field := &fieldToExec{field: sf, resolver: resolver}
 				*fields = append(*fields, field)
 				fieldByAlias[sel.Alias] = field
@@ -184,7 +186,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 		defer func() {
 			if panicValue := recover(); panicValue != nil {
 				r.Logger.LogPanic(ctx, panicValue)
-				err = makePanicError(panicValue)
+				err = r.PanicHandler.MakePanicError(ctx, panicValue)
 				err.Path = path.toSlice()
 			}
 		}()

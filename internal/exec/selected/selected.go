@@ -176,8 +176,8 @@ func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag 
 		t := r.Schema.Resolve(frag.On.Name)
 		face, ok := t.(*types.InterfaceTypeDefinition)
 		if !ok && frag.On.Name != "" {
-			a, ok := e.TypeAssertions[frag.On.Name]
-			if !ok {
+			a, ok2 := e.TypeAssertions[frag.On.Name]
+			if !ok2 {
 				panic(fmt.Errorf("%q does not implement %q", frag.On, e.Name)) // TODO proper error handling
 			}
 

@@ -469,9 +469,9 @@ Second line of the description.
 					return fmt.Errorf("Expected 3 possible types, but instead got %d types", len(typ.UnionMemberTypes))
 				}
 				posible := map[string]struct{}{
-					"Coloured": struct{}{},
-					"Named":    struct{}{},
-					"Numbered": struct{}{},
+					"Coloured": {},
+					"Named":    {},
+					"Numbered": {},
 				}
 				for _, pt := range typ.UnionMemberTypes {
 					if _, ok := posible[pt.Name]; !ok {
@@ -503,11 +503,11 @@ Second line of the description.
 					return fmt.Errorf("Expected 5 enum values, but instead got %d types", len(typ.EnumValuesDefinition))
 				}
 				posible := map[string]struct{}{
-					"AUD": struct{}{},
-					"USD": struct{}{},
-					"EUR": struct{}{},
-					"BGN": struct{}{},
-					"GBP": struct{}{},
+					"AUD": {},
+					"USD": {},
+					"EUR": {},
+					"BGN": {},
+					"GBP": {},
 				}
 				for _, v := range typ.EnumValuesDefinition {
 					if _, ok := posible[v.EnumValue]; !ok {
@@ -604,9 +604,9 @@ Second line of the description.
 					return fmt.Errorf("Expected 3 possible types, but instead got %d types", len(typ.UnionMemberTypes))
 				}
 				posible := map[string]struct{}{
-					"Coloured": struct{}{},
-					"Named":    struct{}{},
-					"Numbered": struct{}{},
+					"Coloured": {},
+					"Named":    {},
+					"Numbered": {},
 				}
 				for _, pt := range typ.UnionMemberTypes {
 					if _, ok := posible[pt.Name]; !ok {
@@ -641,10 +641,10 @@ Second line of the description.
 					return fmt.Errorf("Expected 4 fields, but instead got %d types", len(typ.Values))
 				}
 				posible := map[string]struct{}{
-					"id":       struct{}{},
-					"name":     struct{}{},
-					"category": struct{}{},
-					"tags":     struct{}{},
+					"id":       {},
+					"name":     {},
+					"category": {},
+					"tags":     {},
 				}
 				for _, pt := range typ.Values {
 					if _, ok := posible[pt.Name.Name]; !ok {
@@ -741,9 +741,9 @@ Second line of the description.
 					return fmt.Errorf("Expected 3 fields, but instead got %d types", len(typ.Fields))
 				}
 				fields := map[string]struct{}{
-					"id":       struct{}{},
-					"name":     struct{}{},
-					"category": struct{}{},
+					"id":       {},
+					"name":     {},
+					"category": {},
 				}
 				for _, f := range typ.Fields {
 					if _, ok := fields[f.Name]; !ok {
@@ -861,13 +861,147 @@ Second line of the description.
 				if test.validateError == nil {
 					t.Fatal(err)
 				}
-				if err := test.validateError(err); err != nil {
-					t.Fatal(err)
+				if err2 := test.validateError(err); err2 != nil {
+					t.Fatal(err2)
 				}
 			}
 			if test.validateSchema != nil {
 				if err := test.validateSchema(s); err != nil {
 					t.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func TestInterfaceImplementsInterface(t *testing.T) {
+	for _, tt := range []struct {
+		name                  string
+		sdl                   string
+		useStringDescriptions bool
+		validateError         func(err error) error
+		validateSchema        func(s *types.Schema) error
+	}{
+		{
+			name: "Parses interface implementing other interface",
+			sdl: `
+			interface Foo {
+				field: String!
+			}
+			interface Bar implements Foo {
+				field: String!
+			}
+			`,
+			validateSchema: func(s *types.Schema) error {
+				const implementedInterfaceName = "Bar"
+				typ, ok := s.Types[implementedInterfaceName].(*types.InterfaceTypeDefinition)
+				if !ok {
+					return fmt.Errorf("interface %q not found", implementedInterfaceName)
+				}
+				if len(typ.Fields) != 1 {
+					return fmt.Errorf("invalid number of fields: want %d, have %d", 1, len(typ.Fields))
+				}
+				const fieldName = "field"
+
+				if typ.Fields[0].Name != fieldName {
+					return fmt.Errorf("field %q not found", fieldName)
+				}
+
+				if len(typ.Interfaces) != 1 {
+					return fmt.Errorf("invalid number of implementing interfaces found on %q: want %d, have %d", implementedInterfaceName, 1, len(typ.Interfaces))
+				}
+
+				const implementingInterfaceName = "Foo"
+				if typ.Interfaces[0].Name != implementingInterfaceName {
+					return fmt.Errorf("interface %q not found", implementingInterfaceName)
+				}
+
+				return nil
+			},
+		},
+		{
+			name: "Parses interface transitively implementing an interface that implements an interface",
+			sdl: `
+			interface Foo {
+				field: String!
+			}
+			interface Bar implements Foo {
+				field: String!
+			}
+			interface Baz implements Bar & Foo {
+				field: String!
+			}
+			`,
+			validateSchema: func(s *types.Schema) error {
+				const implementedInterfaceName = "Baz"
+				typ, ok := s.Types[implementedInterfaceName].(*types.InterfaceTypeDefinition)
+				if !ok {
+					return fmt.Errorf("interface %q not found", implementedInterfaceName)
+				}
+				if len(typ.Fields) != 1 {
+					return fmt.Errorf("invalid number of fields: want %d, have %d", 1, len(typ.Fields))
+				}
+				const fieldName = "field"
+
+				if typ.Fields[0].Name != fieldName {
+					return fmt.Errorf("field %q not found", fieldName)
+				}
+
+				if len(typ.Interfaces) != 2 {
+					return fmt.Errorf("invalid number of implementing interfaces found on %q: want %d, have %d", implementedInterfaceName, 2, len(typ.Interfaces))
+				}
+
+				const firstImplementingInterfaceName = "Bar"
+				if typ.Interfaces[0].Name != firstImplementingInterfaceName {
+					return fmt.Errorf("first interface %q not found", firstImplementingInterfaceName)
+				}
+
+				const secondImplementingInterfaceName = "Foo"
+				if typ.Interfaces[1].Name != secondImplementingInterfaceName {
+					return fmt.Errorf("second interface %q not found", secondImplementingInterfaceName)
+				}
+
+				return nil
+			},
+		},
+		{
+			name: "Transitively implemented interfaces must also be defined on an implementing type or interface",
+			sdl: `
+			interface A {
+				message: String!
+			}
+			interface B implements A {
+				message: String!
+				name: String!
+			}
+			interface C implements B {
+				message: String!
+				name: String!
+				hug: Boolean!
+			}
+			`,
+			validateError: func(err error) error {
+				msg := `graphql: interface "C" must explicitly implement transitive interface "A"`
+				if err == nil || err.Error() != msg {
+					return fmt.Errorf("expected error %q, but got %q", msg, err)
+				}
+				return nil
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := schema.ParseSchema(tt.sdl, tt.useStringDescriptions)
+			if err != nil {
+				if tt.validateError == nil {
+					t.Fatal(err)
+				}
+				if err2 := tt.validateError(err); err2 != nil {
+					t.Fatal(err2)
+				}
+			}
+			if tt.validateSchema != nil {
+				if err2 := tt.validateSchema(s); err2 != nil {
+					t.Fatal(err2)
 				}
 			}
 		})

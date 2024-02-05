@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/tribunadigital/graphql-go/errors"
@@ -30,6 +29,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		maxParallelism: 10,
 		tracer:         trace.OpenTracingTracer{},
 		logger:         &log.DefaultLogger{},
+		panicHandler:   &errors.DefaultPanicHandler{},
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -78,6 +78,7 @@ type Schema struct {
 	tracer                   trace.Tracer
 	validationTracer         trace.ValidationTracerContext
 	logger                   log.Logger
+	panicHandler             errors.PanicHandler
 	useStringDescriptions    bool
 	disableIntrospection     bool
 	subscribeResolverTimeout time.Duration
@@ -138,7 +139,7 @@ func Tracer(tracer trace.Tracer) SchemaOpt {
 
 // ValidationTracer is used to trace validation errors. It defaults to trace.NoopValidationTracer.
 // Deprecated: context is needed to support tracing correctly. Use a Tracer which implements trace.ValidationTracerContext.
-func ValidationTracer(tracer trace.ValidationTracer) SchemaOpt {
+func ValidationTracer(tracer trace.ValidationTracer) SchemaOpt { //nolint:staticcheck
 	return func(s *Schema) {
 		s.validationTracer = &validationBridgingTracer{tracer: tracer}
 	}
@@ -148,6 +149,14 @@ func ValidationTracer(tracer trace.ValidationTracer) SchemaOpt {
 func Logger(logger log.Logger) SchemaOpt {
 	return func(s *Schema) {
 		s.logger = logger
+	}
+}
+
+// PanicHandler is used to customize the panic errors during query execution.
+// It defaults to errors.DefaultPanicHandler.
+func PanicHandler(panicHandler errors.PanicHandler) SchemaOpt {
+	return func(s *Schema) {
+		s.panicHandler = panicHandler
 	}
 }
 
@@ -195,7 +204,7 @@ func (s *Schema) ValidateWithVariables(queryString string, variables map[string]
 // without a resolver. If the context get cancelled, no further resolvers will be called and a
 // the context error will be returned as soon as possible (not immediately).
 func (s *Schema) Exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}) *Response {
-	if s.res.Resolver == (reflect.Value{}) {
+	if !s.res.Resolver.IsValid() {
 		panic("schema created without resolver, can not exec")
 	}
 	return s.exec(ctx, queryString, operationName, variables, s.res)
@@ -252,9 +261,10 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 			Schema:               s.schema,
 			DisableIntrospection: s.disableIntrospection,
 		},
-		Limiter: make(chan struct{}, s.maxParallelism),
-		Tracer:  s.tracer,
-		Logger:  s.logger,
+		Limiter:      make(chan struct{}, s.maxParallelism),
+		Tracer:       s.tracer,
+		Logger:       s.logger,
+		PanicHandler: s.panicHandler,
 	}
 	varTypes := make(map[string]*introspection.Type)
 	for _, v := range op.Vars {
@@ -294,7 +304,7 @@ func (s *Schema) validateSchema() error {
 }
 
 type validationBridgingTracer struct {
-	tracer trace.ValidationTracer
+	tracer trace.ValidationTracer //nolint:staticcheck
 }
 
 func (t *validationBridgingTracer) TraceValidation(context.Context) trace.TraceValidationFinishFunc {
