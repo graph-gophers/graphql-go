@@ -251,8 +251,6 @@ func TestParseInputDef(t *testing.T) {
 func compareDirectiveDefinitions(t *testing.T, expected *types.DirectiveDefinition, actual *types.DirectiveDefinition) {
 	t.Helper()
 
-	checkNilCase(t, expected, actual)
-
 	if expected.Name != actual.Name {
 		t.Fatalf("wrong DirectiveDefinition name: want %q, got %q", expected.Name, actual.Name)
 	}
@@ -267,8 +265,6 @@ func compareDirectiveDefinitions(t *testing.T, expected *types.DirectiveDefiniti
 func compareInputObjectTypeDefinition(t *testing.T, expected, actual *types.InputObject) {
 	t.Helper()
 
-	checkNilCase(t, expected, actual)
-
 	if expected.Name != actual.Name {
 		t.Fatalf("wrong InputObject name: want %q, got %q", expected.Name, actual.Name)
 	}
@@ -278,8 +274,6 @@ func compareInputObjectTypeDefinition(t *testing.T, expected, actual *types.Inpu
 
 func compareEnumTypeDefs(t *testing.T, expected, actual *types.EnumTypeDefinition) {
 	t.Helper()
-
-	checkNilCase(t, expected, actual)
 
 	if expected.Name != actual.Name {
 		t.Fatalf("wrong EnumTypeDefinition name: want %q, got %q", expected.Name, actual.Name)
@@ -327,8 +321,6 @@ func compareErrors(t *testing.T, expected, actual *errors.QueryError) {
 func compareInterfaces(t *testing.T, expected, actual *types.InterfaceTypeDefinition) {
 	t.Helper()
 
-	checkNilCase(t, expected, actual)
-
 	if expected.Name != actual.Name {
 		t.Errorf("wrong interface name: want %q, got %q", expected.Name, actual.Name)
 	}
@@ -349,8 +341,6 @@ func compareInterfaces(t *testing.T, expected, actual *types.InterfaceTypeDefini
 func compareUnions(t *testing.T, expected, actual *types.Union) {
 	t.Helper()
 
-	checkNilCase(t, expected, actual)
-
 	if expected.Name != actual.Name {
 		t.Errorf("wrong object name: want %q, got %q", expected.Name, actual.Name)
 	}
@@ -362,8 +352,6 @@ func compareUnions(t *testing.T, expected, actual *types.Union) {
 
 func compareObjects(t *testing.T, expected, actual *types.ObjectTypeDefinition) {
 	t.Helper()
-
-	checkNilCase(t, expected, actual)
 
 	if expected.Name != actual.Name {
 		t.Errorf("wrong object name: want %q, got %q", expected.Name, actual.Name)
@@ -382,19 +370,6 @@ func compareObjects(t *testing.T, expected, actual *types.ObjectTypeDefinition) 
 		if expectedName != actualName {
 			t.Errorf("wrong interface name: want %q, got %q", expectedName, actualName)
 		}
-	}
-}
-
-func checkNilCase(t *testing.T, a, b interface{}) {
-	t.Helper()
-
-	switch {
-	case a == nil && a == b:
-		return
-	case a == nil && b != nil:
-		t.Fatalf("wanted nil, got an unexpected result: %#v", b)
-	case a != nil && b == nil:
-		t.Fatalf("wanted non-nil result, got nil")
 	}
 }
 

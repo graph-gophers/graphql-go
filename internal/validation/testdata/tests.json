@@ -1458,6 +1458,125 @@
       "errors": []
     },
     {
+      "name": "Validate: No invalid default String variable values",
+      "rule": "DefaultValuesOfCorrectType",
+      "schema": 0,
+      "query": "\n      query Foo($a: String = -\"\") {\n       field(a: $a)\n     }\n     ",
+      "errors": [
+        {
+          "message": "Variable \"$a\" of type \"String\" has invalid default value -\"\".\nExpected type \"String\", found -\"\".",
+          "locations": [
+            {
+              "line": 2,
+              "column": 30
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: No invalid default Int variable values/bad input",
+      "rule": "DefaultValuesOfCorrectType",
+      "schema": 0,
+      "query": "\n      query Foo($a: Int = -\"\") {\n       field(a: $a)\n     }\n     ",
+      "errors": [
+        {
+          "message": "Variable \"$a\" of type \"Int\" has invalid default value -\"\".\nExpected type \"Int\", found -\"\".",
+          "locations": [
+            {
+              "line": 2,
+              "column": 27
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: No invalid default Int variable values/value out of range",
+      "rule": "DefaultValuesOfCorrectType",
+      "schema": 0,
+      "query": "\n      query Foo($a: Int = -2147483649) {\n       field(a: $a)\n     }\n     ",
+      "errors": [
+        {
+          "message": "Variable \"$a\" of type \"Int\" has invalid default value -2147483649.\nExpected type \"Int\", found -2147483649.",
+          "locations": [
+            {
+              "line": 2,
+              "column": 27
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: No invalid default Float variable values",
+      "rule": "DefaultValuesOfCorrectType",
+      "schema": 0,
+      "query": "\n      query Foo($a: Float = -\"\") {\n       field(a: $a)\n     }\n     ",
+      "errors": [
+        {
+          "message": "Variable \"$a\" of type \"Float\" has invalid default value -\"\".\nExpected type \"Float\", found -\"\".",
+          "locations": [
+            {
+              "line": 2,
+              "column": 29
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: No invalid default Float variable values/value out of range",
+      "rule": "DefaultValuesOfCorrectType",
+      "schema": 0,
+      "query": "\n      query Foo($a: Float = 1.8e+308) {\n       field(a: $a)\n     }\n     ",
+      "errors": [
+        {
+          "message": "Variable \"$a\" of type \"Float\" has invalid default value 1.8e+308.\nExpected type \"Float\", found 1.8e+308.",
+          "locations": [
+            {
+              "line": 2,
+              "column": 29
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: No invalid default Boolean variable values",
+      "rule": "DefaultValuesOfCorrectType",
+      "schema": 0,
+      "query": "\n      query Foo($a: Boolean = \"false\") {\n       field(a: $a)\n     }\n     ",
+      "errors": [
+        {
+          "message": "Variable \"$a\" of type \"Boolean\" has invalid default value \"false\".\nExpected type \"Boolean\", found \"false\".",
+          "locations": [
+            {
+              "line": 2,
+              "column": 31
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: No invalid default ID variable values",
+      "rule": "DefaultValuesOfCorrectType",
+      "schema": 0,
+      "query": "\n      query Foo($a: ID = false) {\n       field(a: $a)\n     }\n     ",
+      "errors": [
+        {
+          "message": "Variable \"$a\" of type \"ID\" has invalid default value false.\nExpected type \"ID\", found false.",
+          "locations": [
+            {
+              "line": 2,
+              "column": 26
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Validate: No unused variables/uses all variables deeply in inline fragments",
       "rule": "NoUnusedVariables",
       "schema": 0,
