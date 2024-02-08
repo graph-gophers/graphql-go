@@ -123,7 +123,7 @@ func (l *Lexer) ConsumeIdentWithLoc() types.Ident {
 	loc := l.Location()
 	name := l.sc.TokenText()
 	l.ConsumeToken(scanner.Ident)
-	return types.Ident{name, loc}
+	return types.Ident{Name: name, Loc: loc}
 }
 
 func (l *Lexer) ConsumeKeyword(keyword string) {

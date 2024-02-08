@@ -1,0 +1,35 @@
+version: v1.0
+name: Go
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu2004
+blocks:
+  - name: Style Check
+    task:
+      jobs:
+        - name: fmt
+          commands:
+            - sem-version go 1.17
+            - checkout
+            - ./scripts/golangci_install.sh -b $(go env GOPATH)/bin v1.42.1
+            - export PATH=$(go env GOPATH)/bin:$PATH
+            - golangci-lint run ./...
+
+  - name: Test & Build
+    task:
+      prologue:
+        commands:
+          - sem-version go 1.17
+          - export PATH=$(go env GOPATH)/bin:$PATH
+          - checkout
+          - go version
+
+      jobs:
+        - name: Test
+          commands:
+            - go test ./...
+
+        - name: Build
+          commands:
+            - go build -v .

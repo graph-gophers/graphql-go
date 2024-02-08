@@ -11,8 +11,8 @@ import (
 
 const (
 	Query        types.OperationType = "QUERY"
-	Mutation                         = "MUTATION"
-	Subscription                     = "SUBSCRIPTION"
+	Mutation     types.OperationType = "MUTATION"
+	Subscription types.OperationType = "SUBSCRIPTION"
 )
 
 func Parse(queryString string) (*types.ExecutableDefinition, *errors.QueryError) {
