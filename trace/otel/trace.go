@@ -9,8 +9,8 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
-	"github.com/graph-gophers/graphql-go/errors"
-	"github.com/graph-gophers/graphql-go/introspection"
+	"github.com/tribunadigital/graphql-go/errors"
+	"github.com/tribunadigital/graphql-go/introspection"
 )
 
 // DefaultTracer creates a tracer using a default name.
