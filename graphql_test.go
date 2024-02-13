@@ -13,7 +13,7 @@ import (
 	"github.com/tribunadigital/graphql-go/example/starwars"
 	"github.com/tribunadigital/graphql-go/gqltesting"
 	"github.com/tribunadigital/graphql-go/introspection"
-	"github.com/tribunadigital/graphql-go/trace"
+	"github.com/tribunadigital/graphql-go/trace/tracer"
 )
 
 type helloWorldResolver1 struct{}
@@ -1536,6 +1536,40 @@ func TestDeprecatedDirective(t *testing.T) {
 	})
 }
 
+func TestSpecifiedByDirective(t *testing.T) {
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+			schema {
+				query: Query
+			}
+			type Query {
+			}
+			scalar UUID @specifiedBy(
+				url: "https://tools.ietf.org/html/rfc4122"
+			)
+			`, &struct{}{}),
+			Query: `
+				query {
+					__type(name: "UUID") {
+						name
+						specifiedByURL
+					}
+				}
+			`,
+			Variables: map[string]interface{}{},
+			ExpectedResult: `
+				{
+					"__type": {
+						"name": "UUID",
+						"specifiedByURL": "https://tools.ietf.org/html/rfc4122"
+					}
+				}
+			`,
+		},
+	})
+}
+
 type testBadEnumResolver struct{}
 
 func (r *testBadEnumResolver) Hero() *testBadEnumCharacterResolver {
@@ -1550,6 +1584,24 @@ func (r *testBadEnumCharacterResolver) Name() string {
 
 func (r *testBadEnumCharacterResolver) AppearsIn() []string {
 	return []string{"STAR_TREK"}
+}
+
+func TestUnknownType(t *testing.T) {
+	gqltesting.RunTest(t, &gqltesting.Test{
+		Schema: starwarsSchema,
+		Query: `
+			query TypeInfo {
+				__type(name: "unknown-type") {
+					name
+				}
+			}
+		`,
+		ExpectedResult: `
+			{
+				"__type": null
+			}
+		`,
+	})
 }
 
 func TestEnums(t *testing.T) {
@@ -1689,6 +1741,23 @@ func TestEnums(t *testing.T) {
 			},
 		},
 	})
+}
+
+type testDeprecatedArgsResolver struct{}
+
+func (r *testDeprecatedArgsResolver) A(args struct{ B *string }) int32 {
+	return 0
+}
+
+func TestDeprecatedArgs(t *testing.T) {
+	graphql.MustParseSchema(`
+		schema {
+			query: Query
+		}
+		type Query {
+			a(b: String @deprecated): Int!
+		}
+	`, &testDeprecatedArgsResolver{})
 }
 
 func TestInlineFragments(t *testing.T) {
@@ -2186,6 +2255,7 @@ func TestIntrospection(t *testing.T) {
 							{ "name": "SearchResult" },
 							{ "name": "Starship" },
 							{ "name": "String" },
+							{ "name": "_Service" },
 							{ "name": "__Directive" },
 							{ "name": "__DirectiveLocation" },
 							{ "name": "__EnumValue" },
@@ -2463,7 +2533,8 @@ func TestIntrospection(t *testing.T) {
 									"description": "Marks an element of a GraphQL schema as no longer supported.",
 									"locations": [
 										"FIELD_DEFINITION",
-										"ENUM_VALUE"
+										"ENUM_VALUE",
+										"ARGUMENT_DEFINITION"
 									],
 									"args": [
 										{
@@ -2515,6 +2586,26 @@ func TestIntrospection(t *testing.T) {
 												"ofType": {
 													"kind": "SCALAR",
 													"name": "Boolean"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "specifiedBy",
+									"description": "Provides a scalar specification URL for specifying the behavior of custom scalar types.",
+									"locations": [
+										"SCALAR"
+									],
+									"args": [
+										{
+											"name": "url",
+											"description": "The URL should point to a human-readable specification of the data format, serialization, and coercion rules.",
+											"type": {
+												"kind": "NON_NULL",
+												"ofType": {
+													"kind": "SCALAR",
+													"name": "String"
 												}
 											}
 										}
@@ -3711,6 +3802,106 @@ func TestErrorPropagation(t *testing.T) {
 	})
 }
 
+type assertionResolver struct{}
+
+func (r *assertionResolver) ToHuman() (*struct{ Name string }, bool) {
+	return &struct{ Name string }{Name: "Luke Skywalker"}, true
+}
+
+type assertionQueryResolver struct{}
+
+func (*assertionQueryResolver) Character() *assertionResolver {
+	return &assertionResolver{}
+}
+
+type badAssertionResolver struct{}
+
+func (r *badAssertionResolver) ToHuman(ctx context.Context) (*struct{ Name string }, bool) {
+	return &struct{ Name string }{Name: "Luke Skywalker"}, true
+}
+
+type badAssertionQueryResolver struct{}
+
+func (*badAssertionQueryResolver) Character() *badAssertionResolver {
+	return &badAssertionResolver{}
+}
+
+func TestTypeAssertions(t *testing.T) {
+	assertionSchema := `
+		schema {
+			query: Query
+		}
+
+		type Query {
+			character: Character!
+		}
+
+		type Human {
+			name: String!
+		}
+
+		union Character = Human
+	`
+	query := `
+		query {
+			character {
+				... on Human {
+					name
+				}
+			}
+		}
+	`
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(assertionSchema, &assertionQueryResolver{}, graphql.UseFieldResolvers()),
+			Query:  query,
+			ExpectedResult: `
+				{
+					"character": {
+						"name": "Luke Skywalker"
+					}
+				}
+			`,
+		},
+	})
+}
+
+func TestPanicTypeAssertionArguments(t *testing.T) {
+	panicMessage := `*graphql_test.badAssertionResolver does not resolve "Character": method "ToHuman" should't have any arguments
+	used by (*graphql_test.badAssertionQueryResolver).Character`
+
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected schema parse to panic")
+		}
+
+		if r.(error).Error() != panicMessage {
+			t.Logf("got:  %s", r)
+			t.Logf("want: %s", panicMessage)
+			t.Fail()
+		}
+	}()
+
+	schema := `
+		schema {
+			query: Query
+		}
+
+		type Query {
+			character: Character!
+		}
+
+		type Human {
+			name: String!
+		}
+
+		union Character = Human
+	`
+	graphql.MustParseSchema(schema, &badAssertionQueryResolver{}, graphql.UseFieldResolvers())
+}
+
 type ambiguousResolver struct {
 	Name string // ambiguous
 	University
@@ -4098,7 +4289,7 @@ type queryTrace struct {
 	errors    []*gqlerrors.QueryError
 }
 
-func (t *testTracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, trace.TraceFieldFinishFunc) {
+func (t *testTracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, func(*gqlerrors.QueryError)) {
 	return ctx, func(qe *gqlerrors.QueryError) {
 		t.mu.Lock()
 		defer t.mu.Unlock()
@@ -4116,7 +4307,7 @@ func (t *testTracer) TraceField(ctx context.Context, label, typeName, fieldName 
 	}
 }
 
-func (t *testTracer) TraceQuery(ctx context.Context, document string, opName string, vars map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, trace.TraceQueryFinishFunc) {
+func (t *testTracer) TraceQuery(ctx context.Context, document string, opName string, vars map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, func([]*gqlerrors.QueryError)) {
 	return ctx, func(qe []*gqlerrors.QueryError) {
 		t.mu.Lock()
 		defer t.mu.Unlock()
@@ -4133,14 +4324,14 @@ func (t *testTracer) TraceQuery(ctx context.Context, document string, opName str
 	}
 }
 
-var _ trace.Tracer = (*testTracer)(nil)
+var _ tracer.Tracer = (*testTracer)(nil)
 
 func TestTracer(t *testing.T) {
 	t.Parallel()
 
-	tracer := &testTracer{mu: &sync.Mutex{}}
+	tt := &testTracer{mu: &sync.Mutex{}}
 
-	schema, err := graphql.ParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.Tracer(tracer))
+	schema, err := graphql.ParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.Tracer(tt))
 	if err != nil {
 		t.Fatalf("graphql.ParseSchema: %s", err)
 	}
@@ -4161,14 +4352,14 @@ func TestTracer(t *testing.T) {
 
 	_ = schema.Exec(ctx, doc, opName, variables)
 
-	tracer.mu.Lock()
-	defer tracer.mu.Unlock()
+	tt.mu.Lock()
+	defer tt.mu.Unlock()
 
-	if len(tracer.queries) != 1 {
-		t.Fatalf("expected one query trace, but got %d: %#v", len(tracer.queries), tracer.queries)
+	if len(tt.queries) != 1 {
+		t.Fatalf("expected one query trace, but got %d: %#v", len(tt.queries), tt.queries)
 	}
 
-	qt := tracer.queries[0]
+	qt := tt.queries[0]
 	if qt.document != doc {
 		t.Errorf("mismatched query trace document:\nwant: %q\ngot : %q", doc, qt.document)
 	}
@@ -4182,7 +4373,7 @@ func TestTracer(t *testing.T) {
 		{fieldName: "name", typeName: "Human"},
 	}
 
-	checkFieldTraces(t, expectedFieldTraces, tracer.fields)
+	checkFieldTraces(t, expectedFieldTraces, tt.fields)
 }
 
 func checkFieldTraces(t *testing.T, want, have []fieldTrace) {
@@ -4369,6 +4560,39 @@ func TestCircularFragmentMaxDepth(t *testing.T) {
 					{Line: 10, Column: 20},
 				},
 			}},
+		},
+	})
+}
+
+func TestQueryService(t *testing.T) {
+	t.Parallel()
+
+	schemaString := `
+	schema {
+		query: Query
+	}
+
+	type Query {
+		hello: String!
+	}`
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(schemaString, &helloWorldResolver1{}),
+			Query: `
+				{
+					_service{
+						sdl
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"_service": {
+						"sdl": "\n\tschema {\n\t\tquery: Query\n\t}\n\n\ttype Query {\n\t\thello: String!\n\t}"
+					}
+				}
+			`,
 		},
 	})
 }

@@ -15,14 +15,14 @@ import (
 	"github.com/tribunadigital/graphql-go/internal/exec/selected"
 	"github.com/tribunadigital/graphql-go/internal/query"
 	"github.com/tribunadigital/graphql-go/log"
-	"github.com/tribunadigital/graphql-go/trace"
+	"github.com/tribunadigital/graphql-go/trace/tracer"
 	"github.com/tribunadigital/graphql-go/types"
 )
 
 type Request struct {
 	selected.Request
 	Limiter                  chan struct{}
-	Tracer                   trace.Tracer
+	Tracer                   tracer.Tracer
 	Logger                   log.Logger
 	PanicHandler             errors.PanicHandler
 	SubscribeResolverTimeout time.Duration
