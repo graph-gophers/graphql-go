@@ -55,8 +55,9 @@ type Field struct {
 }
 
 type FieldVisitors struct {
-	Interceptors []directives.ResolverInterceptor
-	Validators   []directives.Validator
+	ArgValidators map[string][]directives.Validator
+	Interceptors  []directives.ResolverInterceptor
+	Validators    []directives.Validator
 }
 
 func (f *Field) UseMethodResolver() bool {
@@ -86,6 +87,34 @@ func (f *Field) Resolve(ctx context.Context, resolver reflect.Value, args interf
 	return wrapResolver(ctx, args)
 }
 
+func (f *Field) ValidateArgs(ctx context.Context, args map[string]interface{}) []error {
+	d := f.Visitors
+	if d == nil {
+		// Meta schema fields don't include directives on those fields
+		return nil
+	}
+
+	var errs []error
+
+	for _, def := range f.Arguments {
+		name := def.Name.Name
+
+		vs, ok := d.ArgValidators[name]
+		if !ok {
+			continue
+		}
+
+		arg := args[name]
+		for _, v := range vs {
+			if err := v.Validate(ctx, def, arg); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	return errs
+}
+
 func (f *Field) Validate(ctx context.Context, args interface{}) []error {
 	d := f.Visitors
 	if d == nil {
@@ -96,7 +125,7 @@ func (f *Field) Validate(ctx context.Context, args interface{}) []error {
 	var errs []error
 
 	for _, v := range d.Validators {
-		if err := v.Validate(ctx, args); err != nil {
+		if err := v.Validate(ctx, f.FieldDefinition, args); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -270,8 +299,7 @@ func buildDirectivePackers(s *ast.Schema, visitors map[string]directives.Directi
 
 		v, ok := visitors[n]
 		if !ok {
-			// Directives which need visitors have already been checked
-			// Anything without a visitor now is a built-in directive without a packer.
+			// Not all directives have or need a packer, e.g. built-in directives like @deprecated
 			continue
 		}
 
@@ -603,9 +631,9 @@ func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m r
 		}
 	}
 
-	visitors, err := packDirectives(f.Directives, b.directivePackers)
+	visitors, err := packDirectives(f, b.directivePackers)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to pack directives for field %s.%s: %w", typeName, f.Name, err)
 	}
 
 	fe := &Field{
@@ -638,30 +666,25 @@ func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m r
 	return fe, nil
 }
 
-func packDirectives(ds ast.DirectiveList, packers map[string]*packer.StructPacker) (*FieldVisitors, error) {
+func packDirectives(f *ast.FieldDefinition, packers map[string]*packer.StructPacker) (*FieldVisitors, error) {
 	var resolvers []directives.ResolverInterceptor
 	var validators []directives.Validator
+	argValidators := map[string][]directives.Validator{}
 
-	for _, d := range ds {
+	for _, d := range f.Directives {
 		dp, ok := packers[d.Name.Name]
 		if !ok {
 			continue // skip directives without packers
 		}
 
-		args := make(map[string]interface{})
-		for _, arg := range d.Arguments {
-			if arg.Value == nil {
-				continue
-			}
-			args[arg.Name.Name] = arg.Value.Deserialize(nil)
-		}
-
-		p, err := dp.Pack(args)
+		v, err := packDirective(d, dp)
 		if err != nil {
 			return nil, err
 		}
 
-		v := p.Interface()
+		if !v.AllowLocation("FIELD_DEFINITION") {
+			return nil, fmt.Errorf("directive %q declared on field definition, but implementation %T doesn't allow this location", d.Name.Name, v)
+		}
 
 		// Visitors can implement any of these types optionally, and may implement multiple
 		if v, ok := v.(directives.ResolverInterceptor); ok {
@@ -673,7 +696,48 @@ func packDirectives(ds ast.DirectiveList, packers map[string]*packer.StructPacke
 		}
 	}
 
-	return &FieldVisitors{Interceptors: resolvers, Validators: validators}, nil
+	for _, a := range f.Arguments {
+		for _, d := range a.Directives {
+			dp, ok := packers[d.Name.Name]
+			if !ok {
+				continue // skip directives without packers
+			}
+
+			v, err := packDirective(d, dp)
+			if err != nil {
+				return nil, err
+			}
+
+			if !v.AllowLocation("ARGUMENT_DEFINITION") {
+				return nil, fmt.Errorf("directive %q declared on argument definition %q, but implementation %T doesn't allow this location", d.Name.Name, a.Name.Name, v)
+			}
+
+			if v, ok := v.(directives.Validator); ok {
+				argValidators[a.Name.Name] = append(argValidators[a.Name.Name], v)
+			}
+		}
+	}
+
+	return &FieldVisitors{ArgValidators: argValidators, Interceptors: resolvers, Validators: validators}, nil
+}
+
+func packDirective(d *ast.Directive, dp *packer.StructPacker) (directives.Directive, error) {
+	args := make(map[string]interface{})
+	for _, arg := range d.Arguments {
+		if arg.Value == nil {
+			args[arg.Name.Name] = nil
+			continue
+		}
+
+		args[arg.Name.Name] = arg.Value.Deserialize(nil)
+	}
+
+	p, err := dp.Pack(args)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.Interface().(directives.Directive), nil
 }
 
 func findMethod(t reflect.Type, name string) int {
