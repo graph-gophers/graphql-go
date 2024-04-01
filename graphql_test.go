@@ -5211,8 +5211,8 @@ func TestCircularFragmentMaxDepth(t *testing.T) {
 	              }
 	          `,
 			ExpectedErrors: []*gqlerrors.QueryError{{
-				Message: `Cannot spread fragment "X" within itself via Y.`,
-				Rule:    "NoFragmentCycles",
+				Message: `Cannot spread fragment "X" within itself via "Y".`,
+				Rule:    "NoFragmentCyclesRule",
 				Locations: []gqlerrors.Location{
 					{Line: 7, Column: 20},
 					{Line: 10, Column: 20},

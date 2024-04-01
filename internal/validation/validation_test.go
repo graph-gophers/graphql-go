@@ -4,7 +4,6 @@ import (
 	"os"
 	"reflect"
 	"sort"
-	"strings"
 	"testing"
 
 	"encoding/json"
@@ -27,6 +26,8 @@ type Test struct {
 
 func TestValidate(t *testing.T) {
 	skip := map[string]struct{}{
+		// graphql-js test case parses SDL as if it was a query here, which fails since we only accept a query
+		"Validate: Directives Are Unique Per Location/unknown directives must be ignored": {},
 		// The meta schema always includes the standard types, so this isn't applicable
 		"Validate: Known type names/references to standard scalars that are missing in schema": {},
 		// Ignore tests using experimental @stream
@@ -84,8 +85,7 @@ func TestValidate(t *testing.T) {
 			errs := validation.Validate(schemas[test.Schema], d, test.Vars, 0)
 			got := []*errors.QueryError{}
 			for _, err := range errs {
-				// graphql-js adjusted its rule naming. Preserve the existing naming to minimise changes for now
-				if rule := strings.TrimSuffix(test.Rule, "Rule"); err.Rule == rule {
+				if err.Rule == test.Rule {
 					err.Rule = ""
 					got = append(got, err)
 				}
@@ -104,7 +104,4 @@ func sortLocations(errs []*errors.QueryError) {
 		locs := err.Locations
 		sort.Slice(locs, func(i, j int) bool { return locs[i].Before(locs[j]) })
 	}
-
-	// FIXME: Sorting errors seems necessary, as mutations being validated before queries, but order reversed in expectations?
-	sort.Slice(errs, func(i, j int) bool { return errs[i].Locations[0].Before(errs[j].Locations[0]) })
 }
