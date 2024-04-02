@@ -1,23 +1,22 @@
 {
   "name": "testdata",
+  "type": "module",
   "version": "0.0.0",
   "description": "Extracts test data from github.com/graphql/graphql-js",
   "main": "",
   "devDependencies": {
-    "babel-cli": "^6.26.0",
-    "babel-plugin-syntax-async-functions": "^6.13.0",
-    "babel-plugin-syntax-async-generators": "^6.13.0",
-    "babel-plugin-transform-class-properties": "^6.24.1",
-    "babel-plugin-transform-es2015-classes": "^6.24.1",
-    "babel-plugin-transform-es2015-destructuring": "^6.23.0",
-    "babel-plugin-transform-es2015-spread": "^6.22.0",
-    "babel-plugin-transform-flow-strip-types": "^6.22.0",
-    "babel-plugin-transform-object-rest-spread": "^6.26.0",
-    "babel-preset-env": "^1.6.1",
-    "chai": "^4.1.2",
-    "iterall": "^1.2.2"
+    "@types/chai": "4.3.4",
+    "chai": "^4.3.7",
+    "graphql": "github:graphql/graphql-js",
+    "patch-package": "^8.0.0",
+    "postinstall-postinstall": "^2.1.0",
+    "ts-node": "10.9.1",
+    "typescript": "5.0.4"
   },
   "scripts": {
+    "create-patches": "npx patch-package graphql",
+    "export": "node --loader ts-node/esm export.ts",
+    "postinstall": "patch-package",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

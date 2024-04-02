@@ -56,7 +56,7 @@ func ResolveType(t ast.Type, resolver Resolver) (ast.Type, *errors.QueryError) {
 		refT := resolver(t.Name)
 		if refT == nil {
 			err := errors.Errorf("Unknown type %q.", t.Name)
-			err.Rule = "KnownTypeNames"
+			err.Rule = "KnownTypeNamesRule"
 			err.Locations = []errors.Location{t.Loc}
 			return nil, err
 		}
