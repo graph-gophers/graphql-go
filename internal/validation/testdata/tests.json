@@ -401,6 +401,199 @@
       ]
     },
     {
+      "name": "Validate: Known argument names/single arg is known",
+      "rule": "KnownArgumentNamesRule",
+      "schema": "3vm8aJ4UHhzj01V2PFAYRVZj2R0SPm+mxfn/edqH9aU=",
+      "query": "\n      fragment argOnRequiredArg on Dog {\n        doesKnowCommand(dogCommand: SIT)\n      }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Known argument names/multiple args are known",
+      "rule": "KnownArgumentNamesRule",
+      "schema": "3vm8aJ4UHhzj01V2PFAYRVZj2R0SPm+mxfn/edqH9aU=",
+      "query": "\n      fragment multipleArgs on ComplicatedArgs {\n        multipleReqs(req1: 1, req2: 2)\n      }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Known argument names/ignores args of unknown fields",
+      "rule": "KnownArgumentNamesRule",
+      "schema": "3vm8aJ4UHhzj01V2PFAYRVZj2R0SPm+mxfn/edqH9aU=",
+      "query": "\n      fragment argOnUnknownField on Dog {\n        unknownField(unknownArg: SIT)\n      }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Known argument names/multiple args in reverse order are known",
+      "rule": "KnownArgumentNamesRule",
+      "schema": "3vm8aJ4UHhzj01V2PFAYRVZj2R0SPm+mxfn/edqH9aU=",
+      "query": "\n      fragment multipleArgsReverseOrder on ComplicatedArgs {\n        multipleReqs(req2: 2, req1: 1)\n      }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Known argument names/no args on optional arg",
+      "rule": "KnownArgumentNamesRule",
+      "schema": "3vm8aJ4UHhzj01V2PFAYRVZj2R0SPm+mxfn/edqH9aU=",
+      "query": "\n      fragment noArgOnOptionalArg on Dog {\n        isHouseTrained\n      }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Known argument names/args are known deeply",
+      "rule": "KnownArgumentNamesRule",
+      "schema": "3vm8aJ4UHhzj01V2PFAYRVZj2R0SPm+mxfn/edqH9aU=",
+      "query": "\n      {\n        dog {\n          doesKnowCommand(dogCommand: SIT)\n        }\n        human {\n          pet {\n            ... on Dog {\n              doesKnowCommand(dogCommand: SIT)\n            }\n          }\n        }\n      }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Known argument names/directive args are known",
+      "rule": "KnownArgumentNamesRule",
+      "schema": "3vm8aJ4UHhzj01V2PFAYRVZj2R0SPm+mxfn/edqH9aU=",
+      "query": "\n      {\n        dog @skip(if: true)\n      }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Known argument names/field args are invalid",
+      "rule": "KnownArgumentNamesRule",
+      "schema": "3vm8aJ4UHhzj01V2PFAYRVZj2R0SPm+mxfn/edqH9aU=",
+      "query": "\n      {\n        dog @skip(unless: true)\n      }\n    ",
+      "errors": [
+        {
+          "message": "Unknown argument \"unless\" on directive \"@skip\".",
+          "locations": [
+            {
+              "line": 3,
+              "column": 19
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Known argument names/directive without args is valid",
+      "rule": "KnownArgumentNamesRule",
+      "schema": "3vm8aJ4UHhzj01V2PFAYRVZj2R0SPm+mxfn/edqH9aU=",
+      "query": "\n      {\n        dog @onField\n      }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Known argument names/arg passed to directive without arg is reported",
+      "rule": "KnownArgumentNamesRule",
+      "schema": "3vm8aJ4UHhzj01V2PFAYRVZj2R0SPm+mxfn/edqH9aU=",
+      "query": "\n      {\n        dog @onField(if: true)\n      }\n    ",
+      "errors": [
+        {
+          "message": "Unknown argument \"if\" on directive \"@onField\".",
+          "locations": [
+            {
+              "line": 3,
+              "column": 22
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Known argument names/misspelled directive args are reported",
+      "rule": "KnownArgumentNamesRule",
+      "schema": "3vm8aJ4UHhzj01V2PFAYRVZj2R0SPm+mxfn/edqH9aU=",
+      "query": "\n      {\n        dog @skip(iff: true)\n      }\n    ",
+      "errors": [
+        {
+          "message": "Unknown argument \"iff\" on directive \"@skip\". Did you mean \"if\"?",
+          "locations": [
+            {
+              "line": 3,
+              "column": 19
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Known argument names/invalid arg name",
+      "rule": "KnownArgumentNamesRule",
+      "schema": "3vm8aJ4UHhzj01V2PFAYRVZj2R0SPm+mxfn/edqH9aU=",
+      "query": "\n      fragment invalidArgName on Dog {\n        doesKnowCommand(unknown: true)\n      }\n    ",
+      "errors": [
+        {
+          "message": "Unknown argument \"unknown\" on field \"Dog.doesKnowCommand\".",
+          "locations": [
+            {
+              "line": 3,
+              "column": 25
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Known argument names/misspelled arg name is reported",
+      "rule": "KnownArgumentNamesRule",
+      "schema": "3vm8aJ4UHhzj01V2PFAYRVZj2R0SPm+mxfn/edqH9aU=",
+      "query": "\n      fragment invalidArgName on Dog {\n        doesKnowCommand(DogCommand: true)\n      }\n    ",
+      "errors": [
+        {
+          "message": "Unknown argument \"DogCommand\" on field \"Dog.doesKnowCommand\". Did you mean \"dogCommand\"?",
+          "locations": [
+            {
+              "line": 3,
+              "column": 25
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Known argument names/unknown args amongst known args",
+      "rule": "KnownArgumentNamesRule",
+      "schema": "3vm8aJ4UHhzj01V2PFAYRVZj2R0SPm+mxfn/edqH9aU=",
+      "query": "\n      fragment oneGoodArgOneInvalidArg on Dog {\n        doesKnowCommand(whoKnows: 1, dogCommand: SIT, unknown: true)\n      }\n    ",
+      "errors": [
+        {
+          "message": "Unknown argument \"whoKnows\" on field \"Dog.doesKnowCommand\".",
+          "locations": [
+            {
+              "line": 3,
+              "column": 25
+            }
+          ]
+        },
+        {
+          "message": "Unknown argument \"unknown\" on field \"Dog.doesKnowCommand\".",
+          "locations": [
+            {
+              "line": 3,
+              "column": 55
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Known argument names/unknown args deeply",
+      "rule": "KnownArgumentNamesRule",
+      "schema": "3vm8aJ4UHhzj01V2PFAYRVZj2R0SPm+mxfn/edqH9aU=",
+      "query": "\n      {\n        dog {\n          doesKnowCommand(unknown: true)\n        }\n        human {\n          pet {\n            ... on Dog {\n              doesKnowCommand(unknown: true)\n            }\n          }\n        }\n      }\n    ",
+      "errors": [
+        {
+          "message": "Unknown argument \"unknown\" on field \"Dog.doesKnowCommand\".",
+          "locations": [
+            {
+              "line": 4,
+              "column": 27
+            }
+          ]
+        },
+        {
+          "message": "Unknown argument \"unknown\" on field \"Dog.doesKnowCommand\".",
+          "locations": [
+            {
+              "line": 9,
+              "column": 31
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Validate: Known directives/with no directives",
       "rule": "KnownDirectivesRule",
       "schema": "7vlHtoKB6yn7Yw66xpvtAb0M4Wjj5LmzeSTymz2zE5w=",

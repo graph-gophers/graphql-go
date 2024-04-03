@@ -31,6 +31,25 @@ index 849b662..1e37004 100644
  
  function expectErrors(queryStr: string) {
    return expectValidationErrors(FragmentsOnCompositeTypesRule, queryStr);
+diff --git a/node_modules/graphql/src/validation/__tests__/KnownArgumentNamesRule-test.ts b/node_modules/graphql/src/validation/__tests__/KnownArgumentNamesRule-test.ts
+index 0fcffec..8aa40d3 100644
+--- a/node_modules/graphql/src/validation/__tests__/KnownArgumentNamesRule-test.ts
++++ b/node_modules/graphql/src/validation/__tests__/KnownArgumentNamesRule-test.ts
+@@ -1,5 +1,3 @@
+-import { describe, it } from 'mocha';
+-
+ import type { GraphQLSchema } from '../../type/schema.js';
+ 
+ import { buildSchema } from '../../utilities/buildASTSchema.js';
+@@ -10,6 +8,8 @@ import {
+ } from '../rules/KnownArgumentNamesRule.js';
+ 
+ import {
++  describe,
++  it,
+   expectSDLValidationErrors,
+   expectValidationErrors,
+ } from './harness.js';
 diff --git a/node_modules/graphql/src/validation/__tests__/KnownDirectivesRule-test.ts b/node_modules/graphql/src/validation/__tests__/KnownDirectivesRule-test.ts
 index a3bbc19..7b04bba 100644
 --- a/node_modules/graphql/src/validation/__tests__/KnownDirectivesRule-test.ts

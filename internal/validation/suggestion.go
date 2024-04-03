@@ -12,7 +12,7 @@ func makeSuggestion(prefix string, options []string, input string) string {
 	distances := make(map[string]int)
 	for _, opt := range options {
 		distance := levenshteinDistance(input, opt)
-		threshold := max(len(input)/2, max(len(opt)/2, 1))
+		threshold := max(len(input)/2, max(len(opt)/2, 2))
 		if distance < threshold {
 			selected = append(selected, opt)
 			distances[opt] = distance

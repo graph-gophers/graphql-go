@@ -355,7 +355,7 @@ func validateSelection(c *opContext, sel ast.Selection, t ast.NamedType) {
 		validateArgumentLiterals(c, sel.Arguments)
 		if f != nil {
 			validateArgumentTypes(c, sel.Arguments, f.Arguments, sel.Alias.Loc,
-				func() string { return fmt.Sprintf("field %q of type %q", fieldName, t) },
+				func() string { return fmt.Sprintf(`field "%s.%s"`, t, fieldName) },
 				func() string { return fmt.Sprintf("Field %q", fieldName) },
 			)
 		}
@@ -752,7 +752,8 @@ func validateArgumentTypes(c *opContext, args ast.ArgumentList, argDecls ast.Arg
 	for _, selArg := range args {
 		arg := argDecls.Get(selArg.Name.Name)
 		if arg == nil {
-			c.addErr(selArg.Name.Loc, "KnownArgumentNames", "Unknown argument %q on %s.", selArg.Name.Name, owner1())
+			suggestion := makeSuggestion("Did you mean", argDecls.Names(), selArg.Name.Name)
+			c.addErr(selArg.Name.Loc, "KnownArgumentNamesRule", "Unknown argument %q on %s.%s", selArg.Name.Name, owner1(), suggestion)
 			continue
 		}
 		value := selArg.Value

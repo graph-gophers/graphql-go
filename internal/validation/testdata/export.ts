@@ -7,8 +7,7 @@ import { schemas, testCases } from 'graphql/src/validation/__tests__/harness.js'
 // require('graphql/src/validation/__tests__/ExecutableDefinitions-test');
 import 'graphql/src/validation/__tests__/FieldsOnCorrectTypeRule-test.js';
 import 'graphql/src/validation/__tests__/FragmentsOnCompositeTypesRule-test.js';
-// TODO: Fix test failures.
-// require('graphql/src/validation/__tests__/KnownArgumentNames-test');
+import 'graphql/src/validation/__tests__/KnownArgumentNamesRule-test.js';
 import 'graphql/src/validation/__tests__/KnownDirectivesRule-test.js';
 import 'graphql/src/validation/__tests__/KnownFragmentNamesRule-test.js';
 import 'graphql/src/validation/__tests__/KnownTypeNamesRule-test.js';
