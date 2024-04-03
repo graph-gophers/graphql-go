@@ -43,3 +43,12 @@ func (a ArgumentsDefinition) Get(name string) *InputValueDefinition {
 	}
 	return nil
 }
+
+// Names returns a slice of ArgumentsDefinition names.
+func (a ArgumentsDefinition) Names() []string {
+	names := make([]string, len(a))
+	for i, f := range a {
+		names[i] = f.Name.Name
+	}
+	return names
+}
