@@ -15,10 +15,15 @@ import (
 	"github.com/graph-gophers/graphql-go/internal/validation"
 )
 
+type Schema struct {
+	ID  string
+	SDL string
+}
+
 type Test struct {
 	Name   string
 	Rule   string
-	Schema int
+	Schema string
 	Query  string
 	Vars   map[string]interface{}
 	Errors []*errors.QueryError
@@ -45,15 +50,15 @@ func TestValidate(t *testing.T) {
 	}
 
 	var testData struct {
-		Schemas []string
+		Schemas []Schema
 		Tests   []*Test
 	}
 	if err := json.NewDecoder(f).Decode(&testData); err != nil {
 		t.Fatal(err)
 	}
 
-	schemas := make([]*ast.Schema, len(testData.Schemas))
-	for i, schemaStr := range testData.Schemas {
+	schemas := make(map[string]*ast.Schema, len(testData.Schemas))
+	for _, sc := range testData.Schemas {
 		s := schema.New()
 
 		s.Directives["oneOf"] = &ast.DirectiveDefinition{
@@ -65,11 +70,11 @@ func TestValidate(t *testing.T) {
 			Locations: []string{"INPUT_OBJECT"},
 		}
 
-		err := schema.Parse(s, schemaStr, false)
+		err := schema.Parse(s, sc.SDL, false)
 		if err != nil {
 			t.Fatal(err)
 		}
-		schemas[i] = s
+		schemas[sc.ID] = s
 	}
 
 	for _, test := range testData.Tests {
