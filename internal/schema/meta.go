@@ -1,7 +1,7 @@
 package schema
 
 import (
-	"github.com/graph-gophers/graphql-go/types"
+	"github.com/graph-gophers/graphql-go/ast"
 )
 
 func init() {
@@ -9,11 +9,10 @@ func init() {
 }
 
 // newMeta initializes an instance of the meta Schema.
-func newMeta() *types.Schema {
-	s := &types.Schema{
-		EntryPointNames: make(map[string]string),
-		Types:           make(map[string]types.NamedType),
-		Directives:      make(map[string]*types.DirectiveDefinition),
+func newMeta() *ast.Schema {
+	s := &ast.Schema{
+		Types:      make(map[string]ast.NamedType),
+		Directives: make(map[string]*ast.DirectiveDefinition),
 	}
 
 	err := Parse(s, metaSrc, false)
@@ -57,7 +56,13 @@ var metaSrc = `
 		# for how to access supported similar data. Formatted in
 		# [Markdown](https://daringfireball.net/projects/markdown/).
 		reason: String = "No longer supported"
-	) on FIELD_DEFINITION | ENUM_VALUE
+	) on FIELD_DEFINITION | ENUM_VALUE | ARGUMENT_DEFINITION
+
+	# Provides a scalar specification URL for specifying the behavior of custom scalar types.
+	directive @specifiedBy(
+		# The URL should point to a human-readable specification of the data format, serialization, and coercion rules.
+		url: String!
+	) on SCALAR
 
 	# A Directive provides a way to describe alternate runtime execution and type validation behavior in a GraphQL document.
 	#
@@ -143,6 +148,8 @@ var metaSrc = `
 		type: __Type!
 		# A GraphQL-formatted string representing the default value for this input value.
 		defaultValue: String
+		isDeprecated: Boolean!
+		deprecationReason: String
 	}
 
 	# A GraphQL Schema defines the capabilities of a GraphQL server. It exposes all
@@ -179,6 +186,7 @@ var metaSrc = `
 		enumValues(includeDeprecated: Boolean = false): [__EnumValue!]
 		inputFields: [__InputValue!]
 		ofType: __Type
+		specifiedByURL: String
 	}
 
 	# An enum describing what kind of type a given ` + "`" + `__Type` + "`" + ` is.

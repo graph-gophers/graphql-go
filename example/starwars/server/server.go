@@ -27,39 +27,36 @@ func main() {
 
 var page = []byte(`
 <!DOCTYPE html>
-<html>
-	<head>
-		<link href="https://cdnjs.cloudflare.com/ajax/libs/graphiql/0.11.11/graphiql.min.css" rel="stylesheet" />
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/es6-promise/4.1.1/es6-promise.auto.min.js"></script>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/fetch/2.0.3/fetch.min.js"></script>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/react/16.2.0/umd/react.production.min.js"></script>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/16.2.0/umd/react-dom.production.min.js"></script>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/graphiql/0.11.11/graphiql.min.js"></script>
-	</head>
-	<body style="width: 100%; height: 100%; margin: 0; overflow: hidden;">
-		<div id="graphiql" style="height: 100vh;">Loading...</div>
-		<script>
-			function graphQLFetcher(graphQLParams) {
-				return fetch("/query", {
-					method: "post",
-					body: JSON.stringify(graphQLParams),
-					credentials: "include",
-				}).then(function (response) {
-					return response.text();
-				}).then(function (responseBody) {
-					try {
-						return JSON.parse(responseBody);
-					} catch (error) {
-						return responseBody;
-					}
-				});
-			}
-
-			ReactDOM.render(
-				React.createElement(GraphiQL, {fetcher: graphQLFetcher}),
-				document.getElementById("graphiql")
-			);
-		</script>
-	</body>
+<html lang="en">
+  <head>
+    <title>GraphiQL</title>
+    <style>
+      body {
+        height: 100%;
+        margin: 0;
+        width: 100%;
+        overflow: hidden;
+      }
+      #graphiql {
+        height: 100vh;
+      }
+    </style>
+    <script src="https://unpkg.com/react@17/umd/react.development.js" integrity="sha512-Vf2xGDzpqUOEIKO+X2rgTLWPY+65++WPwCHkX2nFMu9IcstumPsf/uKKRd5prX3wOu8Q0GBylRpsDB26R6ExOg==" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js" integrity="sha512-Wr9OKCTtq1anK0hq5bY3X/AvDI5EflDSAh0mE9gma+4hl+kXdTJPKZ3TwLMBcrgUeoY0s3dq9JjhCQc7vddtFg==" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://unpkg.com/graphiql@2.3.0/graphiql.min.css" />
+  </head>
+  <body>
+    <div id="graphiql">Loading...</div>
+    <script src="https://unpkg.com/graphiql@2.3.0/graphiql.min.js" type="application/javascript"></script>
+    <script>
+      ReactDOM.render(
+        React.createElement(GraphiQL, {
+          fetcher: GraphiQL.createFetcher({url: '/query'}),
+          defaultEditorToolsVisibility: true,
+        }),
+        document.getElementById('graphiql'),
+      );
+    </script>
+  </body>
 </html>
 `)

@@ -40,7 +40,7 @@ func UnmarshalSpec(id graphql.ID, v interface{}) error {
 	if i == -1 {
 		return errors.New("invalid graphql.ID")
 	}
-	return json.Unmarshal([]byte(s[i+1:]), v)
+	return json.Unmarshal(s[i+1:], v)
 }
 
 type Handler struct {

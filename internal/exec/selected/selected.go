@@ -1,25 +1,26 @@
 package selected
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"sync"
 
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"github.com/graph-gophers/graphql-go/internal/query"
 	"github.com/graph-gophers/graphql-go/introspection"
-	"github.com/graph-gophers/graphql-go/types"
 )
 
 type Request struct {
-	Schema               *types.Schema
-	Doc                  *types.ExecutableDefinition
-	Vars                 map[string]interface{}
-	Mu                   sync.Mutex
-	Errs                 []*errors.QueryError
-	DisableIntrospection bool
+	Schema             *ast.Schema
+	Doc                *ast.ExecutableDefinition
+	Vars               map[string]interface{}
+	Mu                 sync.Mutex
+	Errs               []*errors.QueryError
+	AllowIntrospection bool
 }
 
 func (r *Request) AddError(err *errors.QueryError) {
@@ -28,7 +29,7 @@ func (r *Request) AddError(err *errors.QueryError) {
 	r.Mu.Unlock()
 }
 
-func ApplyOperation(r *Request, s *resolvable.Schema, op *types.OperationDefinition) []Selection {
+func ApplyOperation(r *Request, s *resolvable.Schema, op *ast.OperationDefinition) []Selection {
 	var obj *resolvable.Object
 	switch op.Type {
 	case query.Query:
@@ -55,6 +56,16 @@ type SchemaField struct {
 	FixedResult reflect.Value
 }
 
+func (f *SchemaField) Resolve(ctx context.Context, resolver reflect.Value) (output interface{}, err error) {
+	var args interface{}
+
+	if f.ArgsPacker != nil {
+		args = f.PackedArgs.Interface()
+	}
+
+	return f.Field.Resolve(ctx, resolver, args)
+}
+
 type TypeAssertion struct {
 	resolvable.TypeAssertion
 	Sels []Selection
@@ -69,10 +80,10 @@ func (*SchemaField) isSelection()   {}
 func (*TypeAssertion) isSelection() {}
 func (*TypenameField) isSelection() {}
 
-func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, sels []types.Selection) (flattenedSels []Selection) {
+func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, sels []ast.Selection) (flattenedSels []Selection) {
 	for _, sel := range sels {
 		switch sel := sel.(type) {
-		case *types.Field:
+		case *ast.Field:
 			field := sel
 			if skipByDirective(r, field.Directives) {
 				continue
@@ -80,7 +91,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 
 			switch field.Name.Name {
 			case "__typename":
-				// __typename is available even though r.DisableIntrospection == true
+				// __typename is available even though r.AllowIntrospection == false
 				// because it is necessary when using union types and interfaces: https://graphql.org/learn/schema/#union-types
 				flattenedSels = append(flattenedSels, &TypenameField{
 					Object: *e,
@@ -88,7 +99,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 				})
 
 			case "__schema":
-				if !r.DisableIntrospection {
+				if r.AllowIntrospection {
 					flattenedSels = append(flattenedSels, &SchemaField{
 						Field:       s.Meta.FieldSchema,
 						Alias:       field.Alias.Name,
@@ -99,7 +110,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 				}
 
 			case "__type":
-				if !r.DisableIntrospection {
+				if r.AllowIntrospection {
 					p := packer.ValuePacker{ValueType: reflect.TypeOf("")}
 					v, err := p.Pack(field.Arguments.MustGet("name").Deserialize(r.Vars))
 					if err != nil {
@@ -107,9 +118,10 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 						return nil
 					}
 
+					var resolvedType *introspection.Type
 					t, ok := r.Schema.Types[v.String()]
-					if !ok {
-						return nil
+					if ok {
+						resolvedType = introspection.WrapType(t)
 					}
 
 					flattenedSels = append(flattenedSels, &SchemaField{
@@ -117,7 +129,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 						Alias:       field.Alias.Name,
 						Sels:        applySelectionSet(r, s, s.Meta.Type, field.SelectionSet),
 						Async:       true,
-						FixedResult: reflect.ValueOf(introspection.WrapType(t)),
+						FixedResult: reflect.ValueOf(resolvedType),
 					})
 				}
 
@@ -146,18 +158,18 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 					Args:       args,
 					PackedArgs: packedArgs,
 					Sels:       fieldSels,
-					Async:      fe.HasContext || fe.ArgsPacker != nil || fe.HasError || HasAsyncSel(fieldSels),
+					Async:      fe.HasContext || fe.ArgsPacker != nil || len(fe.Visitors.Interceptors) > 0 || fe.HasError || HasAsyncSel(fieldSels),
 				})
 			}
 
-		case *types.InlineFragment:
+		case *ast.InlineFragment:
 			frag := sel
 			if skipByDirective(r, frag.Directives) {
 				continue
 			}
 			flattenedSels = append(flattenedSels, applyFragment(r, s, e, &frag.Fragment)...)
 
-		case *types.FragmentSpread:
+		case *ast.FragmentSpread:
 			spread := sel
 			if skipByDirective(r, spread.Directives) {
 				continue
@@ -171,13 +183,13 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 	return
 }
 
-func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag *types.Fragment) []Selection {
+func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag *ast.Fragment) []Selection {
 	if frag.On.Name != e.Name {
 		t := r.Schema.Resolve(frag.On.Name)
-		face, ok := t.(*types.InterfaceTypeDefinition)
+		face, ok := t.(*ast.InterfaceTypeDefinition)
 		if !ok && frag.On.Name != "" {
-			a, ok := e.TypeAssertions[frag.On.Name]
-			if !ok {
+			a, ok2 := e.TypeAssertions[frag.On.Name]
+			if !ok2 {
 				panic(fmt.Errorf("%q does not implement %q", frag.On, e.Name)) // TODO proper error handling
 			}
 
@@ -185,6 +197,11 @@ func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag 
 				TypeAssertion: *a,
 				Sels:          applySelectionSet(r, s, a.TypeExec.(*resolvable.Object), frag.Selections),
 			}}
+		}
+		// check if the fragment is on an interface which the current resolvable type implements
+		// see the second test in [TestFragments] in the graphql_test.go file.
+		if _, found := e.Interfaces[frag.On.Name]; found {
+			return applyInterfaceFragment(r, s, e, frag)
 		}
 		if ok && len(face.PossibleTypes) > 0 {
 			sels := []Selection{}
@@ -209,7 +226,35 @@ func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag 
 	return applySelectionSet(r, s, e, frag.Selections)
 }
 
-func applyField(r *Request, s *resolvable.Schema, e resolvable.Resolvable, sels []types.Selection) []Selection {
+func applyInterfaceFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag *ast.Fragment) []Selection {
+	// if the fragment is on an interface the object type implements, then filter out
+	// selections for any fragments that don't match this type.
+	var sels []ast.Selection
+	for _, sel := range frag.Selections {
+		switch sel := sel.(type) {
+		case *ast.Field:
+			sels = append(sels, sel)
+		case *ast.InlineFragment:
+			if sel.On.Name != e.Name {
+				if _, ok := e.Interfaces[sel.On.Name]; !ok {
+					continue
+				}
+			}
+			sels = append(sels, sel)
+		case *ast.FragmentSpread:
+			f := &r.Doc.Fragments.Get(sel.Name.Name).Fragment
+			if f.On.Name != e.Name {
+				if _, ok := e.Interfaces[f.On.Name]; !ok {
+					continue
+				}
+			}
+			sels = append(sels, sel)
+		}
+	}
+	return applySelectionSet(r, s, e, sels)
+}
+
+func applyField(r *Request, s *resolvable.Schema, e resolvable.Resolvable, sels []ast.Selection) []Selection {
 	switch e := e.(type) {
 	case *resolvable.Object:
 		return applySelectionSet(r, s, e, sels)
@@ -222,7 +267,7 @@ func applyField(r *Request, s *resolvable.Schema, e resolvable.Resolvable, sels 
 	}
 }
 
-func skipByDirective(r *Request, directives types.DirectiveList) bool {
+func skipByDirective(r *Request, directives ast.DirectiveList) bool {
 	if d := directives.Get("skip"); d != nil {
 		p := packer.ValuePacker{ValueType: reflect.TypeOf(false)}
 		v, err := p.Pack(d.Arguments.MustGet("if").Deserialize(r.Vars))

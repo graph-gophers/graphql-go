@@ -1,65 +1,62 @@
-# graphql-go [![Sourcegraph](https://sourcegraph.com/github.com/graph-gophers/graphql-go/-/badge.svg)](https://sourcegraph.com/github.com/graph-gophers/graphql-go?badge) [![Build Status](https://semaphoreci.com/api/v1/graph-gophers/graphql-go/branches/master/badge.svg)](https://semaphoreci.com/graph-gophers/graphql-go) [![GoDoc](https://godoc.org/github.com/graph-gophers/graphql-go?status.svg)](https://godoc.org/github.com/graph-gophers/graphql-go)
+# graphql-go [![Sourcegraph](https://sourcegraph.com/github.com/graph-gophers/graphql-go/-/badge.svg)](https://sourcegraph.com/github.com/graph-gophers/graphql-go?badge) [![Build Status](https://graph-gophers.semaphoreci.com/badges/graphql-go/branches/master.svg?style=shields)](https://graph-gophers.semaphoreci.com/projects/graphql-go) [![Go Report](https://goreportcard.com/badge/github.com/graph-gophers/graphql-go)](https://goreportcard.com/report/github.com/graph-gophers/graphql-go) [![GoDoc](https://godoc.org/github.com/graph-gophers/graphql-go?status.svg)](https://godoc.org/github.com/graph-gophers/graphql-go)
 
 <p align="center"><img src="docs/img/logo.png" width="300"></p>
 
-The goal of this project is to provide full support of the [GraphQL draft specification](https://facebook.github.io/graphql/draft) with a set of idiomatic, easy to use Go packages.
+The goal of this project is to provide full support of the [October 2021 GraphQL specification](https://spec.graphql.org/October2021/) with a set of idiomatic, easy to use Go packages.
 
-While still under heavy development (`internal` APIs are almost certainly subject to change), this library is
-safe for production use.
+While still under development (`internal` APIs are almost certainly subject to change), this library is safe for production use.
 
 ## Features
 
 - minimal API
 - support for `context.Context`
-- support for the `OpenTracing` standard
+- support for the `OpenTelemetry` and `OpenTracing` standards
 - schema type-checking against resolvers
 - resolvers are matched to the schema based on method sets (can resolve a GraphQL schema with a Go interface or Go struct).
 - handles panics in resolvers
 - parallel execution of resolvers
 - subscriptions
-   - [sample WS transport](https://github.com/graph-gophers/graphql-transport-ws)
+  - [sample WS transport](https://github.com/graph-gophers/graphql-transport-ws)
+- directive visitors on fields (the API is subject to change in future versions)
 
-## Roadmap
+## (Some) Documentation [![GoDoc](https://godoc.org/github.com/graph-gophers/graphql-go?status.svg)](https://godoc.org/github.com/graph-gophers/graphql-go)
 
-We're trying out the GitHub Project feature to manage `graphql-go`'s [development roadmap](https://github.com/graph-gophers/graphql-go/projects/1).
-Feedback is welcome and appreciated.
+### Getting started
 
-## (Some) Documentation
-
-### Basic Sample
-
+In order to run a simple GraphQL server locally create a `main.go` file with the following content:
 ```go
 package main
 
 import (
-        "log"
-        "net/http"
+	"log"
+	"net/http"
 
-        graphql "github.com/graph-gophers/graphql-go"
-        "github.com/graph-gophers/graphql-go/relay"
+	graphql "github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/relay"
 )
 
 type query struct{}
 
-func (_ *query) Hello() string { return "Hello, world!" }
+func (query) Hello() string { return "Hello, world!" }
 
 func main() {
-        s := `
-                type Query {
-                        hello: String!
-                }
-        `
-        schema := graphql.MustParseSchema(s, &query{})
-        http.Handle("/query", &relay.Handler{Schema: schema})
-        log.Fatal(http.ListenAndServe(":8080", nil))
+	s := `
+        type Query {
+                hello: String!
+        }
+    `
+	schema := graphql.MustParseSchema(s, &query{})
+	http.Handle("/query", &relay.Handler{Schema: schema})
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
-```
 
-To test:
+```
+Then run the file with `go run main.go`. To test:
 	    
 ```sh
 curl -XPOST -d '{"query": "{ hello }"}' localhost:8080/query
 ```
+For more realistic usecases check our [examples section](https://github.com/graph-gophers/graphql-go/wiki/Examples).
 
 ### Resolvers
 
@@ -101,17 +98,66 @@ func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
 }
 ```
 
+### Separate resolvers for different operations
+> **NOTE**: This feature is not in the stable release yet. In order to use it you need to run `go get github.com/graph-gophers/graphql-go@master` and in your `go.mod` file you will have something like:
+>  ```
+>  v1.5.1-0.20230216224648-5aa631d05992
+>  ```
+> It is expected to be released in `v1.6.0` soon.
+
+The GraphQL specification allows for fields with the same name defined in different query types. For example, the schema below is a valid schema definition:
+```graphql
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+type Query {
+  hello: String!
+}
+
+type Mutation {
+  hello: String!
+}
+```
+The above schema would result in name collision if we use a single resolver struct because fields from both operations correspond to methods in the root resolver (the same Go struct). In order to resolve this issue, the library allows resolvers for query, mutation and subscription operations to be separated using the `Query`, `Mutation` and `Subscription` methods of the root resolver. These special methods are optional and if defined return the resolver for each opeartion. For example, the following is a resolver corresponding to the schema definition above. Note that there is a field named `hello` in both the query and the mutation definitions:
+
+```go
+type RootResolver struct{}
+type QueryResolver struct{}
+type MutationResolver struct{}
+
+func(r *RootResolver) Query() *QueryResolver {
+  return &QueryResolver{}
+}
+
+func(r *RootResolver) Mutation() *MutationResolver {
+  return &MutationResolver{}
+}
+
+func (*QueryResolver) Hello() string {
+	return "Hello query!"
+}
+
+func (*MutationResolver) Hello() string {
+	return "Hello mutation!"
+}
+
+schema := graphql.MustParseSchema(sdl, &RootResolver{}, nil)
+...
+```
+
 ### Schema Options
 
 - `UseStringDescriptions()` enables the usage of double quoted and triple quoted. When this is not enabled, comments are parsed as descriptions instead.
 - `UseFieldResolvers()` specifies whether to use struct field resolvers.
 - `MaxDepth(n int)` specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
 - `MaxParallelism(n int)` specifies the maximum number of resolvers per request allowed to run in parallel. The default is 10.
-- `Tracer(tracer trace.Tracer)` is used to trace queries and fields. It defaults to `trace.OpenTracingTracer`.
-- `ValidationTracer(tracer trace.ValidationTracer)` is used to trace validation errors. It defaults to `trace.NoopValidationTracer`.
+- `Tracer(tracer trace.Tracer)` is used to trace queries and fields. It defaults to `noop.Tracer`.
 - `Logger(logger log.Logger)` is used to log panics during query execution. It defaults to `exec.DefaultLogger`.
 - `PanicHandler(panicHandler errors.PanicHandler)` is used to transform panics into errors during query execution. It defaults to `errors.DefaultPanicHandler`.
 - `DisableIntrospection()` disables introspection queries.
+- `DirectiveVisitors()` adds directive visitor implementations to the schema. See examples/directives/authorization for an example.
 
 ### Custom Errors
 
@@ -164,6 +210,56 @@ Which could produce a GraphQL error such as:
 }
 ```
 
+### Tracing
+
+By default the library uses `noop.Tracer`. If you want to change that you can use the OpenTelemetry or the OpenTracing implementations, respectively:
+
+```go
+// OpenTelemetry tracer
+package main
+
+import (
+	"github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/example/starwars"
+	otelgraphql "github.com/graph-gophers/graphql-go/trace/otel"
+	"github.com/graph-gophers/graphql-go/trace/tracer"
+)
+// ...
+_, err := graphql.ParseSchema(starwars.Schema, nil, graphql.Tracer(otelgraphql.DefaultTracer()))
+// ...
+```
+Alternatively you can pass an existing trace.Tracer instance:
+```go
+tr := otel.Tracer("example")
+_, err = graphql.ParseSchema(starwars.Schema, nil, graphql.Tracer(&otelgraphql.Tracer{Tracer: tr}))
+```
+
+
+```go
+// OpenTracing tracer
+package main
+
+import (
+	"github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/example/starwars"
+	"github.com/graph-gophers/graphql-go/trace/opentracing"
+	"github.com/graph-gophers/graphql-go/trace/tracer"
+)
+// ...
+_, err := graphql.ParseSchema(starwars.Schema, nil, graphql.Tracer(opentracing.Tracer{}))
+
+// ...
+```
+
+If you need to implement a custom tracer the library would accept any tracer which implements the interface below:
+```go
+type Tracer interface {
+    TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, func([]*errors.QueryError))
+    TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, func(*errors.QueryError))
+    TraceValidation(context.Context) func([]*errors.QueryError)
+}
+```
+
+
 ### [Examples](https://github.com/graph-gophers/graphql-go/wiki/Examples)
 
-### [Companies that use this library](https://github.com/graph-gophers/graphql-go/wiki/Users)

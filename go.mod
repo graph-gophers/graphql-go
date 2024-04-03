@@ -1,5 +1,9 @@
 module github.com/graph-gophers/graphql-go
 
-require github.com/opentracing/opentracing-go v1.1.0
+go 1.16
 
-go 1.13
+require (
+	github.com/opentracing/opentracing-go v1.2.0
+	go.opentelemetry.io/otel v1.6.3
+	go.opentelemetry.io/otel/trace v1.6.3
+)

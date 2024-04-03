@@ -3,15 +3,13 @@ package graphql_test
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/graph-gophers/graphql-go"
 	"github.com/graph-gophers/graphql-go/example/social"
 	"github.com/graph-gophers/graphql-go/example/starwars"
 )
-
-var socialSchema = graphql.MustParseSchema(social.Schema, &social.Resolver{}, graphql.UseFieldResolvers())
 
 func TestSchema_ToJSON(t *testing.T) {
 	t.Parallel()
@@ -29,7 +27,7 @@ func TestSchema_ToJSON(t *testing.T) {
 	}{
 		{
 			Name: "Social Schema",
-			Args: args{Schema: socialSchema},
+			Args: args{Schema: graphql.MustParseSchema(social.Schema, &social.Resolver{}, graphql.UseFieldResolvers())},
 			Want: want{JSON: mustReadFile("example/social/introspect.json")},
 		},
 		{
@@ -83,7 +81,7 @@ func formatJSON(data []byte) ([]byte, error) {
 }
 
 func mustReadFile(filename string) []byte {
-	b, err := ioutil.ReadFile(filename)
+	b, err := os.ReadFile(filename)
 	if err != nil {
 		panic(err)
 	}

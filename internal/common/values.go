@@ -1,11 +1,11 @@
 package common
 
 import (
-	"github.com/graph-gophers/graphql-go/types"
+	"github.com/graph-gophers/graphql-go/ast"
 )
 
-func ParseInputValue(l *Lexer) *types.InputValueDefinition {
-	p := &types.InputValueDefinition{}
+func ParseInputValue(l *Lexer) *ast.InputValueDefinition {
+	p := &ast.InputValueDefinition{}
 	p.Loc = l.Location()
 	p.Desc = l.DescComment()
 	p.Name = l.ConsumeIdentWithLoc()
@@ -20,16 +20,18 @@ func ParseInputValue(l *Lexer) *types.InputValueDefinition {
 	return p
 }
 
-func ParseArgumentList(l *Lexer) types.ArgumentList {
-	var args types.ArgumentList
+func ParseArgumentList(l *Lexer) ast.ArgumentList {
+	var args ast.ArgumentList
 	l.ConsumeToken('(')
 	for l.Peek() != ')' {
 		name := l.ConsumeIdentWithLoc()
 		l.ConsumeToken(':')
 		value := ParseLiteral(l, false)
-		args = append(args, &types.Argument{
-			Name:  name,
-			Value: value,
+		directives := ParseDirectives(l)
+		args = append(args, &ast.Argument{
+			Name:       name,
+			Value:      value,
+			Directives: directives,
 		})
 	}
 	l.ConsumeToken(')')
