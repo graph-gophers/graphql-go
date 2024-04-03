@@ -698,7 +698,15 @@ func validateDirectives(c *opContext, loc string, directives ast.DirectiveList) 
 		)
 	}
 
-	for n := range directiveNames {
+	// Iterating in the declared order, rather than using the directiveNames ordering which is random
+	for _, d := range directives {
+		n := d.Name.Name
+
+		ds := directiveNames[n]
+		if len(ds) <= 1 {
+			continue
+		}
+
 		dd, ok := c.schema.Directives[n]
 		if !ok {
 			// Invalid directive will have been flagged already
@@ -706,11 +714,6 @@ func validateDirectives(c *opContext, loc string, directives ast.DirectiveList) 
 		}
 
 		if dd.Repeatable {
-			continue
-		}
-
-		ds := directiveNames[n]
-		if len(ds) <= 1 {
 			continue
 		}
 
@@ -722,6 +725,9 @@ func validateDirectives(c *opContext, loc string, directives ast.DirectiveList) 
 				return fmt.Sprintf("The directive %q can only be used once at this location.", "@"+n)
 			})
 		}
+
+		// drop the name from the set to prevent the same errors being re-added for duplicates
+		delete(directiveNames, n)
 	}
 }
 
