@@ -17,8 +17,7 @@ import 'graphql/src/validation/__tests__/NoUndefinedVariablesRule-test.js';
 import 'graphql/src/validation/__tests__/NoUnusedFragmentsRule-test.js';
 import 'graphql/src/validation/__tests__/NoUnusedVariablesRule-test.js';
 import 'graphql/src/validation/__tests__/OverlappingFieldsCanBeMergedRule-test.js';
-// TODO: Fix test failures.
-// require('graphql/src/validation/__tests__/PossibleFragmentSpreads-test');
+import 'graphql/src/validation/__tests__/PossibleFragmentSpreadsRule-test.js';
 import 'graphql/src/validation/__tests__/ProvidedRequiredArgumentsRule-test.js';
 import 'graphql/src/validation/__tests__/ScalarLeafsRule-test.js';
 // TODO: Add support for subscriptions.

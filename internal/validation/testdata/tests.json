@@ -9,6 +9,10 @@
       "sdl": "input SomeInput {\n  a: String\n  b: String\n}\n\ntype Query {\n  someField(arg: SomeInput): String\n}"
     },
     {
+      "id": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "sdl": "interface Being {\n  name: String\n}\n\ninterface Pet implements Being {\n  name: String\n}\n\ntype Dog implements Being & Pet {\n  name: String\n  barkVolume: Int\n}\n\ntype Cat implements Being & Pet {\n  name: String\n  meowVolume: Int\n}\n\nunion CatOrDog = Cat | Dog\n\ninterface Intelligent {\n  iq: Int\n}\n\ntype Human implements Being & Intelligent {\n  name: String\n  pets: [Pet]\n  iq: Int\n}\n\ntype Alien implements Being & Intelligent {\n  name: String\n  iq: Int\n}\n\nunion DogOrHuman = Dog | Human\n\nunion HumanOrAlien = Human | Alien\n\ntype Query {\n  catOrDog: CatOrDog\n  dogOrHuman: DogOrHuman\n  humanOrAlien: HumanOrAlien\n}"
+    },
+    {
       "id": "QCY6hMOsxyATcac05rKqjKSVL1T9s4WCW+M3bkNLnbk=",
       "sdl": "interface Pet {\n  name: String\n}\n\ntype Dog implements Pet {\n  name: String\n  nickname: String\n  barkVolume: Int\n}\n\ntype Cat implements Pet {\n  name: String\n  nickname: String\n  meowVolume: Int\n}\n\nunion CatOrDog = Cat | Dog\n\ntype Human {\n  name: String\n  pets: [Pet]\n}\n\ntype Query {\n  human: Human\n}"
     },
@@ -2848,6 +2852,284 @@
             {
               "line": 5,
               "column": 9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Possible fragment spreads/of the same object",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment objectWithinObject on Dog { ...dogFragment }\n      fragment dogFragment on Dog { barkVolume }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Possible fragment spreads/of the same object with inline fragment",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment objectWithinObjectAnon on Dog { ... on Dog { barkVolume } }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Possible fragment spreads/object into an implemented interface",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment objectWithinInterface on Pet { ...dogFragment }\n      fragment dogFragment on Dog { barkVolume }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Possible fragment spreads/object into containing union",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment objectWithinUnion on CatOrDog { ...dogFragment }\n      fragment dogFragment on Dog { barkVolume }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Possible fragment spreads/union into contained object",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment unionWithinObject on Dog { ...catOrDogFragment }\n      fragment catOrDogFragment on CatOrDog { __typename }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Possible fragment spreads/union into overlapping interface",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment unionWithinInterface on Pet { ...catOrDogFragment }\n      fragment catOrDogFragment on CatOrDog { __typename }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Possible fragment spreads/union into overlapping union",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment unionWithinUnion on DogOrHuman { ...catOrDogFragment }\n      fragment catOrDogFragment on CatOrDog { __typename }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Possible fragment spreads/interface into implemented object",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment interfaceWithinObject on Dog { ...petFragment }\n      fragment petFragment on Pet { name }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Possible fragment spreads/interface into overlapping interface",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment interfaceWithinInterface on Pet { ...beingFragment }\n      fragment beingFragment on Being { name }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Possible fragment spreads/interface into overlapping interface in inline fragment",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment interfaceWithinInterface on Pet { ... on Being { name } }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Possible fragment spreads/interface into overlapping union",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment interfaceWithinUnion on CatOrDog { ...petFragment }\n      fragment petFragment on Pet { name }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Possible fragment spreads/ignores incorrect type (caught by FragmentsOnCompositeTypesRule)",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment petFragment on Pet { ...badInADifferentWay }\n      fragment badInADifferentWay on String { name }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Possible fragment spreads/ignores unknown fragments (caught by KnownFragmentNamesRule)",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment petFragment on Pet { ...UnknownFragment }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Possible fragment spreads/different object into object",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment invalidObjectWithinObject on Cat { ...dogFragment }\n      fragment dogFragment on Dog { barkVolume }\n    ",
+      "errors": [
+        {
+          "message": "Fragment \"dogFragment\" cannot be spread here as objects of type \"Cat\" can never be of type \"Dog\".",
+          "locations": [
+            {
+              "line": 2,
+              "column": 51
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Possible fragment spreads/different object into object in inline fragment",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment invalidObjectWithinObjectAnon on Cat {\n        ... on Dog { barkVolume }\n      }\n    ",
+      "errors": [
+        {
+          "message": "Fragment cannot be spread here as objects of type \"Cat\" can never be of type \"Dog\".",
+          "locations": [
+            {
+              "line": 3,
+              "column": 9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Possible fragment spreads/object into not implementing interface",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment invalidObjectWithinInterface on Pet { ...humanFragment }\n      fragment humanFragment on Human { pets { name } }\n    ",
+      "errors": [
+        {
+          "message": "Fragment \"humanFragment\" cannot be spread here as objects of type \"Pet\" can never be of type \"Human\".",
+          "locations": [
+            {
+              "line": 2,
+              "column": 54
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Possible fragment spreads/object into not containing union",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment invalidObjectWithinUnion on CatOrDog { ...humanFragment }\n      fragment humanFragment on Human { pets { name } }\n    ",
+      "errors": [
+        {
+          "message": "Fragment \"humanFragment\" cannot be spread here as objects of type \"CatOrDog\" can never be of type \"Human\".",
+          "locations": [
+            {
+              "line": 2,
+              "column": 55
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Possible fragment spreads/union into not contained object",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment invalidUnionWithinObject on Human { ...catOrDogFragment }\n      fragment catOrDogFragment on CatOrDog { __typename }\n    ",
+      "errors": [
+        {
+          "message": "Fragment \"catOrDogFragment\" cannot be spread here as objects of type \"Human\" can never be of type \"CatOrDog\".",
+          "locations": [
+            {
+              "line": 2,
+              "column": 52
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Possible fragment spreads/union into non overlapping interface",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment invalidUnionWithinInterface on Pet { ...humanOrAlienFragment }\n      fragment humanOrAlienFragment on HumanOrAlien { __typename }\n    ",
+      "errors": [
+        {
+          "message": "Fragment \"humanOrAlienFragment\" cannot be spread here as objects of type \"Pet\" can never be of type \"HumanOrAlien\".",
+          "locations": [
+            {
+              "line": 2,
+              "column": 53
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Possible fragment spreads/union into non overlapping union",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment invalidUnionWithinUnion on CatOrDog { ...humanOrAlienFragment }\n      fragment humanOrAlienFragment on HumanOrAlien { __typename }\n    ",
+      "errors": [
+        {
+          "message": "Fragment \"humanOrAlienFragment\" cannot be spread here as objects of type \"CatOrDog\" can never be of type \"HumanOrAlien\".",
+          "locations": [
+            {
+              "line": 2,
+              "column": 54
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Possible fragment spreads/interface into non implementing object",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment invalidInterfaceWithinObject on Cat { ...intelligentFragment }\n      fragment intelligentFragment on Intelligent { iq }\n    ",
+      "errors": [
+        {
+          "message": "Fragment \"intelligentFragment\" cannot be spread here as objects of type \"Cat\" can never be of type \"Intelligent\".",
+          "locations": [
+            {
+              "line": 2,
+              "column": 54
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Possible fragment spreads/interface into non overlapping interface",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment invalidInterfaceWithinInterface on Pet {\n        ...intelligentFragment\n      }\n      fragment intelligentFragment on Intelligent { iq }\n    ",
+      "errors": [
+        {
+          "message": "Fragment \"intelligentFragment\" cannot be spread here as objects of type \"Pet\" can never be of type \"Intelligent\".",
+          "locations": [
+            {
+              "line": 3,
+              "column": 9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Possible fragment spreads/interface into non overlapping interface in inline fragment",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment invalidInterfaceWithinInterfaceAnon on Pet {\n        ...on Intelligent { iq }\n      }\n    ",
+      "errors": [
+        {
+          "message": "Fragment cannot be spread here as objects of type \"Pet\" can never be of type \"Intelligent\".",
+          "locations": [
+            {
+              "line": 3,
+              "column": 9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Possible fragment spreads/interface into non overlapping union",
+      "rule": "PossibleFragmentSpreadsRule",
+      "schema": "j60+7rXUIN3Vm5LJHNUyKRATi1ksX6cSMmX+z0nvQMs=",
+      "query": "\n      fragment invalidInterfaceWithinUnion on HumanOrAlien { ...petFragment }\n      fragment petFragment on Pet { name }\n    ",
+      "errors": [
+        {
+          "message": "Fragment \"petFragment\" cannot be spread here as objects of type \"HumanOrAlien\" can never be of type \"Pet\".",
+          "locations": [
+            {
+              "line": 2,
+              "column": 62
             }
           ]
         }
