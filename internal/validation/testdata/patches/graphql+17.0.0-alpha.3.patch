@@ -191,6 +191,22 @@ index ecb56a1..cde5f38 100644
    expectValidationErrors,
    expectValidationErrorsWithSchema,
  } from './harness.js';
+diff --git a/node_modules/graphql/src/validation/__tests__/PossibleFragmentSpreadsRule-test.ts b/node_modules/graphql/src/validation/__tests__/PossibleFragmentSpreadsRule-test.ts
+index bd3bb63..2633a2f 100644
+--- a/node_modules/graphql/src/validation/__tests__/PossibleFragmentSpreadsRule-test.ts
++++ b/node_modules/graphql/src/validation/__tests__/PossibleFragmentSpreadsRule-test.ts
+@@ -1,10 +1,8 @@
+-import { describe, it } from 'mocha';
+-
+ import { buildSchema } from '../../utilities/buildASTSchema.js';
+ 
+ import { PossibleFragmentSpreadsRule } from '../rules/PossibleFragmentSpreadsRule.js';
+ 
+-import { expectValidationErrorsWithSchema } from './harness.js';
++import { describe, it, expectValidationErrorsWithSchema } from './harness.js';
+ 
+ function expectErrors(queryStr: string) {
+   return expectValidationErrorsWithSchema(
 diff --git a/node_modules/graphql/src/validation/__tests__/ProvidedRequiredArgumentsRule-test.ts b/node_modules/graphql/src/validation/__tests__/ProvidedRequiredArgumentsRule-test.ts
 index 6f0d223..fb7101e 100644
 --- a/node_modules/graphql/src/validation/__tests__/ProvidedRequiredArgumentsRule-test.ts

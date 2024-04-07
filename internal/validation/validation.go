@@ -380,7 +380,7 @@ func validateSelection(c *opContext, sel ast.Selection, t ast.NamedType) {
 		if sel.On.Name != "" {
 			fragTyp := unwrapType(resolveType(c.context, &sel.On))
 			if fragTyp != nil && !compatible(t, fragTyp) {
-				c.addErr(sel.Loc, "PossibleFragmentSpreads", "Fragment cannot be spread here as objects of type %q can never be of type %q.", t, fragTyp)
+				c.addErr(sel.Loc, "PossibleFragmentSpreadsRule", "Fragment cannot be spread here as objects of type %q can never be of type %q.", t, fragTyp)
 			}
 			t = fragTyp
 			// continue even if t is nil
@@ -400,7 +400,7 @@ func validateSelection(c *opContext, sel ast.Selection, t ast.NamedType) {
 		}
 		fragTyp := c.schema.Types[frag.On.Name]
 		if !compatible(t, fragTyp) {
-			c.addErr(sel.Loc, "PossibleFragmentSpreads", "Fragment %q cannot be spread here as objects of type %q can never be of type %q.", frag.Name.Name, t, fragTyp)
+			c.addErr(sel.Loc, "PossibleFragmentSpreadsRule", "Fragment %q cannot be spread here as objects of type %q can never be of type %q.", frag.Name.Name, t, fragTyp)
 		}
 
 	default:
