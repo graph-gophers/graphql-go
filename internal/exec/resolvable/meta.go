@@ -20,7 +20,7 @@ type Meta struct {
 
 func newMeta(s *ast.Schema) *Meta {
 	var err error
-	b := newBuilder(s, nil, false)
+	b := newBuilder(s, false)
 
 	metaSchema := s.Types["__Schema"].(*ast.ObjectTypeDefinition)
 	so, err := b.makeObjectExec(metaSchema.Name, metaSchema.Fields, nil, nil, false, reflect.TypeOf(&introspection.Schema{}))

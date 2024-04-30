@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/graph-gophers/graphql-go/ast"
-	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec"
@@ -52,7 +51,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		return nil, err
 	}
 
-	r, err := resolvable.ApplyResolver(s.schema, resolver, s.directives, s.useFieldResolvers)
+	r, err := resolvable.ApplyResolver(s.schema, resolver, s.useFieldResolvers)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +75,6 @@ type Schema struct {
 	res    *resolvable.Schema
 
 	allowIntrospection       func(ctx context.Context) bool
-	directives               []directives.Directive
 	maxQueryLength           int
 	maxDepth                 int
 	maxParallelism           int
@@ -209,14 +207,6 @@ func DisableIntrospection() SchemaOpt {
 func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
 	return func(s *Schema) {
 		s.subscribeResolverTimeout = timeout
-	}
-}
-
-// Directives defines the implementation for each directive.
-// Per the GraphQL specification, each Field Directive in the schema must have an implementation here.
-func Directives(ds ...directives.Directive) SchemaOpt {
-	return func(s *Schema) {
-		s.directives = ds
 	}
 }
 
