@@ -1143,3 +1143,10 @@ func TestInterfaceImplementsInterface(t *testing.T) {
 		})
 	}
 }
+
+func FuzzParse(f *testing.F){
+	f.Fuzz(func(t *testing.T, schemaString string, useStringDescriptions bool){
+		s := schema.New()
+		schema.Parse(s, schemaString, useStringDescriptions)
+	})
+}
