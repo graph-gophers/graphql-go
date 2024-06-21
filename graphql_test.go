@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/directives"
 	gqlerrors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/example/social"
@@ -61,12 +62,20 @@ type customInvalidDirective struct {
 	CustomAttribute *string
 }
 
+func (c customInvalidDirective) AllowLocation(l string) bool {
+	return l == "FIELD_DEFINITION"
+}
+
 func (c customInvalidDirective) ImplementsDirective() string {
 	return "customDirective"
 }
 
 type customDirectiveVisitor struct {
 	CustomAttribute *string
+}
+
+func (v *customDirectiveVisitor) AllowLocation(l string) bool {
+	return l == "FIELD_DEFINITION"
 }
 
 func (v *customDirectiveVisitor) ImplementsDirective() string {
@@ -85,8 +94,36 @@ func (v *customDirectiveVisitor) Resolve(ctx context.Context, args interface{}, 
 	return fmt.Sprintf("Directive modified result: %s", output.(string)), nil
 }
 
+type customArgDirectiveVisitor struct {
+	CustomAttribute *string
+}
+
+func (v *customArgDirectiveVisitor) AllowLocation(l string) bool {
+	return l == "ARGUMENT_DEFINITION"
+}
+
+func (v *customArgDirectiveVisitor) ImplementsDirective() string {
+	return "customDirective"
+}
+
+func (v *customArgDirectiveVisitor) Resolve(ctx context.Context, args interface{}, next directives.Resolver) (output interface{}, err error) {
+	output, err = next.Resolve(ctx, args)
+	if err != nil {
+		return output, err
+	}
+
+	if v.CustomAttribute != nil {
+		return fmt.Sprintf("Directive (with arg '%s') modified result: %s", *v.CustomAttribute, output.(string)), nil
+	}
+	return fmt.Sprintf("Directive modified result: %s", output.(string)), nil
+}
+
 type cachedDirectiveVisitor struct {
 	Key string
+}
+
+func (v *cachedDirectiveVisitor) AllowLocation(l string) bool {
+	return l == "FIELD_DEFINITION"
 }
 
 func (v *cachedDirectiveVisitor) ImplementsDirective() string {
@@ -299,6 +336,10 @@ func TestHelloWorldStructFieldResolver(t *testing.T) {
 type wrapDirective struct {
 	Prefix string
 	Suffix string
+}
+
+func (w *wrapDirective) AllowLocation(l string) bool {
+	return l == "FIELD_DEFINITION"
 }
 
 func (w *wrapDirective) ImplementsDirective() string {
@@ -629,12 +670,12 @@ func TestCustomValidatingDirective(t *testing.T) {
 		},
 		{
 			Schema: graphql.MustParseSchema(
-				`directive @restrictImperialUnits on FIELD_DEFINITION
+				`directive @restrictImperialUnits on ARGUMENT_DEFINITION
 
 				`+strings.ReplaceAll(
 					starwars.Schema,
 					"height(unit: LengthUnit = METER): Float!",
-					`height(unit: LengthUnit = METER): Float! @restrictImperialUnits`,
+					`height(unit: LengthUnit = METER @restrictImperialUnits): Float!`,
 				),
 				&starwars.Resolver{},
 				graphql.Directives(&restrictImperialUnitsDirective{}),
@@ -654,25 +695,105 @@ func TestCustomValidatingDirective(t *testing.T) {
 				{Message: `rebels cannot request imperial units`, Locations: []gqlerrors.Location{{Line: 58, Column: 3}}, Path: []interface{}{"hero", "height"}},
 			},
 		},
+		{
+			Schema: graphql.MustParseSchema(
+				`directive @gg_length(
+					max: Int
+					min: Int
+				) on ARGUMENT_DEFINITION
+
+				`+strings.ReplaceAll(
+					starwars.Schema,
+					"search(text: String!): [SearchResult]!",
+					`search(text: String! @gg_length(min: 3)): [SearchResult]!`,
+				),
+				&starwars.Resolver{},
+				graphql.Directives(&lengthDirective{}),
+			),
+			Query: `
+				query Search($text: String!) {
+					search(text: $text) {
+						... on Human { id name }
+						... on Droid { id name }
+						... on Starship { id name }
+					}
+				}
+			`,
+			Variables:      map[string]interface{}{"text": "Lu"},
+			ExpectedResult: "null",
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message:    `length of input "Lu" is less than the minimum of 3`,
+					Locations:  []gqlerrors.Location{{Line: 15, Column: 3}},
+					Path:       []interface{}{"search"},
+					Extensions: map[string]interface{}{"name": "text"},
+				},
+			},
+		},
 	})
 }
 
 type restrictImperialUnitsDirective struct{}
 
+func (d *restrictImperialUnitsDirective) AllowLocation(l string) bool {
+	return l == "ARGUMENT_DEFINITION"
+}
+
 func (d *restrictImperialUnitsDirective) ImplementsDirective() string {
 	return "restrictImperialUnits"
 }
 
-func (d *restrictImperialUnitsDirective) Validate(ctx context.Context, args interface{}) error {
+func (d *restrictImperialUnitsDirective) Validate(ctx context.Context, _, value interface{}) error {
 	if ctx.Value(RoleKey) == "EMPIRE" {
 		return nil
 	}
 
-	v, ok := args.(struct {
-		Unit string
-	})
-	if ok && v.Unit == "FOOT" {
+	v, ok := value.(string)
+	if ok && v == "FOOT" {
 		return fmt.Errorf("rebels cannot request imperial units")
+	}
+
+	return nil
+}
+
+type lengthDirective struct {
+	Max *int32
+	Min *int32
+}
+
+func (d *lengthDirective) AllowLocation(l string) bool {
+	return l == "ARGUMENT_DEFINITION"
+}
+
+func (d *lengthDirective) ImplementsDirective() string {
+	return "gg_length"
+}
+
+type validationError struct {
+	error
+	Name string
+}
+
+func (e validationError) Extensions() map[string]interface{} {
+	return map[string]interface{}{"name": e.Name}
+}
+
+func (d *lengthDirective) Validate(_ context.Context, typ, value interface{}) error {
+	def := typ.(*ast.InputValueDefinition)
+
+	v, ok := value.(string)
+	if !ok {
+		return fmt.Errorf("length validation cannot be applied to values of type %T", value)
+	}
+
+	l := int32(len(v))
+
+	if d.Min != nil && l < *d.Min {
+		return validationError{error: fmt.Errorf("length of input %q is less than the minimum of %d", v, *d.Min), Name: def.Name.Name}
+	}
+
+	if d.Max != nil && l > *d.Max {
+		return validationError{error: fmt.Errorf("length of input %q is greater than the maximum of %d", v, *d.Max), Name: def.Name.Name}
 	}
 
 	return nil
@@ -871,6 +992,42 @@ func TestParseSchemaWithInvalidCustomDirectives(t *testing.T) {
 				`,
 			},
 			Want: want{Error: `directive "customDirective" (implemented by *graphql_test.customInvalidDirective) does not implement a valid directive visitor function`},
+		},
+		"Implementation does not support field definition location": {
+			Args: args{
+				Directives: []directives.Directive{&customArgDirectiveVisitor{}},
+				Resolver:   &helloSnakeResolver1{},
+				Schema: `
+					directive @customDirective on FIELD_DEFINITION
+	
+					schema {
+						query: Query
+					}
+	
+					type Query {
+						sayHello(fullName: String!): String! @customDirective
+					}
+				`,
+			},
+			Want: want{Error: "failed to pack directives for field Query.sayHello: directive \"customDirective\" declared on field definition, but implementation *graphql_test.customArgDirectiveVisitor doesn't allow this location\n\tused by (*graphql_test.helloSnakeResolver1).SayHello"},
+		},
+		"Implementation does not support argument definition location": {
+			Args: args{
+				Directives: []directives.Directive{&customDirectiveVisitor{}},
+				Resolver:   &helloSnakeResolver1{},
+				Schema: `
+					directive @customDirective on ARGUMENT_DEFINITION
+	
+					schema {
+						query: Query
+					}
+	
+					type Query {
+						sayHello(fullName: String! @customDirective): String!
+					}
+				`,
+			},
+			Want: want{Error: "failed to pack directives for field Query.sayHello: directive \"customDirective\" declared on argument definition \"fullName\", but implementation *graphql_test.customDirectiveVisitor doesn't allow this location\n\tused by (*graphql_test.helloSnakeResolver1).SayHello"},
 		},
 	}
 
