@@ -5725,3 +5725,28 @@ func Test_fieldFunc(t *testing.T) {
 		},
 	})
 }
+
+type query struct{}
+
+func (_ *query) Hello() string { return "Hello, world!" }
+func (_ *query) Hi(string, string) string { return "Hello, world!" }
+func (_ *query) LaunchMissil(string, string) string { return "Hello, world!" }
+
+func FuzzSchemaExec(f *testing.F) {
+    f.Fuzz(func(t *testing.T, s string, queryString , operationName string) {
+	    defer func(){
+		    if err := recover(); err != nil{
+			    if !strings.Contains(err.(error).Error(), "invalid syntax"){
+				    panic(err)
+			    }
+		    }
+	    }()
+	    ctx := context.Background()
+	    variables := map[string]interface{}{}
+	    schema,err := graphql.ParseSchema(s, &query{})
+	    if err != nil {
+		    t.Skip()
+	    }
+	    schema.Exec(ctx, queryString, operationName, variables)
+    })
+}
