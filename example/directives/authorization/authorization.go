@@ -31,11 +31,15 @@ type HasRoleDirective struct {
 	Role string
 }
 
+func (h *HasRoleDirective) AllowLocation(l string) bool {
+	return l == "FIELD_DEFINITION"
+}
+
 func (h *HasRoleDirective) ImplementsDirective() string {
 	return "hasRole"
 }
 
-func (h *HasRoleDirective) Validate(ctx context.Context, _ interface{}) error {
+func (h *HasRoleDirective) Validate(ctx context.Context, _, _ interface{}) error {
 	u, ok := user.FromContext(ctx)
 	if !ok {
 		return fmt.Errorf("user not provided in cotext")

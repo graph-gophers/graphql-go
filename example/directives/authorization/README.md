@@ -80,7 +80,7 @@ $ curl 'http://localhost:8080/query' \
        return "hasRole"
    }
 
-    func (h *HasRoleDirective) Validate(ctx context.Context, _ interface{}) error {
+    func (h *HasRoleDirective) Validate(ctx context.Context, _, _ interface{}) error {
         u, ok := user.FromContext(ctx)
         if !ok {
             return fmt.Errorf("user not provided in context")
