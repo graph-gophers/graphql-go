@@ -1124,6 +1124,42 @@ func TestInterfaceImplementsInterface(t *testing.T) {
 				return nil
 			},
 		},
+		{
+			name: "Unions can be defined with a leading pipe",
+			sdl: `
+			type Named {
+				name: String!
+			}
+			type Numbered {
+				num: Int!
+			}
+			union Item1 =
+				| Named
+				| Numbered
+			union Item2 = | Named | Numbered
+			`,
+			validateSchema: func(s *ast.Schema) error {
+				for _, itemName := range []string{"Item1", "Item2"} {
+					typ, ok := s.Types[itemName].(*ast.Union)
+					if !ok {
+						return fmt.Errorf("type %q not found", "Item")
+					}
+					if len(typ.UnionMemberTypes) != 2 {
+						return fmt.Errorf("Expected 2 possible types, but instead got %d types", len(typ.UnionMemberTypes))
+					}
+					posible := map[string]struct{}{
+						"Named":    {},
+						"Numbered": {},
+					}
+					for _, pt := range typ.UnionMemberTypes {
+						if _, ok := posible[pt.Name]; !ok {
+							return fmt.Errorf("Unexpected possible type %q", pt.Name)
+						}
+					}
+				}
+				return nil
+			},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s, err := schema.ParseSchema(tt.sdl, tt.useStringDescriptions)
