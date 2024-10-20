@@ -10,6 +10,7 @@ import (
 //
 // See the graphql.Directives() Schema Option.
 type Directive interface {
+	AllowLocation(l string) bool
 	ImplementsDirective() string
 }
 
@@ -26,5 +27,5 @@ type ResolverInterceptor interface {
 
 // Validator directive which executes before anything is resolved, allowing the request to be rejected.
 type Validator interface {
-	Validate(ctx context.Context, args interface{}) error
+	Validate(ctx context.Context, typ, args interface{}) error
 }
