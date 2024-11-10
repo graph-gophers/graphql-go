@@ -8,7 +8,6 @@ import (
 
 	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/decode"
-	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 )
 
@@ -49,14 +48,8 @@ type Field struct {
 	HasError    bool
 	IsFieldFunc bool
 	ArgsPacker  *packer.StructPacker
-	Visitors    *FieldVisitors
 	ValueExec   Resolvable
 	TraceLabel  string
-}
-
-type FieldVisitors struct {
-	Interceptors []directives.ResolverInterceptor
-	Validators   []directives.Validator
 }
 
 func (f *Field) UseMethodResolver() bool {
@@ -64,47 +57,6 @@ func (f *Field) UseMethodResolver() bool {
 }
 
 func (f *Field) Resolve(ctx context.Context, resolver reflect.Value, args interface{}) (output interface{}, err error) {
-	// Short circuit case to avoid wrapping functions
-	v := f.Visitors.Interceptors
-	if len(v) == 0 {
-		return f.resolve(ctx, resolver, args)
-	}
-
-	wrapResolver := func(ctx context.Context, args interface{}) (output interface{}, err error) {
-		return f.resolve(ctx, resolver, args)
-	}
-
-	for _, d := range v {
-		d := d // Needed to avoid passing only the last directive, since we're closing over this loop var pointer
-		innerResolver := wrapResolver
-
-		wrapResolver = func(ctx context.Context, args interface{}) (output interface{}, err error) {
-			return d.Resolve(ctx, args, resolverFunc(innerResolver))
-		}
-	}
-
-	return wrapResolver(ctx, args)
-}
-
-func (f *Field) Validate(ctx context.Context, args interface{}) []error {
-	d := f.Visitors
-	if d == nil {
-		// Meta schema fields don't include directives on those fields
-		return nil
-	}
-
-	var errs []error
-
-	for _, v := range d.Validators {
-		if err := v.Validate(ctx, args); err != nil {
-			errs = append(errs, err)
-		}
-	}
-
-	return errs
-}
-
-func (f *Field) resolve(ctx context.Context, resolver reflect.Value, args interface{}) (output interface{}, err error) {
 	if !f.UseMethodResolver() {
 		res := resolver
 
@@ -167,22 +119,12 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *ast.Schema, resolver interface{}, dirs []directives.Directive, useFieldResolvers bool) (*Schema, error) {
+func ApplyResolver(s *ast.Schema, resolver interface{}, useFieldResolvers bool) (*Schema, error) {
 	if resolver == nil {
 		return &Schema{Meta: newMeta(s), Schema: *s}, nil
 	}
 
-	ds, err := applyDirectives(s, dirs)
-	if err != nil {
-		return nil, err
-	}
-
-	directivePackers, err := buildDirectivePackers(s, ds)
-	if err != nil {
-		return nil, err
-	}
-
-	b := newBuilder(s, directivePackers, useFieldResolvers)
+	b := newBuilder(s, useFieldResolvers)
 
 	var query, mutation, subscription Resolvable
 
@@ -259,69 +201,6 @@ func ApplyResolver(s *ast.Schema, resolver interface{}, dirs []directives.Direct
 	}, nil
 }
 
-func buildDirectivePackers(s *ast.Schema, visitors map[string]directives.Directive) (map[string]*packer.StructPacker, error) {
-	// Directive packers need to use a dedicated builder which is ready ('finish()' called) while
-	// schema fields (and their argument packers) are still being built
-	builder := packer.NewBuilder()
-
-	packers := map[string]*packer.StructPacker{}
-	for _, d := range s.Directives {
-		n := d.Name
-
-		v, ok := visitors[n]
-		if !ok {
-			// Directives which need visitors have already been checked
-			// Anything without a visitor now is a built-in directive without a packer.
-			continue
-		}
-
-		switch v.(type) {
-		case directives.ResolverInterceptor, directives.Validator:
-			// Accepted directive type
-		default:
-			// Directive doesn't apply at field resolution time, skip it
-			continue
-		}
-
-		r := reflect.TypeOf(v)
-
-		p, err := builder.MakeStructPacker(d.Arguments, r)
-		if err != nil {
-			return nil, err
-		}
-
-		packers[n] = p
-	}
-
-	if err := builder.Finish(); err != nil {
-		return nil, err
-	}
-
-	return packers, nil
-}
-
-func applyDirectives(s *ast.Schema, visitors []directives.Directive) (map[string]directives.Directive, error) {
-	byName := make(map[string]directives.Directive, len(s.Directives))
-
-	for _, v := range visitors {
-		name := v.ImplementsDirective()
-
-		if existing, ok := byName[name]; ok {
-			return nil, fmt.Errorf("multiple implementations registered for directive %q. Implementation types %T and %T", name, existing, v)
-		}
-
-		// At least 1 of the optional directive functions must be defined for each directive.
-		switch v.(type) {
-		case directives.ResolverInterceptor, directives.Validator:
-			byName[name] = v
-		default:
-			return nil, fmt.Errorf("directive %q (implemented by %T) does not implement a valid directive visitor function", name, v)
-		}
-	}
-
-	return byName, nil
-}
-
 type execBuilder struct {
 	schema            *ast.Schema
 	resMap            map[typePair]*resMapEntry
@@ -340,11 +219,10 @@ type resMapEntry struct {
 	targets []*Resolvable
 }
 
-func newBuilder(s *ast.Schema, directives map[string]*packer.StructPacker, useFieldResolvers bool) *execBuilder {
+func newBuilder(s *ast.Schema, useFieldResolvers bool) *execBuilder {
 	return &execBuilder{
 		schema:            s,
 		resMap:            make(map[typePair]*resMapEntry),
-		directivePackers:  directives,
 		packerBuilder:     packer.NewBuilder(),
 		useFieldResolvers: useFieldResolvers,
 	}
@@ -603,11 +481,6 @@ func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m r
 		}
 	}
 
-	visitors, err := packDirectives(f.Directives, b.directivePackers)
-	if err != nil {
-		return nil, err
-	}
-
 	fe := &Field{
 		FieldDefinition: *f,
 		TypeName:        typeName,
@@ -616,7 +489,6 @@ func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m r
 		IsFieldFunc:     isFieldFunc,
 		HasContext:      hasContext,
 		ArgsPacker:      argsPacker,
-		Visitors:        visitors,
 		HasError:        hasError,
 		TraceLabel:      fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name),
 	}
@@ -636,44 +508,6 @@ func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m r
 	}
 
 	return fe, nil
-}
-
-func packDirectives(ds ast.DirectiveList, packers map[string]*packer.StructPacker) (*FieldVisitors, error) {
-	var resolvers []directives.ResolverInterceptor
-	var validators []directives.Validator
-
-	for _, d := range ds {
-		dp, ok := packers[d.Name.Name]
-		if !ok {
-			continue // skip directives without packers
-		}
-
-		args := make(map[string]interface{})
-		for _, arg := range d.Arguments {
-			if arg.Value == nil {
-				continue
-			}
-			args[arg.Name.Name] = arg.Value.Deserialize(nil)
-		}
-
-		p, err := dp.Pack(args)
-		if err != nil {
-			return nil, err
-		}
-
-		v := p.Interface()
-
-		// Visitors can implement any of these types optionally, and may implement multiple
-		if v, ok := v.(directives.ResolverInterceptor); ok {
-			resolvers = append(resolvers, v)
-		}
-
-		if v, ok := v.(directives.Validator); ok {
-			validators = append(validators, v)
-		}
-	}
-
-	return &FieldVisitors{Interceptors: resolvers, Validators: validators}, nil
 }
 
 func findMethod(t reflect.Type, name string) int {
