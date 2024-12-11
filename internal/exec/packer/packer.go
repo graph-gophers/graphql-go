@@ -8,7 +8,6 @@ import (
 
 	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/decode"
-	"github.com/graph-gophers/graphql-go/directives"
 	"github.com/graph-gophers/graphql-go/errors"
 )
 
@@ -187,13 +186,6 @@ func (b *Builder) MakeStructPacker(values []*ast.InputValueDefinition, typ refle
 
 		sf, ok := structType.FieldByNameFunc(fx)
 		if !ok {
-			dv := reflect.TypeOf((*directives.ResolverInterceptor)(nil)).Elem()
-
-			// Check the original type here to compare using the pointer (if applicable)
-			if ok := typ.Implements(dv); ok {
-				return nil, fmt.Errorf("directive %s does not define field %q (hint: missing field on directive visitor struct)", typ, name)
-			}
-
 			return nil, fmt.Errorf("%s does not define field %q (hint: missing `args struct { ... }` wrapper for field arguments, or missing field on input struct)", typ, name)
 		}
 		if sf.PkgPath != "" {

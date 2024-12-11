@@ -37,34 +37,6 @@ func validateFieldSelection(ctx context.Context, s *resolvable.Schema, f *fieldT
 		return nil
 	}
 
-	var args interface{}
-
-	if f.field.ArgsPacker != nil {
-		args = f.field.PackedArgs.Interface()
-	}
-
-	vErrs := f.field.Validate(ctx, args)
-
-	if l := len(vErrs); l > 0 {
-		errs := make([]*errors.QueryError, l)
-
-		for i, err := range vErrs {
-			var ext map[string]interface{}
-			if e, ok := err.(extensionser); ok {
-				ext = e.Extensions()
-			}
-			errs[i] = &errors.QueryError{
-				Err:        err,
-				Message:    err.Error(),
-				Locations:  []errors.Location{f.field.Loc},
-				Path:       path.toSlice(),
-				Extensions: ext,
-			}
-		}
-
-		return errs
-	}
-
 	return validateSelectionSet(ctx, f.sels, f.field.Type, path, s)
 }
 
