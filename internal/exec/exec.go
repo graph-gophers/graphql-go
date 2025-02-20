@@ -203,7 +203,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 	var result reflect.Value
 	var err *errors.QueryError
 
-	traceCtx, finish := r.Tracer.TraceField(ctx, f.field.TraceLabel, f.field.TypeName, f.field.Name, !f.field.Async, f.field.Args)
+	ctx, finish := r.Tracer.TraceField(ctx, f.field.TraceLabel, f.field.TypeName, f.field.Name, !f.field.Async, f.field.Args)
 	defer func() {
 		finish(err)
 	}()
@@ -222,7 +222,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			return nil
 		}
 
-		if err := traceCtx.Err(); err != nil {
+		if err := ctx.Err(); err != nil {
 			return errors.Errorf("%s", err) // don't execute any more resolvers if context got cancelled
 		}
 
@@ -254,7 +254,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 		return
 	}
 
-	r.execSelectionSet(traceCtx, f.sels, f.field.Type, path, s, result, f.out)
+	r.execSelectionSet(ctx, f.sels, f.field.Type, path, s, result, f.out)
 }
 
 func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selection, typ ast.Type, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *bytes.Buffer) {
