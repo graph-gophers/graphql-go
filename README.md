@@ -17,7 +17,6 @@ While still under development (`internal` APIs are almost certainly subject to c
 - parallel execution of resolvers
 - subscriptions
   - [sample WS transport](https://github.com/graph-gophers/graphql-transport-ws)
-- directive visitors on fields (the API is subject to change in future versions)
 
 ## (Some) Documentation [![GoDoc](https://godoc.org/github.com/graph-gophers/graphql-go?status.svg)](https://godoc.org/github.com/graph-gophers/graphql-go)
 
@@ -157,7 +156,6 @@ schema := graphql.MustParseSchema(sdl, &RootResolver{}, nil)
 - `Logger(logger log.Logger)` is used to log panics during query execution. It defaults to `exec.DefaultLogger`.
 - `PanicHandler(panicHandler errors.PanicHandler)` is used to transform panics into errors during query execution. It defaults to `errors.DefaultPanicHandler`.
 - `DisableIntrospection()` disables introspection queries.
-- `DirectiveVisitors()` adds directive visitor implementations to the schema. See examples/directives/authorization for an example.
 
 ### Custom Errors
 
