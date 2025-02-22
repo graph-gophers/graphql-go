@@ -98,12 +98,6 @@ func (f *Field) Resolve(ctx context.Context, resolver reflect.Value, args interf
 	return result.Interface(), nil
 }
 
-type resolverFunc func(ctx context.Context, args interface{}) (output interface{}, err error)
-
-func (f resolverFunc) Resolve(ctx context.Context, args interface{}) (output interface{}, err error) {
-	return f(ctx, args)
-}
-
 type TypeAssertion struct {
 	MethodIndex int
 	TypeExec    Resolvable
@@ -204,7 +198,6 @@ func ApplyResolver(s *ast.Schema, resolver interface{}, useFieldResolvers bool) 
 type execBuilder struct {
 	schema            *ast.Schema
 	resMap            map[typePair]*resMapEntry
-	directivePackers  map[string]*packer.StructPacker
 	packerBuilder     *packer.Builder
 	useFieldResolvers bool
 }
