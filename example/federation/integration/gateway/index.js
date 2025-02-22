@@ -1,5 +1,6 @@
-const { ApolloServer }  = require('apollo-server')
-const { ApolloGateway, IntrospectAndCompose } = require('@apollo/gateway');
+import { ApolloServer } from '@apollo/server';
+import { startStandaloneServer } from '@apollo/server/standalone';
+import { ApolloGateway, IntrospectAndCompose } from '@apollo/gateway';
 
 const gateway = new ApolloGateway({
     supergraphSdl: new IntrospectAndCompose({
@@ -12,9 +13,12 @@ const gateway = new ApolloGateway({
 
 const server = new ApolloServer({
     gateway,
-    subscriptions: false,
+    plugins: [
+        ApolloServerPluginSubscription(),
+    ],
 });
 
-server.listen().then(({ url }) => {
+(async () => {
+    const { url } = await startStandaloneServer(server);
     console.log(`Server ready at ${url}`);
-});
+})();
