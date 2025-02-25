@@ -195,6 +195,13 @@ func typeOf(tf *selected.TypenameField, resolver reflect.Value) string {
 }
 
 func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f *fieldToExec, path *pathSegment, applyLimiter bool) {
+	// Exit early if the context has been cancelled.
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+
 	if applyLimiter {
 		r.Limiter <- struct{}{}
 	}
@@ -206,13 +213,6 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 	defer func() {
 		finish(err)
 	}()
-
-	select {
-	case <-ctx.Done():
-		fmt.Println(time.Now(), "execFieldSelection", f.field.Name, f.field.TypeName, f.field.Args, "ctx.Done()")
-		return
-	default:
-	}
 
 	fmt.Println(time.Now(), "execFieldSelection", f.field.Name, f.field.TypeName, f.field.Args)
 
