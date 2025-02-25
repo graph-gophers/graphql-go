@@ -96,7 +96,6 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 
 	var fields []*fieldToExec
 	collectFieldsToResolve(sels, s, resolver, &fields, make(map[string]*fieldToExec))
-	fmt.Println("Running async = ", async)
 	if async {
 		var wg sync.WaitGroup
 		wg.Add(len(fields))
@@ -207,6 +206,15 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 	defer func() {
 		finish(err)
 	}()
+
+	select {
+	case <-ctx.Done():
+		fmt.Println(time.Now(), "execFieldSelection", f.field.Name, f.field.TypeName, f.field.Args, "ctx.Done()")
+		return
+	default:
+	}
+
+	fmt.Println(time.Now(), "execFieldSelection", f.field.Name, f.field.TypeName, f.field.Args)
 
 	err = func() (err *errors.QueryError) {
 		defer func() {
