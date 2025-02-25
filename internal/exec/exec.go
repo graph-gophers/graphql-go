@@ -96,6 +96,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 
 	var fields []*fieldToExec
 	collectFieldsToResolve(sels, s, resolver, &fields, make(map[string]*fieldToExec))
+
 	if async {
 		var wg sync.WaitGroup
 		wg.Add(len(fields))
@@ -213,8 +214,6 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 	defer func() {
 		finish(err)
 	}()
-
-	fmt.Println(time.Now(), "execFieldSelection", f.field.Name, f.field.TypeName, f.field.Args)
 
 	err = func() (err *errors.QueryError) {
 		defer func() {
