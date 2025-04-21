@@ -6,6 +6,7 @@ import (
 
 type QueryError struct {
 	Err           error                  `json:"-"` // Err holds underlying if available
+	SkipCtxErr    bool                   `json:"-"`
 	Message       string                 `json:"message"`
 	Locations     []Location             `json:"locations,omitempty"`
 	Path          []interface{}          `json:"path,omitempty"`
@@ -21,6 +22,13 @@ type Location struct {
 
 func (a Location) Before(b Location) bool {
 	return a.Line < b.Line || (a.Line == b.Line && a.Column < b.Column)
+}
+
+// ErrorfSkip is a wrapper for Errorf to set SkipCtxErr to true.
+func ErrorfSkip(format string, a ...interface{}) *QueryError {
+	err := Errorf(format, a...)
+	err.SkipCtxErr = true
+	return err
 }
 
 func Errorf(format string, a ...interface{}) *QueryError {

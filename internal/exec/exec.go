@@ -197,7 +197,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 		}
 
 		if err := traceCtx.Err(); err != nil {
-			return errors.Errorf("%s", err) // don't execute any more resolvers if context got cancelled
+			return errors.ErrorfSkip("%s", err) // don't execute any more resolvers if context got cancelled
 		}
 
 		res := f.resolver
