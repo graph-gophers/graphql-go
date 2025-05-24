@@ -12,7 +12,6 @@ formatters:
     gofmt:
       simplify: true
 
-
 linters:
   default: none
   enable:
@@ -22,11 +21,7 @@ linters:
     - unconvert
     - unused
     - misspell
-  exclusions:
-    rules:
-      - path: 'graphql_test.go'
-        linters:
-          - unused
+
   settings:
     govet:
       enable-all: true
