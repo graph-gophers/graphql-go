@@ -233,6 +233,10 @@ func (s *Schema) ValidateWithVariables(queryString string, variables map[string]
 		return []*errors.QueryError{qErr}
 	}
 
+	if len(doc.Operations) == 0 {
+		return []*errors.QueryError{errors.Errorf("no operations in executable document")}
+	}
+
 	return validation.Validate(s.schema, doc, variables, s.maxDepth)
 }
 
