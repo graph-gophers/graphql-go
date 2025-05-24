@@ -934,7 +934,7 @@ func validateBasicLit(v *ast.PrimitiveValue, t ast.Type) bool {
 		case "ID":
 			return (v.Type == scanner.Int && validateBuiltInScalar(v.Text, "Int")) || (v.Type == scanner.String && validateBuiltInScalar(v.Text, "String"))
 		default:
-			//TODO: Type-check against expected type by Unmarshalling
+			// TODO: Type-check against expected type by Unmarshalling
 			return true
 		}
 

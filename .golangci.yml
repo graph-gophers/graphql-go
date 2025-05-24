@@ -1,32 +1,40 @@
+version: "2"
+
 run:
   timeout: 5m
 
-linters-settings:
-  gofmt:
-    simplify: true
-  govet:
-    check-shadowing: true
-    enable-all: true
-    disable:
-      - fieldalignment
-      - deepequalerrors # remove later
-
-linters:
-  disable-all: true
+formatters:
   enable:
     - gofmt
-    - gosimple
+    - goimports
+    - gofumpt
+  settings:
+    gofmt:
+      simplify: true
+
+
+linters:
+  default: none
+  enable:
     - govet
     - ineffassign
-    - exportloopref
     - staticcheck
     - unconvert
     - unused
     - misspell
-    - goimports
-
-issues:
-  exclude-rules:
-    - linters:
-      - unused
-      path: "graphql_test.go"
+  exclusions:
+    rules:
+      - path: 'graphql_test.go'
+        linters:
+          - unused
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - deepequalerrors # remove later
+      enable:
+        - shadow
+    unconvert:
+      fast-math: false
+      safe: false

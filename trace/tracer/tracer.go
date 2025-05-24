@@ -8,9 +8,11 @@ import (
 	"github.com/graph-gophers/graphql-go/introspection"
 )
 
-type QueryFinishFunc = func([]*errors.QueryError)
-type FieldFinishFunc = func(*errors.QueryError)
-type ValidationFinishFunc = func([]*errors.QueryError)
+type (
+	QueryFinishFunc      = func([]*errors.QueryError)
+	FieldFinishFunc      = func(*errors.QueryError)
+	ValidationFinishFunc = func([]*errors.QueryError)
+)
 
 type Tracer interface {
 	TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, QueryFinishFunc)
