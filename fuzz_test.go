@@ -8,7 +8,7 @@ import (
 	"github.com/graph-gophers/graphql-go/example/starwars"
 )
 
-func FuzzSchema_Exec(f *testing.F) {
+func FuzzSchemaExec(f *testing.F) {
 	resolver := &starwars.Resolver{}
 	opts := []graphql.SchemaOpt{graphql.MaxDepth(3)}
 	schema, err := graphql.ParseSchema(starwars.Schema, resolver, opts...)
