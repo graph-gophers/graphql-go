@@ -1,12 +1,11 @@
 package validation_test
 
 import (
+	"encoding/json"
 	"os"
 	"reflect"
 	"sort"
 	"testing"
-
-	"encoding/json"
 
 	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/errors"

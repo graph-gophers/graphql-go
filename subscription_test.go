@@ -24,8 +24,10 @@ func (r *helloResolver) Hello() string {
 	return "Hello world!"
 }
 
-var errResolver = errors.New("resolver error")
-var resolverQueryErr = &qerrors.QueryError{Message: "query", ResolverError: errResolver}
+var (
+	errResolver      = errors.New("resolver error")
+	resolverQueryErr = &qerrors.QueryError{Message: "query", ResolverError: errResolver}
+)
 
 type helloSaidResolver struct {
 	err      error

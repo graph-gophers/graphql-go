@@ -157,7 +157,8 @@ func ExampleMaxQueryLength() {
 }
 
 func ExampleRestrictIntrospection() {
-	allowKey := struct{}{}
+	type allowKeyType struct{}
+	allowKey := allowKeyType{}
 	// only allow introspection if the function below returns true
 	filter := func(ctx context.Context) bool {
 		allow, found := ctx.Value(allowKey).(bool)

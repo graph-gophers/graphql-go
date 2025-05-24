@@ -364,9 +364,9 @@ func parseSchema(s *ast.Schema, l *common.Lexer) {
 		switch x := l.ConsumeIdent(); x {
 
 		case "schema":
-			s.SchemaDefinition.Present = true
-			s.SchemaDefinition.Loc = l.Location()
-			s.SchemaDefinition.Desc = desc
+			s.Present = true
+			s.Loc = l.Location()
+			s.Desc = desc
 			s.SchemaDefinition.Directives = common.ParseDirectives(l)
 			l.ConsumeToken('{')
 			for l.Peek() != '}' {
@@ -429,11 +429,7 @@ func parseSchema(s *ast.Schema, l *common.Lexer) {
 func parseObjectDef(l *common.Lexer) *ast.ObjectTypeDefinition {
 	object := &ast.ObjectTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
 
-	for {
-		if l.Peek() == '{' {
-			break
-		}
-
+	for l.Peek() != '{' {
 		if l.Peek() == '@' {
 			object.Directives = common.ParseDirectives(l)
 			continue
@@ -458,7 +454,6 @@ func parseObjectDef(l *common.Lexer) *ast.ObjectTypeDefinition {
 	l.ConsumeToken('}')
 
 	return object
-
 }
 
 func parseInterfaceDef(l *common.Lexer) *ast.InterfaceTypeDefinition {
@@ -531,6 +526,7 @@ func parseEnumDef(l *common.Lexer) *ast.EnumTypeDefinition {
 	l.ConsumeToken('}')
 	return enum
 }
+
 func parseDirectiveDef(l *common.Lexer) *ast.DirectiveDefinition {
 	l.ConsumeToken('@')
 	loc := l.Location()
@@ -573,7 +569,7 @@ func parseExtension(s *ast.Schema, l *common.Lexer) {
 	loc := l.Location()
 	switch x := l.ConsumeIdent(); x {
 	case "schema":
-		s.SchemaDefinition.Present = true
+		s.Present = true
 		s.SchemaDefinition.Directives = append(s.SchemaDefinition.Directives, common.ParseDirectives(l)...)
 		if l.Peek() == '{' { // in schema extensions the body is optional
 			l.ConsumeToken('{')

@@ -61,8 +61,8 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 	}()
 
 	// Handles the case where the locally executed func above panicked
-	if len(r.Request.Errs) > 0 {
-		return sendAndReturnClosed(&Response{Errors: r.Request.Errs})
+	if len(r.Errs) > 0 {
+		return sendAndReturnClosed(&Response{Errors: r.Errs})
 	}
 
 	if f == nil {
@@ -115,9 +115,9 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 
 				subR := &Request{
 					Request: selected.Request{
-						Doc:    r.Request.Doc,
-						Vars:   r.Request.Vars,
-						Schema: r.Request.Schema,
+						Doc:    r.Doc,
+						Vars:   r.Vars,
+						Schema: r.Schema,
 					},
 					Limiter: r.Limiter,
 					Tracer:  r.Tracer,
