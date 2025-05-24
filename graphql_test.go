@@ -2915,7 +2915,8 @@ func TestTime(t *testing.T) {
 
 type resolverWithUnexportedMethod struct{}
 
-func (r *resolverWithUnexportedMethod) changeTheNumber(args struct{ NewNumber int32 }) int32 { //lint:ignore U1000 ingore this for now
+//nolint:unused // Method is intentionally left unused to test unexported methods.
+func (r *resolverWithUnexportedMethod) changeTheNumber(args struct{ NewNumber int32 }) int32 {
 	return args.NewNumber
 }
 
