@@ -17,17 +17,18 @@ func FuzzSchemaExec(f *testing.F) {
 		return
 	}
 
+	// Seed the fuzzing corpus with a variety of valid GraphQL queries.
 	queries := []string{
 		`{ hero { name } }`,
 		`{ hero { name appearsIn } }`,
 		`{ hero { name appearsIn friends { name } } }`,
 		`{ hero(episode: EMPIRE) { name } }`,
-		`{ episode(episode: EMPIRE) { title characters { name } } }`,
-		`{ episode(episode: EMPIRE) { title characters { name friends { name } } } }`,
+		`{ episode(episode: EMPIRE) { title characters { name } reviews { stars commentary } } }`,
+		`{ episode(episode: EMPIRE) { title characters { name friends { name } reviews { stars commentary } } }`,
 		`query { episode(episode: EMPIRE) { title characters { name friends { name } } } }`,
 		`query HeroName { hero { name } }`,
 		`query HeroNameAndFriends { hero { name friends { name } } }`,
-		`query HeroNameAndFriendsWithAlias { hero { name friends { name alias: name } } }`,
+		`mutation { createReview(episode: EMPIRE, review: { stars: 5, commentary: "Great!" }) }`,
 	}
 	for _, q := range queries {
 		f.Add(q)
