@@ -59,7 +59,7 @@ func (e productNotFoundError) Extensions() map[string]interface{} {
 
 // Example_customErrors demonstrates the use of custom errors and error extensions.
 func Example_customErrors() {
-	var products = []*product{
+	products := []*product{
 		{ID: "1000", Name: "Product1"},
 		{ID: "1001", Name: "Product2"},
 	}

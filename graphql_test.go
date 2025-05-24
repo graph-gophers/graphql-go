@@ -3475,12 +3475,15 @@ type childResolver struct{}
 func (r *childResolver) TriggerError() (string, error) {
 	return "This will never be returned to the client", errExample
 }
+
 func (r *childResolver) NoError() string {
 	return "no error"
 }
+
 func (r *childResolver) Child() *childResolver {
 	return &childResolver{}
 }
+
 func (r *childResolver) NilChild() *childResolver {
 	return nil
 }
@@ -4110,12 +4113,12 @@ type nullableResult struct {
 	Float  string
 }
 
-type nullableResolver struct {
-}
+type nullableResolver struct{}
 
 func (r *nullableResolver) TestNullables(args struct {
 	Input *nullableInput
-}) nullableResult {
+},
+) nullableResult {
 	var res nullableResult
 	if args.Input.String.Set {
 		if args.Input.String.Value == nil {
@@ -4426,11 +4429,14 @@ func stringsEqual(want, have string) string {
 	return ""
 }
 
-type queryVarResolver struct{}
-type filterArgs struct {
-	Required string
-	Optional *string
-}
+type (
+	queryVarResolver struct{}
+	filterArgs       struct {
+		Required string
+		Optional *string
+	}
+)
+
 type filterSearchResults struct {
 	Match *string
 }
@@ -4494,12 +4500,14 @@ func TestQueryVariablesValidation(t *testing.T) {
 	}})
 }
 
-type interfaceImplementingInterfaceResolver struct{}
-type interfaceImplementingInterfaceExample struct {
-	A string
-	B string
-	C bool
-}
+type (
+	interfaceImplementingInterfaceResolver struct{}
+	interfaceImplementingInterfaceExample  struct {
+		A string
+		B string
+		C bool
+	}
+)
 
 func (r *interfaceImplementingInterfaceResolver) Hey() *interfaceImplementingInterfaceExample {
 	return &interfaceImplementingInterfaceExample{
@@ -4605,13 +4613,15 @@ func TestMaxQueryLength(t *testing.T) {
 	})
 }
 
-type RootResolver struct{}
-type QueryResolver struct{}
-type MutationResolver struct{}
-type SubscriptionResolver struct {
-	err      error
-	upstream <-chan *helloEventResolver
-}
+type (
+	RootResolver         struct{}
+	QueryResolver        struct{}
+	MutationResolver     struct{}
+	SubscriptionResolver struct {
+		err      error
+		upstream <-chan *helloEventResolver
+	}
+)
 
 func (r *RootResolver) Query() *QueryResolver {
 	return &QueryResolver{}

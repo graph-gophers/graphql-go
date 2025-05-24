@@ -101,7 +101,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 			case "__schema":
 				if r.AllowIntrospection {
 					flattenedSels = append(flattenedSels, &SchemaField{
-						Field:       s.Meta.FieldSchema,
+						Field:       s.FieldSchema,
 						Alias:       field.Alias.Name,
 						Sels:        applySelectionSet(r, s, s.Meta.Schema, field.SelectionSet),
 						Async:       true,
@@ -125,9 +125,9 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 					}
 
 					flattenedSels = append(flattenedSels, &SchemaField{
-						Field:       s.Meta.FieldType,
+						Field:       s.FieldType,
 						Alias:       field.Alias.Name,
-						Sels:        applySelectionSet(r, s, s.Meta.Type, field.SelectionSet),
+						Sels:        applySelectionSet(r, s, s.Type, field.SelectionSet),
 						Async:       true,
 						FixedResult: reflect.ValueOf(resolvedType),
 					})

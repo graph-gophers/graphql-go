@@ -202,7 +202,8 @@ type Resolver struct{}
 func (r *Resolver) Admin(ctx context.Context, args struct {
 	ID   string
 	Role string
-}) (*adminResolver, error) {
+},
+) (*adminResolver, error) {
 	if usr, ok := usersMap[args.ID]; ok {
 		if usr.RoleField == args.Role {
 			return &adminResolver{*usr}, nil
@@ -212,11 +213,11 @@ func (r *Resolver) Admin(ctx context.Context, args struct {
 	return nil, err
 }
 
-func (r *Resolver) User(ctx context.Context, args struct{ Id string }) (user, error) {
-	if usr, ok := usersMap[args.Id]; ok {
+func (r *Resolver) User(ctx context.Context, args struct{ ID string }) (user, error) {
+	if usr, ok := usersMap[args.ID]; ok {
 		return *usr, nil
 	}
-	err := fmt.Errorf("user with id=%s does not exist", args.Id)
+	err := fmt.Errorf("user with id=%s does not exist", args.ID)
 	return user{}, err
 }
 

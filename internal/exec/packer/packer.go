@@ -383,7 +383,7 @@ func unwrapNonNull(t ast.Type) (ast.Type, bool) {
 }
 
 func stripUnderscore(s string) string {
-	return strings.Replace(s, "_", "", -1)
+	return strings.ReplaceAll(s, "_", "")
 }
 
 // NullUnmarshaller is an unmarshaller that can handle a nil input

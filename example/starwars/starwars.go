@@ -367,7 +367,8 @@ type MutationResolver struct{}
 func (r *MutationResolver) CreateReview(args *struct {
 	Episode string
 	Review  reviewInput
-}) *reviewResolver {
+},
+) *reviewResolver {
 	review := &review{
 		stars:      args.Review.Stars,
 		commentary: args.Review.Commentary,

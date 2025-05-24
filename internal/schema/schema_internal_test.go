@@ -175,7 +175,6 @@ func TestParseSchemaDef(t *testing.T) {
 				s := New()
 				parseSchema(s, lex)
 				actual = &s.SchemaDefinition
-
 			}
 			err := lex.CatchSyntaxError(parse)
 
@@ -199,7 +198,8 @@ func TestParseInterfaceDef(t *testing.T) {
 		expected: &ast.InterfaceTypeDefinition{
 			Name:   "Greeting",
 			Loc:    errors.Location{Line: 1, Column: 1},
-			Fields: ast.FieldsDefinition{&ast.FieldDefinition{Name: "field"}}},
+			Fields: ast.FieldsDefinition{&ast.FieldDefinition{Name: "field"}},
+		},
 	}}
 
 	for _, test := range tests {

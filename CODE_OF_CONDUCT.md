@@ -1,6 +1,6 @@
-## Community Code of Conduct
+# Community Code of Conduct
 
-### Contributor Code of Conduct
+## Contributor Code of Conduct
 
 As contributors and maintainers of this project, and in the interest of fostering
 an open and welcoming community, we pledge to respect all people who contribute
@@ -9,7 +9,7 @@ submitting pull requests or patches, and other activities.
 
 We are committed to making participation in the GraphQL Go community a harassment-free experience for everyone, regardless of level of experience, gender, gender identity and expression, sexual orientation, disability, personal appearance, body size, race, ethnicity, age, religion, or nationality.
 
-## Scope 
+## Scope
 
 This code of conduct applies both within project spaces and in public spaces when an individual is representing the project or its community.
 
@@ -36,17 +36,17 @@ Examples of unacceptable behavior include:
 * Other conduct which could reasonably be considered inappropriate in a
   professional setting
 
-Project maintainers have the right and responsibility to remove, edit, or reject comments, commits, code, wiki edits, issues, and other contributions that are not aligned to this Code of Conduct. 
+Project maintainers have the right and responsibility to remove, edit, or reject comments, commits, code, wiki edits, issues, and other contributions that are not aligned to this Code of Conduct.
 By adopting this Code of Conduct, project maintainers commit themselves to fairly and consistently applying these principles to every aspect
-of managing this project. 
+of managing this project.
 Project maintainers who do not follow or enforce the Code of
 Conduct may be permanently removed from the project team.
 
-## Reporting 
+## Reporting
 
 For incidents occurring in the Graph Gophers community, contact @pavelnikolov in [the Gophers Slack](https://gophers.slack.com/) or alternatively you can contact  me [at] pavelnikolov [dot] net. You can expect a response within few business days.
 
-## Enforcement 
+## Enforcement
 
 The Graph Gophers maintainers enforce code of conduct issues for the graphql-go project as well other projects under the graph-gophers github organization.
 
