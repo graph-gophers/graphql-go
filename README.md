@@ -156,6 +156,23 @@ schema := graphql.MustParseSchema(sdl, &RootResolver{}, nil)
 - `Logger(logger log.Logger)` is used to log panics during query execution. It defaults to `exec.DefaultLogger`.
 - `PanicHandler(panicHandler errors.PanicHandler)` is used to transform panics into errors during query execution. It defaults to `errors.DefaultPanicHandler`.
 - `DisableIntrospection()` disables introspection queries.
+- `DisableFieldSelections()` disables capturing child field selections used by helper APIs (see below).
+
+### Field Selection Inspection Helpers
+
+Resolvers can introspect which immediate child fields were requested using:
+
+```go
+graphql.SelectedFieldNames(ctx)       // []string of direct child schema field names
+graphql.HasSelectedField(ctx, "name") // bool
+graphql.SortedSelectedFieldNames(ctx) // sorted copy
+```
+
+Use cases include building projection lists for databases or conditionally avoiding expensive sub-fetches. The helpers are intentionally shallow (only direct children) and fragment spreads / inline fragments are flattened with duplicates removed; meta fields (e.g. `__typename`) are excluded.
+
+Performance: selection data is computed lazily only when a helper is called. If you never call them there is effectively no additional overhead. To remove even the small context value insertion you can opt out with `DisableFieldSelections()`; helpers then return empty results.
+
+For more detail and examples see the [docs](https://godoc.org/github.com/graph-gophers/graphql-go).
 
 ### Custom Errors
 

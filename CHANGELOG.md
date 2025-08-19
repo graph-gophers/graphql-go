@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## [Unreleased]
+
+* [FEATURE] Add resolver field selection inspection helpers (`SelectedFieldNames`, `HasSelectedField`, `SortedSelectedFieldNames`). Helpers are available by default and compute results lazily only when called. An explicit opt-out (`DisableFieldSelections()` schema option) is provided for applications that want to remove even the minimal context insertion overhead when the helpers are never used.
+
 [v1.5.0](https://github.com/graph-gophers/graphql-go/releases/tag/v1.5.0) Release v1.5.0
 
 * [FEATURE] Add specifiedBy directive in #532
