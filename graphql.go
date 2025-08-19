@@ -85,6 +85,7 @@ type Schema struct {
 	useStringDescriptions    bool
 	subscribeResolverTimeout time.Duration
 	useFieldResolvers        bool
+	disableFieldSelections   bool
 }
 
 // AST returns the abstract syntax tree of the GraphQL schema definition.
@@ -119,6 +120,15 @@ func UseFieldResolvers() SchemaOpt {
 	return func(s *Schema) {
 		s.useFieldResolvers = true
 	}
+}
+
+// DisableFieldSelections disables capturing child field selections for the
+// SelectedFieldNames / HasSelectedField helpers. When disabled, those helpers
+// will always return an empty result / false (i.e. zero-value) and no per-resolver
+// selection context is stored. This is an opt-out for applications that never intend
+// to use the feature and want to avoid even its small lazy overhead.
+func DisableFieldSelections() SchemaOpt {
+	return func(s *Schema) { s.disableFieldSelections = true }
 }
 
 // MaxDepth specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
@@ -304,10 +314,11 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 			Schema:             s.schema,
 			AllowIntrospection: s.allowIntrospection == nil || s.allowIntrospection(ctx), // allow introspection by default, i.e. when allowIntrospection is nil
 		},
-		Limiter:      make(chan struct{}, s.maxParallelism),
-		Tracer:       s.tracer,
-		Logger:       s.logger,
-		PanicHandler: s.panicHandler,
+		Limiter:                make(chan struct{}, s.maxParallelism),
+		Tracer:                 s.tracer,
+		Logger:                 s.logger,
+		PanicHandler:           s.panicHandler,
+		DisableFieldSelections: s.disableFieldSelections,
 	}
 	varTypes := make(map[string]*introspection.Type)
 	for _, v := range op.Vars {

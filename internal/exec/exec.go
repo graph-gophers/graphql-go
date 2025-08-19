@@ -14,6 +14,7 @@ import (
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"github.com/graph-gophers/graphql-go/internal/exec/selected"
 	"github.com/graph-gophers/graphql-go/internal/query"
+	"github.com/graph-gophers/graphql-go/internal/selections"
 	"github.com/graph-gophers/graphql-go/log"
 	"github.com/graph-gophers/graphql-go/trace/tracer"
 )
@@ -25,6 +26,7 @@ type Request struct {
 	Logger                   log.Logger
 	PanicHandler             errors.PanicHandler
 	SubscribeResolverTimeout time.Duration
+	DisableFieldSelections   bool
 }
 
 func (r *Request) handlePanic(ctx context.Context) {
@@ -226,6 +228,9 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			return errors.Errorf("%s", err) // don't execute any more resolvers if context got cancelled
 		}
 
+		if len(f.sels) > 0 && !r.DisableFieldSelections {
+			ctx = selections.With(ctx, f.sels)
+		}
 		res, resolverErr := f.resolve(ctx)
 		if resolverErr != nil {
 			err := errors.Errorf("%s", resolverErr)
