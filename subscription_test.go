@@ -499,7 +499,9 @@ const schema = `
 	}
 `
 
-type subscriptionsCustomTimeout struct{}
+type subscriptionsCustomTimeout struct {
+	Name string // at least one Query field is required
+}
 
 type messageResolver struct{}
 
@@ -521,7 +523,10 @@ func (r *subscriptionsCustomTimeout) OnTimeout() <-chan *messageResolver {
 func TestSchemaSubscribe_CustomResolverTimeout(t *testing.T) {
 	gqltesting.RunSubscribe(t, &gqltesting.TestSubscription{
 		Schema: graphql.MustParseSchema(`
-			type Query {}
+			type Query {
+				# at least one Query field is required
+				name: String!
+			}
 			type Subscription {
 				onTimeout : Message!
 			}
@@ -529,9 +534,9 @@ func TestSchemaSubscribe_CustomResolverTimeout(t *testing.T) {
 			type Message {
 				msg: String!
 			}
-		`,
-			&subscriptionsCustomTimeout{},
-			graphql.SubscribeResolverTimeout(1*time.Nanosecond)),
+		`, &subscriptionsCustomTimeout{Name: "test"},
+			graphql.SubscribeResolverTimeout(1*time.Nanosecond),
+			graphql.UseFieldResolvers()),
 		Query: `
 			subscription {
 				onTimeout { msg }
@@ -552,16 +557,19 @@ func (r *subscriptionsPanicInResolver) OnPanic() <-chan string {
 func TestSchemaSubscribe_PanicInResolver(t *testing.T) {
 	r := &struct {
 		*subscriptionsPanicInResolver
+		Name string
 	}{
 		subscriptionsPanicInResolver: &subscriptionsPanicInResolver{},
 	}
 	gqltesting.RunSubscribe(t, &gqltesting.TestSubscription{
 		Schema: graphql.MustParseSchema(`
-			type Query {}
+			type Query {
+				name: String!
+			}
 			type Subscription {
 				onPanic : String!
 			}
-		`, r),
+		`, r, graphql.UseFieldResolvers()),
 		Query: `
 			subscription {
 				onPanic

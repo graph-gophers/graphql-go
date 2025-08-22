@@ -20,6 +20,10 @@ func (*mutnb) Toggle(args struct{ Enabled graphql.NullBool }) string {
 	return fmt.Sprintf("enabled '%v'", *args.Enabled.Value)
 }
 
+func (r *mutnb) Name() string {
+	return "test"
+}
+
 // ExampleNullBool demonstrates how to use nullable Bool type when it is necessary to differentiate between nil and not set.
 func ExampleNullBool() {
 	const s = `
@@ -27,7 +31,9 @@ func ExampleNullBool() {
 			query: Query
 			mutation: Mutation
 		}
-		type Query{}
+		type Query{
+			name: String!
+		}
 		type Mutation{
 			toggle(enabled: Boolean): String!
 		}

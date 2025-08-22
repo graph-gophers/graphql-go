@@ -1,5 +1,9 @@
 # CHANGELOG
 
+[Unreleased]
+
+* [BUGFIX] Reject object, interface, and input object type definitions that declare zero fields/input values (spec compliance).
+
 [v1.7.0](https://github.com/graph-gophers/graphql-go/releases/tag/v1.7.0) Release v1.7.0
 
 * [FEATURE] Add resolver field selection inspection helpers (`SelectedFieldNames`, `HasSelectedField`, `SortedSelectedFieldNames`). Helpers are available by default and compute results lazily only when called. An explicit opt-out (`DisableFieldSelections()` schema option) is provided for applications that want to remove even the minimal context insertion overhead when the helpers are never used.
@@ -32,7 +36,7 @@
 
 * [FEATURE] Add types package #437
 * [FEATURE] Expose `packer.Unmarshaler` as `decode.Unmarshaler` to the public #450
-* [FEATURE] Add location fields to type definitions #454 
+* [FEATURE] Add location fields to type definitions #454
 * [FEATURE] `errors.Errorf` preserves original error similar to `fmt.Errorf` #456
 * [BUGFIX] Fix duplicated __typename in response (fixes #369) #443
 
