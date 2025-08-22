@@ -31,6 +31,10 @@ type Args struct {
 
 type mutation struct{}
 
+func (m *mutation) Name() string {
+	return "test"
+}
+
 func (*mutation) Hello(args Args) string {
 	fmt.Println(args)
 	return "Args accepted!"
@@ -40,7 +44,9 @@ func Example_customScalarMap() {
 	s := `
 		scalar Map
 	
-		type Query {}
+		type Query {
+			name: String!
+		}
 		
 		type Mutation {
 			hello(

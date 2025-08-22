@@ -259,12 +259,18 @@ func mergeExtensions(s *ast.Schema) error {
 func resolveNamedType(s *ast.Schema, t ast.NamedType) error {
 	switch t := t.(type) {
 	case *ast.ObjectTypeDefinition:
+		if len(t.Fields) == 0 {
+			return errors.Errorf("object type %q must define one or more fields", t.Name)
+		}
 		for _, f := range t.Fields {
 			if err := resolveField(s, f); err != nil {
 				return err
 			}
 		}
 	case *ast.InterfaceTypeDefinition:
+		if len(t.Fields) == 0 {
+			return errors.Errorf("interface type %q must define one or more fields", t.Name)
+		}
 		for _, f := range t.Fields {
 			if err := resolveField(s, f); err != nil {
 				return err
@@ -274,6 +280,9 @@ func resolveNamedType(s *ast.Schema, t ast.NamedType) error {
 			return err
 		}
 	case *ast.InputObject:
+		if len(t.Values) == 0 {
+			return errors.Errorf("input object type %q must define one or more fields", t.Name)
+		}
 		if err := resolveInputObject(s, t.Values); err != nil {
 			return err
 		}

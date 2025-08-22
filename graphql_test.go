@@ -1459,6 +1459,10 @@ func (r *testDeprecatedDirectiveResolver) C() int32 {
 	return 0
 }
 
+func (r *testDeprecatedDirectiveResolver) Name() string {
+	return "test"
+}
+
 func TestDeprecatedDirective(t *testing.T) {
 	t.Parallel()
 
@@ -1511,6 +1515,7 @@ func TestDeprecatedDirective(t *testing.T) {
 				}
 
 				type Query {
+					name: String!
 				}
 
 				enum Test {
@@ -1552,6 +1557,9 @@ func TestDeprecatedDirective(t *testing.T) {
 }
 
 func TestSpecifiedByDirective(t *testing.T) {
+	type nameResolver struct {
+		Name string
+	}
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(`
@@ -1559,11 +1567,12 @@ func TestSpecifiedByDirective(t *testing.T) {
 				query: Query
 			}
 			type Query {
+			    name: String!
 			}
 			scalar UUID @specifiedBy(
 				url: "https://tools.ietf.org/html/rfc4122"
 			)
-			`, &struct{}{}),
+			`, &nameResolver{Name: "Pavel"}, graphql.UseFieldResolvers()),
 			Query: `
 				query {
 					__type(name: "UUID") {

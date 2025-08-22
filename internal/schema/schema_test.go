@@ -41,8 +41,9 @@ func TestParse(t *testing.T) {
 			sdl: `
 			interface Greeting { 
 				message: String!
-			} 
+			}
 			type Welcome implements Greeting {
+				id: ID!
 			}`,
 			validateError: func(err error) error {
 				if err == nil {
@@ -967,7 +968,7 @@ Second line of the description.
 		{
 			name: "Decorating input object with an undeclared directive should return an error",
 			sdl: `
-			input InputObject @undeclareddirective{}
+			input InputObject @undeclareddirective{field: String!}
 			`,
 			validateError: func(err error) error {
 				prefix := `graphql: directive "undeclareddirective" not found`
@@ -980,7 +981,7 @@ Second line of the description.
 		{
 			name: "Decorating interface with an undeclared directive should return an error",
 			sdl: `
-			interface I @undeclareddirective {}
+			interface I @undeclareddirective {field: String!}
 			`,
 			validateError: func(err error) error {
 				prefix := `graphql: directive "undeclareddirective" not found`
