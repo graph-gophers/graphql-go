@@ -1,7 +1,9 @@
 package validation
 
 import (
+	"encoding/binary"
 	"fmt"
+	"hash/fnv"
 	"math"
 	"reflect"
 	"strconv"
@@ -34,7 +36,14 @@ type context struct {
 	fieldMap         map[*ast.Field]fieldInfo
 	overlapValidated map[selectionPair]struct{}
 	maxDepth         int
+	fieldHashes      map[*ast.Field]uint64 // memoized structural hashes to detect identical duplicates
 }
+
+// minIdenticalGroupSize is the minimum size of a same-alias field group for which
+// we attempt the identical-fields fast path. For very small groups (sizes < 3)
+// the overhead of shallow + hash comparisons usually outweighs doing the single
+// or couple of direct overlap comparisons, so we skip optimization.
+const minIdenticalGroupSize = 3
 
 func (c *context) addErr(loc errors.Location, rule string, format string, a ...interface{}) {
 	c.addErrMultiLoc([]errors.Location{loc}, rule, format, a...)
@@ -62,6 +71,7 @@ func newContext(s *ast.Schema, doc *ast.ExecutableDefinition, maxDepth int) *con
 		fieldMap:         make(map[*ast.Field]fieldInfo),
 		overlapValidated: make(map[selectionPair]struct{}),
 		maxDepth:         maxDepth,
+		fieldHashes:      make(map[*ast.Field]uint64),
 	}
 }
 
@@ -71,6 +81,8 @@ func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string
 	opNames := make(nameSet, len(doc.Operations))
 	fragUsedBy := make(map[*ast.FragmentDefinition][]*ast.OperationDefinition)
 	for _, op := range doc.Operations {
+		// Reset structural hash cache per operation to avoid retaining hashes for previous operations.
+		c.fieldHashes = make(map[*ast.Field]uint64)
 		c.usedVars[op] = make(varSet)
 		opc := &opContext{c, []*ast.OperationDefinition{op}}
 
@@ -303,10 +315,52 @@ func validateMaxDepth(c *opContext, sels []ast.Selection, visited map[*ast.Fragm
 }
 
 func validateSelectionSet(c *opContext, sels []ast.Selection, t ast.NamedType) {
+	// First pass: validate individual selections and classify.
+	var hasNonField bool
+	fieldSels := make([]*ast.Field, 0, len(sels))
 	for _, sel := range sels {
 		validateSelection(c, sel, t)
+		if f, ok := sel.(*ast.Field); ok {
+			fieldSels = append(fieldSels, f)
+		} else {
+			hasNonField = true
+		}
 	}
 
+	// Optimization: if the selection set contains only fields (the common case for large
+	// query batches) we can drastically reduce overlap comparisons by grouping fields by
+	// their response key (alias/name). Only fields with identical response keys can
+	// produce an overlap conflict per spec, so comparing across different keys is wasted work.
+	// This reduces worst-case comparisons from O(n^2) to O(sum k_i^2) where k_i are group sizes;
+	// for the typical non-overlapping alias case it becomes effectively O(n).
+	if !hasNonField {
+		groups := make(map[string][]*ast.Field, len(fieldSels))
+		for _, f := range fieldSels {
+			groups[f.Alias.Name] = append(groups[f.Alias.Name], f)
+		}
+		for _, g := range groups {
+			if len(g) < 2 {
+				continue
+			}
+
+			// Fast path: if all fields in the group are structurally identical
+			// (same underlying name, arguments, and identical subselections) there
+			// can be no conflict, so skip O(k^2) comparisons entirely.
+			if allIdenticalFields(c.context, g) {
+				continue
+			}
+
+			for i := 0; i < len(g); i++ {
+				for j := i + 1; j < len(g); j++ {
+					c.validateOverlap(g[i], g[j], nil, nil)
+				}
+			}
+		}
+		return
+	}
+
+	// Fallback: original pairwise comparison when fragments / spreads are present since
+	// fragment expansion can introduce overlaps across different initial response keys.
 	for i, a := range sels {
 		for _, b := range sels[i+1:] {
 			c.validateOverlap(a, b, nil, nil)
@@ -417,6 +471,102 @@ func compatible(a, b ast.Type) bool {
 		}
 	}
 	return false
+}
+
+// allIdenticalFields returns true if every field in the slice is structurally identical.
+// Identical means: same field name, same argument names & literal values in order, and
+// identical subselections recursively (by hashing subselections ignoring order of identical duplicates).
+func allIdenticalFields(c *context, fields []*ast.Field) bool {
+	// Precondition: caller only invokes when len(fields) >= 2 (validated in grouping loop).
+	if len(fields) < minIdenticalGroupSize {
+		return false
+	}
+	base := fields[0]
+	// Shallow pass: argument order is not semantically significant per spec, but we
+	// treat differing order as non-identical to avoid extra allocations (could be
+	// improved by normalizing if hit-rate becomes important).
+	for _, f := range fields[1:] {
+		if !shallowFieldEqual(base, f) {
+			return false
+		}
+	}
+	if len(base.SelectionSet) == 0 {
+		return true
+	}
+	firstHash := hashField(c, base)
+	for _, f := range fields[1:] {
+		if hashField(c, f) != firstHash {
+			return false
+		}
+	}
+	return true
+}
+
+// shallowFieldEqual performs a cheap comparison of two fields ignoring deeper nested structure.
+// It checks underlying field name, argument names & literal values (order sensitive), and number of direct sub-selections.
+func shallowFieldEqual(a, b *ast.Field) bool {
+	if a.Name.Name != b.Name.Name {
+		return false
+	}
+	if len(a.Arguments) != len(b.Arguments) {
+		return false
+	}
+	for i, arga := range a.Arguments {
+		argb := b.Arguments[i]
+		if arga.Name.Name != argb.Name.Name || fmt.Sprint(arga.Value) != fmt.Sprint(argb.Value) { // fmt.Sprint is acceptable for literals here
+			return false
+		}
+	}
+	return len(a.SelectionSet) == len(b.SelectionSet)
+}
+
+func hashField(c *context, f *ast.Field) uint64 {
+	if h, ok := c.fieldHashes[f]; ok {
+		return h
+	}
+	hasher := fnv.New64a()
+	// Underlying field name (alias already used for grouping externally)
+	hasher.Write([]byte(f.Name.Name))
+	// Arguments (name + literal value print form)
+	for _, arg := range f.Arguments {
+		hasher.Write([]byte{0})
+		hasher.Write([]byte(arg.Name.Name))
+		fmt.Fprint(hasher, arg.Value)
+	}
+	// Sub-selections (order preserved). We incorporate fragment spreads & inline fragments so
+	// that structurally different fragment usage does not collapse to the same hash.
+	for _, sel := range f.SelectionSet {
+		switch s := sel.(type) {
+		case *ast.Field:
+			childHash := hashField(c, s)
+			var buf [8]byte
+			binary.LittleEndian.PutUint64(buf[:], childHash)
+			hasher.Write([]byte("F"))
+			hasher.Write(buf[:])
+		case *ast.FragmentSpread:
+			hasher.Write([]byte("S"))
+			hasher.Write([]byte(s.Name.Name))
+		case *ast.InlineFragment:
+			hasher.Write([]byte("I"))
+			// s.On is a value (ast.TypeName), always present; include its name (may be empty for type conditionless inline fragment)
+			hasher.Write([]byte(s.On.Name))
+			// Shallow representation of inline fragment subselections: hash only immediate field
+			// children to balance cost vs precision. This avoids deep recursion into potentially
+			// large fragment trees while still distinguishing most structural differences.
+			for _, isel := range s.Selections {
+				if cf, ok := isel.(*ast.Field); ok {
+					hasher.Write([]byte{':'})
+					hasher.Write([]byte(cf.Name.Name))
+				}
+			}
+		default:
+			// Future-proof: unknown selection kinds.
+			hasher.Write([]byte("?"))
+		}
+	}
+	h := hasher.Sum64()
+	c.fieldHashes[f] = h
+	return h
 }
 
 func possibleTypes(t ast.Type) []*ast.ObjectTypeDefinition {
