@@ -3,6 +3,9 @@
 [Unreleased]
 
 * [BUGFIX] Reject object, interface, and input object type definitions that declare zero fields/input values (spec compliance).
+* [IMPROVEMENT] Optimize overlapping field validation to avoid quadratic memory blowups on large sibling field lists.
+* [FEATURE] Add configurable safety valve for overlapping field comparison count with `OverlapValidationLimit(n)` schema option (0 disables the cap). When exceeded validation aborts early with rule `OverlapValidationLimitExceeded`. Disabled by default.
+* [TEST] Add benchmarks & randomized overlap stress test for mixed field/fragment patterns.
 
 [v1.7.0](https://github.com/graph-gophers/graphql-go/releases/tag/v1.7.0) Release v1.7.0
 
