@@ -26,14 +26,17 @@ type fieldInfo struct {
 }
 
 type context struct {
-	schema           *ast.Schema
-	doc              *ast.ExecutableDefinition
-	errs             []*errors.QueryError
-	opErrs           map[*ast.OperationDefinition][]*errors.QueryError
-	usedVars         map[*ast.OperationDefinition]varSet
-	fieldMap         map[*ast.Field]fieldInfo
-	overlapValidated map[selectionPair]struct{}
-	maxDepth         int
+	schema               *ast.Schema
+	doc                  *ast.ExecutableDefinition
+	errs                 []*errors.QueryError
+	opErrs               map[*ast.OperationDefinition][]*errors.QueryError
+	usedVars             map[*ast.OperationDefinition]varSet
+	fieldMap             map[*ast.Field]fieldInfo
+	overlapValidated     map[selectionPair]struct{}
+	maxDepth             int
+	overlapPairLimit     int
+	overlapPairsObserved int
+	overlapLimitHit      bool
 }
 
 func (c *context) addErr(loc errors.Location, rule string, format string, a ...interface{}) {
@@ -53,7 +56,7 @@ type opContext struct {
 	ops []*ast.OperationDefinition
 }
 
-func newContext(s *ast.Schema, doc *ast.ExecutableDefinition, maxDepth int) *context {
+func newContext(s *ast.Schema, doc *ast.ExecutableDefinition, maxDepth int, overlapPairLimit int) *context {
 	return &context{
 		schema:           s,
 		doc:              doc,
@@ -62,11 +65,12 @@ func newContext(s *ast.Schema, doc *ast.ExecutableDefinition, maxDepth int) *con
 		fieldMap:         make(map[*ast.Field]fieldInfo),
 		overlapValidated: make(map[selectionPair]struct{}),
 		maxDepth:         maxDepth,
+		overlapPairLimit: overlapPairLimit,
 	}
 }
 
-func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string]interface{}, maxDepth int) []*errors.QueryError {
-	c := newContext(s, doc, maxDepth)
+func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string]interface{}, maxDepth int, overlapPairLimit int) []*errors.QueryError {
+	c := newContext(s, doc, maxDepth, overlapPairLimit)
 
 	opNames := make(nameSet, len(doc.Operations))
 	fragUsedBy := make(map[*ast.FragmentDefinition][]*ast.OperationDefinition)
@@ -303,13 +307,76 @@ func validateMaxDepth(c *opContext, sels []ast.Selection, visited map[*ast.Fragm
 }
 
 func validateSelectionSet(c *opContext, sels []ast.Selection, t ast.NamedType) {
-	for _, sel := range sels {
-		validateSelection(c, sel, t)
+	if len(sels) == 0 {
+		return
 	}
 
-	for i, a := range sels {
-		for _, b := range sels[i+1:] {
-			c.validateOverlap(a, b, nil, nil)
+	// First pass: validate each selection and bucket fields by response name (alias or name).
+	fieldGroups := make(map[string][]ast.Selection)
+	var fragments []ast.Selection // fragment spreads & inline fragments
+	for _, sel := range sels {
+		if c.overlapLimitHit {
+			return
+		}
+		validateSelection(c, sel, t)
+		switch s := sel.(type) {
+		case *ast.Field:
+			name := s.Alias.Name
+			if name == "" {
+				name = s.Name.Name
+			}
+			fieldGroups[name] = append(fieldGroups[name], sel)
+		default:
+			fragments = append(fragments, sel)
+		}
+	}
+
+	// Compare fields only within same response name group (was O(n^2) across all fields previously).
+	for _, group := range fieldGroups {
+		if c.overlapLimitHit {
+			break
+		}
+		if len(group) < 2 {
+			continue
+		}
+		for i, a := range group {
+			if c.overlapLimitHit {
+				break
+			}
+			for _, b := range group[i+1:] {
+				if c.overlapLimitHit {
+					break
+				}
+				c.validateOverlap(a, b, nil, nil)
+			}
+		}
+	}
+
+	// Fragments can introduce any field names, so we must compare them with all fields and each other.
+	if len(fragments) > 0 && !c.overlapLimitHit {
+		// Flatten fields for fragment comparison.
+		var allFields []ast.Selection
+		for _, group := range fieldGroups {
+			allFields = append(allFields, group...)
+		}
+		for i, fa := range fragments {
+			if c.overlapLimitHit {
+				break
+			}
+			// Compare fragment with all fields
+			for _, fld := range allFields {
+				if c.overlapLimitHit {
+					break
+				}
+				c.validateOverlap(fa, fld, nil, nil)
+			}
+			// Compare fragment with following fragments
+			for _, fb := range fragments[i+1:] {
+				if c.overlapLimitHit {
+					break
+				}
+				c.validateOverlap(fa, fb, nil, nil)
+			}
 		}
 	}
 }
@@ -523,11 +590,38 @@ func (c *context) validateOverlap(a, b ast.Selection, reasons *[]string, locs *[
 		return
 	}
 
-	if _, ok := c.overlapValidated[selectionPair{a, b}]; ok {
+	// Optimisation 1: store only one direction of the pair to halve memory and lookups.
+	pa := reflect.ValueOf(a).Pointer()
+	pb := reflect.ValueOf(b).Pointer()
+	if pb < pa { // canonical ordering
+		a, b = b, a
+	}
+	key := selectionPair{a: a, b: b}
+	if _, ok := c.overlapValidated[key]; ok {
 		return
 	}
-	c.overlapValidated[selectionPair{a, b}] = struct{}{}
-	c.overlapValidated[selectionPair{b, a}] = struct{}{}
+	c.overlapValidated[key] = struct{}{}
+
+	if c.overlapPairLimit > 0 && !c.overlapLimitHit {
+		c.overlapPairsObserved++
+		if c.overlapPairsObserved > c.overlapPairLimit {
+			c.overlapLimitHit = true
+			// determine a representative location for error reporting
+			var loc errors.Location
+			switch sel := a.(type) {
+			case *ast.Field:
+				loc = sel.Alias.Loc
+			case *ast.InlineFragment:
+				loc = sel.Loc
+			case *ast.FragmentSpread:
+				loc = sel.Loc
+			default:
+				// leave zero value
+			}
+			c.addErr(loc, "OverlapValidationLimitExceeded", "Overlapping field validation aborted after examining %d pairs (limit %d). Consider restructuring the query or increasing the limit.", c.overlapPairsObserved-1, c.overlapPairLimit)
+			return
+		}
+	}
 
 	switch a := a.(type) {
 	case *ast.Field:
@@ -608,11 +702,54 @@ func (c *context) validateFieldOverlap(a, b *ast.Field) ([]string, []errors.Loca
 
 	var reasons []string
 	var locs []errors.Location
+
+	// Fast-path: if either side has no subselections we are done.
+	if len(a.SelectionSet) == 0 || len(b.SelectionSet) == 0 {
+		return nil, nil
+	}
+
+	// Optimisation 2: avoid O(m*n) cartesian product for large sibling lists with mostly
+	// distinct response names (common & exploitable for DoS). Instead, index B's field
+	// selections by response name (alias/name). For each field in A we only compare
+	// against fields in B with the same response name plus all fragment spreads / inline
+	// fragments (which can expand to any field names and must be compared exhaustively).
+	bFieldIndex := make(map[string][]ast.Selection, len(b.SelectionSet))
+	var bNonField []ast.Selection
+	for _, bs := range b.SelectionSet {
+		if f, ok := bs.(*ast.Field); ok {
+			name := f.Alias.Name
+			if name == "" { // alias may be empty, fall back to field name
+				name = f.Name.Name
+			}
+			bFieldIndex[name] = append(bFieldIndex[name], bs)
+			continue
+		}
+		bNonField = append(bNonField, bs)
+	}
+
 	for _, a2 := range a.SelectionSet {
+		if af, ok := a2.(*ast.Field); ok {
+			name := af.Alias.Name
+			if name == "" {
+				name = af.Name.Name
+			}
+			// Compare only against same-name fields + all non-field selections.
+			if matches := bFieldIndex[name]; len(matches) != 0 {
+				for _, bMatch := range matches {
+					c.validateOverlap(a2, bMatch, &reasons, &locs)
+				}
+			}
+			for _, bnf := range bNonField {
+				c.validateOverlap(a2, bnf, &reasons, &locs)
+			}
+			continue
+		}
+		// For fragments / inline fragments we still need to compare against every selection in B.
 		for _, b2 := range b.SelectionSet {
 			c.validateOverlap(a2, b2, &reasons, &locs)
 		}
 	}
+
 	return reasons, locs
 }
 

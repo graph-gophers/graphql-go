@@ -86,6 +86,7 @@ type Schema struct {
 	subscribeResolverTimeout time.Duration
 	useFieldResolvers        bool
 	disableFieldSelections   bool
+	overlapPairLimit         int
 }
 
 // AST returns the abstract syntax tree of the GraphQL schema definition.
@@ -150,6 +151,14 @@ func MaxQueryLength(n int) SchemaOpt {
 	return func(s *Schema) {
 		s.maxQueryLength = n
 	}
+}
+
+// OverlapValidationLimit caps the number of overlapping selection pairs that will be examined
+// during validation of a single operation (including fragments). A value of 0 disables the cap.
+// When the cap is exceeded validation aborts early with an error (rule: OverlapValidationLimitExceeded)
+// to protect against maliciously constructed queries designed to exhaust memory/CPU.
+func OverlapValidationLimit(n int) SchemaOpt {
+	return func(s *Schema) { s.overlapPairLimit = n }
 }
 
 // Tracer is used to trace queries and fields. It defaults to [noop.Tracer].
@@ -247,7 +256,7 @@ func (s *Schema) ValidateWithVariables(queryString string, variables map[string]
 		return []*errors.QueryError{errors.Errorf("executable document must contain at least one operation")}
 	}
 
-	return validation.Validate(s.schema, doc, variables, s.maxDepth)
+	return validation.Validate(s.schema, doc, variables, s.maxDepth, s.overlapPairLimit)
 }
 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
@@ -270,7 +279,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	}
 
 	validationFinish := s.validationTracer.TraceValidation(ctx)
-	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
+	errs := validation.Validate(s.schema, doc, variables, s.maxDepth, s.overlapPairLimit)
 	validationFinish(errs)
 	if len(errs) != 0 {
 		return &Response{Errors: errs}

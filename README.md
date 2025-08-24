@@ -153,6 +153,7 @@ schema := graphql.MustParseSchema(sdl, &RootResolver{}, nil)
 - `PanicHandler(panicHandler errors.PanicHandler)` is used to transform panics into errors during query execution. It defaults to `errors.DefaultPanicHandler`.
 - `DisableIntrospection()` disables introspection queries.
 - `DisableFieldSelections()` disables capturing child field selections used by helper APIs (see below).
+- `OverlapValidationLimit(n int)` sets a hard cap on examined overlap pairs during validation; exceeding it emits `OverlapValidationLimitExceeded` error.
 
 ### Field Selection Inspection Helpers
 
