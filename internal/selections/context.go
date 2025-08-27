@@ -33,27 +33,10 @@ func (l *Lazy) Names() []string {
 	l.once.Do(func() {
 		seen := make(map[string]struct{}, len(l.raw))
 		ordered := make([]string, 0, len(l.raw))
-		for _, s := range l.raw {
-			switch s := s.(type) {
-			case *selected.SchemaField:
-				name := s.Name
-				if len(name) >= 2 && name[:2] == "__" {
-					continue
-				}
-				if _, ok := seen[name]; !ok {
-					seen[name] = struct{}{}
-					ordered = append(ordered, name)
-				}
-			case *selected.TypeAssertion:
-				collectFromTypeAssertion(&ordered, seen, s.Sels)
-			case *selected.TypenameField:
-				continue
-			}
-		}
+		collectNestedPaths(&ordered, seen, "", l.raw)
 		l.names = ordered
 		l.set = seen
 	})
-	// Return a copy to keep internal slice immutable to callers.
 	out := make([]string, len(l.names))
 	copy(out, l.names)
 	return out
@@ -71,21 +54,27 @@ func (l *Lazy) Has(name string) bool {
 	return ok
 }
 
-// collectFromTypeAssertion flattens selections under a type assertion fragment.
-func collectFromTypeAssertion(dst *[]string, seen map[string]struct{}, sels []selected.Selection) {
-	for _, s := range sels {
-		switch s := s.(type) {
+func collectNestedPaths(dst *[]string, seen map[string]struct{}, prefix string, sels []selected.Selection) {
+	for _, sel := range sels {
+		switch s := sel.(type) {
 		case *selected.SchemaField:
 			name := s.Name
 			if len(name) >= 2 && name[:2] == "__" {
 				continue
 			}
-			if _, ok := seen[name]; !ok {
-				seen[name] = struct{}{}
-				*dst = append(*dst, name)
+			path := name
+			if prefix != "" {
+				path = prefix + "." + name
+			}
+			if _, ok := seen[path]; !ok {
+				seen[path] = struct{}{}
+				*dst = append(*dst, path)
+			}
+			if len(s.Sels) > 0 {
+				collectNestedPaths(dst, seen, path, s.Sels)
 			}
 		case *selected.TypeAssertion:
-			collectFromTypeAssertion(dst, seen, s.Sels)
+			collectNestedPaths(dst, seen, prefix, s.Sels)
 		case *selected.TypenameField:
 			continue
 		}

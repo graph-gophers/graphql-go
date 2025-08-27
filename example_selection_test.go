@@ -12,10 +12,16 @@ type (
 	userResolver struct{ u user }
 )
 
-func (r *userResolver) ID() graphql.ID                              { return graphql.ID(r.u.id) }
-func (r *userResolver) Name() *string                               { return &r.u.name }
-func (r *userResolver) Email() *string                              { return &r.u.email }
-func (r *userResolver) Friends(ctx context.Context) []*userResolver { return nil }
+func (r *userResolver) ID() graphql.ID { return graphql.ID(r.u.id) }
+func (r *userResolver) Name() *string  { return &r.u.name }
+func (r *userResolver) Email() *string { return &r.u.email }
+func (r *userResolver) Friends(ctx context.Context) []*userResolver {
+	// Return a couple of dummy friends (data itself not important for field selection example)
+	return []*userResolver{
+		{u: user{id: "F1", name: "Bob"}},
+		{u: user{id: "F2", name: "Carol"}},
+	}
+}
 
 type root struct{}
 
@@ -34,8 +40,8 @@ func Example_selectedFieldNames() {
         type User { id: ID! name: String email: String friends: [User!]! }
     `
 	schema := graphql.MustParseSchema(s, &root{})
-	query := `query { user(id: "U1") { id name } }`
+	query := `query { user(id: "U1") { id name friends { id name } } }`
 	_ = schema.Exec(context.Background(), query, "", nil)
 	// Output:
-	// [id name]
+	// [id name friends friends.id friends.name]
 }
