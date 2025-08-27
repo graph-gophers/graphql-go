@@ -1,9 +1,8 @@
 # CHANGELOG
 
-[Unreleased]
+[v1.7.1]
 
 * [IMPROVEMENT] `SelectedFieldNames` now returns dot-delimited nested field paths (e.g. `products`, `products.id`, `products.category`, `products.category.id`). Intermediate container object/list paths are included so resolvers can check for both a branch (`products.category`) and its leaves (`products.category.id`). `HasSelectedField` and `SortedSelectedFieldNames` operate on these paths. This aligns behavior with typical resolver projection needs and fixes missing nested selections.
-
 * [BUGFIX] Reject object, interface, and input object type definitions that declare zero fields/input values (spec compliance).
 * [IMPROVEMENT] Optimize overlapping field validation to avoid quadratic memory blowups on large sibling field lists.
 * [FEATURE] Add configurable safety valve for overlapping field comparison count with `OverlapValidationLimit(n)` schema option (0 disables the cap). When exceeded validation aborts early with rule `OverlapValidationLimitExceeded`. Disabled by default.
