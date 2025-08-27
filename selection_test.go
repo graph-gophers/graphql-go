@@ -85,10 +85,35 @@ func TestFieldSelectionHelpers(t *testing.T) {
 		expectSorted []string
 		hasChecks    map[string]bool
 	}{
-		{name: "enabled order", query: `query { customer { name id } }`, expectNames: []string{"name", "id"}, expectSorted: []string{"id", "name"}, hasChecks: map[string]bool{"id": true, "name": true}},
-		{name: "one field", query: `query { customer { id } }`, expectNames: []string{"id"}, expectSorted: []string{"id"}, hasChecks: map[string]bool{"id": true, "name": false}},
-		{name: "nested paths", query: `query { customer { items { id name category { id } } id } }`, expectNames: []string{"items", "items.id", "items.name", "items.category", "items.category.id", "id"}, expectSorted: []string{"id", "items", "items.category", "items.category.id", "items.id", "items.name"}, hasChecks: map[string]bool{"items": true, "items.id": true, "items.name": true, "items.category": true, "items.category.id": true, "id": true}},
-		{name: "disabled", schemaOpts: []graphql.SchemaOpt{graphql.DisableFieldSelections()}, query: `query { customer { name id } }`, expectNames: []string{}, expectSorted: []string{}, hasChecks: map[string]bool{"id": false, "name": false}},
+		{
+			name:         "enabled order",
+			query:        `query { customer { name id } }`,
+			expectNames:  []string{"name", "id"},
+			expectSorted: []string{"id", "name"},
+			hasChecks:    map[string]bool{"id": true, "name": true},
+		},
+		{
+			name:         "one field",
+			query:        `query { customer { id } }`,
+			expectNames:  []string{"id"},
+			expectSorted: []string{"id"},
+			hasChecks:    map[string]bool{"id": true, "name": false},
+		},
+		{
+			name:         "nested paths",
+			query:        `query { customer { items { id name category { id } } id } }`,
+			expectNames:  []string{"items", "items.id", "items.name", "items.category", "items.category.id", "id"},
+			expectSorted: []string{"id", "items", "items.category", "items.category.id", "items.id", "items.name"},
+			hasChecks:    map[string]bool{"items": true, "items.id": true, "items.name": true, "items.category": true, "items.category.id": true, "id": true},
+		},
+		{
+			name:         "disabled",
+			schemaOpts:   []graphql.SchemaOpt{graphql.DisableFieldSelections()},
+			query:        `query { customer { name id } }`,
+			expectNames:  []string{},
+			expectSorted: []string{},
+			hasChecks:    map[string]bool{"id": false, "name": false},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -108,10 +133,30 @@ func TestSelectedFieldNames_FragmentsAliasesMeta(t *testing.T) {
 		expectNames []string
 		hasChecks   map[string]bool
 	}{
-		{"alias ignored", `query { customer { idAlias: id name } }`, []string{"id", "name"}, map[string]bool{"id": true, "idAlias": false, "name": true}},
-		{"fragment spread", `fragment CFields on Customer { id name } query { customer { ...CFields } }`, []string{"id", "name"}, map[string]bool{"id": true, "name": true}},
-		{"inline fragment", `query { customer { id ... on Customer { id name } } }`, []string{"id", "name"}, map[string]bool{"id": true, "name": true}},
-		{"meta excluded", `query { customer { id __typename name } }`, []string{"id", "name"}, map[string]bool{"id": true, "name": true, "__typename": false}},
+		{
+			name:        "alias ignored",
+			query:       `query { customer { idAlias: id name } }`,
+			expectNames: []string{"id", "name"},
+			hasChecks:   map[string]bool{"id": true, "idAlias": false, "name": true},
+		},
+		{
+			name:        "fragment spread",
+			query:       `fragment CFields on Customer { id name } query { customer { ...CFields } }`,
+			expectNames: []string{"id", "name"},
+			hasChecks:   map[string]bool{"id": true, "name": true},
+		},
+		{
+			name:        "inline fragment",
+			query:       `query { customer { id ... on Customer { id name } } }`,
+			expectNames: []string{"id", "name"},
+			hasChecks:   map[string]bool{"id": true, "name": true},
+		},
+		{
+			name:        "meta excluded",
+			query:       `query { customer { id __typename name } }`,
+			expectNames: []string{"id", "name"},
+			hasChecks:   map[string]bool{"id": true, "name": true, "__typename": false},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
