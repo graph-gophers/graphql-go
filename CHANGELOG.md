@@ -1,6 +1,10 @@
 # CHANGELOG
 
-[v1.7.1]
+[v1.7.2](https://github.com/graph-gophers/graphql-go/releases/tag/v1.7.2) Release v1.7.2
+
+* [BUGFIX] Fix checksum mismatch between direct git access and golang proxy for v1.7.1. This version contains identical functionality to v1.7.1 but with proper tag creation to ensure consistent checksums across all proxy configurations.
+
+[v1.7.1](https://github.com/graph-gophers/graphql-go/releases/tag/v1.7.1) Release v1.7.1
 
 * [IMPROVEMENT] `SelectedFieldNames` now returns dot-delimited nested field paths (e.g. `products`, `products.id`, `products.category`, `products.category.id`). Intermediate container object/list paths are included so resolvers can check for both a branch (`products.category`) and its leaves (`products.category.id`). `HasSelectedField` and `SortedSelectedFieldNames` operate on these paths. This aligns behavior with typical resolver projection needs and fixes missing nested selections.
 * [BUGFIX] Reject object, interface, and input object type definitions that declare zero fields/input values (spec compliance).
