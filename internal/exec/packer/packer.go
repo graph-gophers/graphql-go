@@ -314,7 +314,7 @@ func (p *ValuePacker) Pack(value interface{}) (reflect.Value, error) {
 		return reflect.Value{}, errors.Errorf("got null for non-null")
 	}
 
-	coerced, err := unmarshalInput(p.ValueType, value)
+	coerced, err := UnmarshalInput(p.ValueType, value)
 	if err != nil {
 		return reflect.Value{}, fmt.Errorf("could not unmarshal %#v (%T) into %s: %s", value, value, p.ValueType, err)
 	}
@@ -337,7 +337,7 @@ func (p *unmarshalerPacker) Pack(value interface{}) (reflect.Value, error) {
 	return v.Elem(), nil
 }
 
-func unmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
+func UnmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
 	if reflect.TypeOf(input) == typ {
 		return input, nil
 	}
