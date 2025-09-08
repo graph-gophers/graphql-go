@@ -15,6 +15,7 @@ While still under development (`internal` APIs are almost certainly subject to c
 - resolvers are matched to the schema based on method sets (can resolve a GraphQL schema with a Go interface or Go struct).
 - handles panics in resolvers
 - parallel execution of resolvers
+- inspect the selected fields and their args to prefetch data and avoid the N+1 query problem
 - subscriptions
   - [sample WS transport](https://github.com/graph-gophers/graphql-transport-ws)
 
