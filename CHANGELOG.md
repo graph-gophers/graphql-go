@@ -1,5 +1,10 @@
 # CHANGELOG
 
+[v1.8.0](https://github.com/graph-gophers/graphql-go/releases/tag/v1.8.0) Release v1.8.0
+
+* [FEATURE] Added `DecodeSelectedFieldArgs` helper function to decode argument values for any (nested) selected field path directly from a resolver context, enabling efficient multi-level prefetching without per-resolver argument reflection. This enables selective, multi‑level batching (Category → Products → Reviews) by loading only requested fields, mitigating N+1 issues despite complex filters or pagination.
+* [CHORE] Bump Go version in go.mod file to v1.24 to be one minor version less than the latest stable Go release.
+
 [v1.7.2](https://github.com/graph-gophers/graphql-go/releases/tag/v1.7.2) Release v1.7.2
 
 * [BUGFIX] Fix checksum mismatch between direct git access and golang proxy for v1.7.1. This version contains identical functionality to v1.7.1 but with proper tag creation to ensure consistent checksums across all proxy configurations.
