@@ -880,7 +880,7 @@ func validateName(c *context, locs []errors.Location, name string, rule string, 
 
 func validateNameCustomMsg(c *context, locs []errors.Location, rule string, msg func() string) {
 	if len(locs) > 1 {
-		c.addErrMultiLoc(locs, rule, msg())
+		c.addErrMultiLoc(locs, rule, "%s", msg())
 		return
 	}
 }

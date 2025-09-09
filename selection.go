@@ -4,15 +4,15 @@ import (
 	"context"
 	"sort"
 
-	"github.com/graph-gophers/graphql-go/internal/selections"
+	"github.com/graph-gophers/graphql-go/internal/exec/selections"
 )
 
 // SelectedFieldNames returns the set of selected field paths underneath the
-// the current resolver. Paths are dot-delimited for nested structures (e.g.
-// "products", "products.id", "products.category.id"). Immediate child field
-// names are always present (even when they have further children). Order preserves
-// the first appearance in the query after fragment flattening, performing a
-// depth-first traversal.
+// current resolver. Paths are dot-delimited for nested structures (e.g. "products",
+// "products.id", "products.category.id"). Immediate child field names are always
+// present (even when they have further children). Order preserves the first
+// appearance in the query after fragment flattening, performing a depth-first
+// traversal.
 // It returns an empty slice when the current field's return type is a leaf
 // (scalar / enum) or when DisableFieldSelections was used at schema creation.
 // The returned slice is a copy safe for caller modification.
@@ -55,4 +55,26 @@ func SortedSelectedFieldNames(ctx context.Context) []string {
 	copy(out, names)
 	sort.Strings(out)
 	return out
+}
+
+// DecodeSelectedFieldArgs decodes the argument map for the given path into dst.
+// It returns ok=false if the path or its arguments are absent. Results are cached per
+// (path, concrete struct type) to avoid repeated reflection cost; repeated successful decodes
+// copy a previously cached value into dst.
+//
+// Example:
+//
+//	type BooksArgs struct { Top int32 }
+//	var args BooksArgs
+//	ok, err := graphql.DecodeSelectedFieldArgs(ctx, "books", &args)
+//	if ok { /* use args.Top */ }
+func DecodeSelectedFieldArgs(ctx context.Context, path string, dst interface{}) (bool, error) {
+	if dst == nil {
+		return false, nil
+	}
+	lazy := selections.FromContext(ctx)
+	if lazy == nil {
+		return false, nil
+	}
+	return lazy.DecodeArgsInto(path, dst)
 }
