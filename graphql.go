@@ -16,6 +16,7 @@ import (
 	"github.com/nauto/graphql-go/introspection"
 	"github.com/nauto/graphql-go/log"
 	"github.com/nauto/graphql-go/trace"
+	"github.com/sirupsen/logrus"
 )
 
 // ParseSchema parses a GraphQL schema and attaches the given root resolver. It returns an error if
@@ -155,22 +156,51 @@ func (s *Schema) Exec(ctx context.Context, queryString string, operationName str
 }
 
 func (s *Schema) exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, res *resolvable.Schema) *Response {
+	var requestID string
+	if ctx.Value("request_id") != nil {
+		requestID, _ = ctx.Value("request_id").(string)
+	}
+	logrus.WithField("request_id", requestID).Info("GQL lib: Starting GraphQL execution")
+
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
+		logrus.WithFields(logrus.Fields{
+			"request_id": requestID,
+			"error":      qErr.Error(),
+		}).Error("GQL lib: Query parsing failed")
 		return &Response{Errors: []*errors.QueryError{qErr}}
 	}
+
+	logrus.WithField("request_id", requestID).Info("GQL lib: Query parsing successful")
 
 	validationFinish := s.validationTracer.TraceValidation()
 	errs := validation.Validate(s.schema, doc, s.maxDepth)
 	validationFinish(errs)
 	if len(errs) != 0 {
+		logrus.WithFields(logrus.Fields{
+			"request_id":  requestID,
+			"error_count": len(errs),
+		}).Error("GQL lib: Query validation failed")
 		return &Response{Errors: errs}
 	}
 
+	logrus.WithField("request_id", requestID).Debug("GQL lib: Query validation successful")
+
 	op, err := getOperation(doc, operationName)
 	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"request_id":     requestID,
+			"operation_name": operationName,
+			"error":          err.Error(),
+		}).Error("GQL lib: Get operation failed")
 		return &Response{Errors: []*errors.QueryError{errors.Errorf("%s", err)}}
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"request_id":     requestID,
+		"operation_name": operationName,
+		"operation_type": op.Type,
+	}).Info("GQL lib: Operation resolved successfully")
 
 	// Fill in variables with the defaults from the operation
 	if variables == nil {
@@ -200,9 +230,33 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		}
 		varTypes[v.Name.Name] = introspection.WrapType(t)
 	}
+	logrus.WithFields(logrus.Fields{
+		"request_id":      requestID,
+		"variable_count":  len(variables),
+		"max_parallelism": s.maxParallelism,
+	}).Info("GQL lib: Starting query execution")
+
 	traceCtx, finish := s.tracer.TraceQuery(ctx, queryString, operationName, variables, varTypes)
+	logrus.WithFields(logrus.Fields{
+		"request_id": requestID,
+	}).Info("GQL lib: Query tracer setup successful")
+
 	data, errs := r.Execute(traceCtx, res, op)
+	logrus.WithFields(logrus.Fields{
+		"request_id":  requestID,
+		"has_data":    data != nil,
+		"error_count": len(errs),
+	}).Info("GQL lib: After query execution")
+
 	finish(errs)
+
+	logrus.WithFields(logrus.Fields{
+		"request_id":  requestID,
+		"has_data":    data != nil,
+		"data":        string(data),
+		"error_count": len(errs),
+		"errors":      errs,
+	}).Info("GQL lib: Query execution completed")
 
 	return &Response{
 		Data:   data,
