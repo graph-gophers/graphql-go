@@ -26,14 +26,15 @@ type fieldInfo struct {
 }
 
 type context struct {
-	schema           *ast.Schema
-	doc              *ast.ExecutableDefinition
-	errs             []*errors.QueryError
-	opErrs           map[*ast.OperationDefinition][]*errors.QueryError
-	usedVars         map[*ast.OperationDefinition]varSet
-	fieldMap         map[*ast.Field]fieldInfo
-	overlapValidated map[selectionPair]struct{}
-	maxDepth         int
+	schema              *ast.Schema
+	doc                 *ast.ExecutableDefinition
+	errs                []*errors.QueryError
+	opErrs              map[*ast.OperationDefinition][]*errors.QueryError
+	usedVars            map[*ast.OperationDefinition]varSet
+	fieldMap            map[*ast.Field]fieldInfo
+	overlapValidated    map[selectionPair]struct{}
+	maxDepth            int
+	maxSelectionSetSize int
 }
 
 func (c *context) addErr(loc errors.Location, rule string, format string, a ...interface{}) {
@@ -53,20 +54,21 @@ type opContext struct {
 	ops []*ast.OperationDefinition
 }
 
-func newContext(s *ast.Schema, doc *ast.ExecutableDefinition, maxDepth int) *context {
+func newContext(s *ast.Schema, doc *ast.ExecutableDefinition, maxDepth int, maxSelectionSetSize int) *context {
 	return &context{
-		schema:           s,
-		doc:              doc,
-		opErrs:           make(map[*ast.OperationDefinition][]*errors.QueryError),
-		usedVars:         make(map[*ast.OperationDefinition]varSet),
-		fieldMap:         make(map[*ast.Field]fieldInfo),
-		overlapValidated: make(map[selectionPair]struct{}),
-		maxDepth:         maxDepth,
+		schema:              s,
+		doc:                 doc,
+		opErrs:              make(map[*ast.OperationDefinition][]*errors.QueryError),
+		usedVars:            make(map[*ast.OperationDefinition]varSet),
+		fieldMap:            make(map[*ast.Field]fieldInfo),
+		overlapValidated:    make(map[selectionPair]struct{}),
+		maxDepth:            maxDepth,
+		maxSelectionSetSize: maxSelectionSetSize,
 	}
 }
 
-func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string]interface{}, maxDepth int) []*errors.QueryError {
-	c := newContext(s, doc, maxDepth)
+func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string]interface{}, maxDepth int, maxSelectionSetSize int) []*errors.QueryError {
+	c := newContext(s, doc, maxDepth, maxSelectionSetSize)
 
 	opNames := make(nameSet)
 	fragUsedBy := make(map[*ast.FragmentDefinition][]*ast.OperationDefinition)
@@ -287,6 +289,24 @@ func validateMaxDepth(c *opContext, sels []ast.Selection, visited map[*ast.Fragm
 }
 
 func validateSelectionSet(c *opContext, sels []ast.Selection, t ast.NamedType) {
+	// Check if the selection set size exceeds the maximum allowed
+	if c.maxSelectionSetSize > 0 && len(sels) > c.maxSelectionSetSize {
+		// Get the location of the first selection for error reporting
+		var loc errors.Location
+		if len(sels) > 0 {
+			switch sel := sels[0].(type) {
+			case *ast.Field:
+				loc = sel.Alias.Loc
+			case *ast.InlineFragment:
+				loc = sel.Loc
+			case *ast.FragmentSpread:
+				loc = sel.Loc
+			}
+		}
+		c.addErr(loc, "MaxSelectionSetSizeExceeded", "Selection set has %d selections, which exceeds the maximum allowed size", len(sels))
+		return // Don't continue validation to avoid expensive O(n²) overlap checks
+	}
+
 	for _, sel := range sels {
 		validateSelection(c, sel, t)
 	}

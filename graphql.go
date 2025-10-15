@@ -84,6 +84,7 @@ type Schema struct {
 	directives               []directives.Directive
 	maxQueryLength           int
 	maxDepth                 int
+	maxSelectionSetSize      int
 	maxParallelism           int
 	rateLimiter              ratelimit.RateLimiter
 	tracer                   tracer.Tracer
@@ -134,6 +135,15 @@ func UseFieldResolvers() SchemaOpt {
 func MaxDepth(n int) SchemaOpt {
 	return func(s *Schema) {
 		s.maxDepth = n
+	}
+}
+
+// MaxSelectionSetSize specifies the maximum number of selections (fields) allowed in a single selection set.
+// This helps prevent DDoS attacks where an attacker sends queries with thousands of fields at the same level.
+// The default is 0 which disables this check. A recommended value is 100-1000 depending on your schema complexity.
+func MaxSelectionSetSize(n int) SchemaOpt {
+	return func(s *Schema) {
+		s.maxSelectionSetSize = n
 	}
 }
 
@@ -270,7 +280,7 @@ func (s *Schema) ValidateWithVariables(queryString string, variables map[string]
 		return []*errors.QueryError{qErr}
 	}
 
-	return validation.Validate(s.schema, doc, variables, s.maxDepth)
+	return validation.Validate(s.schema, doc, variables, s.maxDepth, s.maxSelectionSetSize)
 }
 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
@@ -297,7 +307,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	}
 
 	validationFinish := s.validationTracer.TraceValidation(ctx)
-	errs := validation.Validate(s.schema, doc, variables, s.maxDepth)
+	errs := validation.Validate(s.schema, doc, variables, s.maxDepth, s.maxSelectionSetSize)
 	validationFinish(errs)
 	if len(errs) != 0 {
 		return &Response{Errors: errs}
