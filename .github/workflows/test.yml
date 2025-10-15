@@ -1,0 +1,25 @@
+name: Tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - name: Check out code
+      uses: actions/checkout@main
+
+    - name: Set up Go
+      uses: actions/setup-go@main
+      with:
+        go-version-file: go.mod
+
+    - name: Run tests
+      run: go test -v -race ./...
