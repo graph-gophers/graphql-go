@@ -273,6 +273,18 @@ type Tracer interface {
 }
 ```
 
-
 ### [Examples](https://github.com/graph-gophers/graphql-go/wiki/Examples)
 
+## Testing
+
+### Run All Tests
+
+```bash
+go test ./... -count=1
+```
+
+### Run Memory Benchmarks
+
+```bash
+go test -run=^$ -bench='BenchmarkMemory.*' -benchmem .
+```
