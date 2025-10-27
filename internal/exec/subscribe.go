@@ -146,7 +146,7 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 						}
 
 						if !propagateChildError {
-							out.WriteString(fmt.Sprintf(`{"%s":`, f.field.Alias))
+							fmt.Fprintf(out, `{"%s":`, f.field.Alias)
 							out.Write(buf.Bytes())
 							out.WriteString(`}`)
 						}
