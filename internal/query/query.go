@@ -96,9 +96,33 @@ func parseFragment(l *common.Lexer) *ast.FragmentDefinition {
 }
 
 func parseSelectionSet(l *common.Lexer) []ast.Selection {
+	const maxRepeatedTokens = 100 // Prevent DDoS attacks with repeated fields like "a a a a..."
+
 	var sels []ast.Selection
+	var prevFieldName string
+	repeatCount := 0
+
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
+		// Detect repeated identical field names to prevent DDoS attacks
+		// Check the token text before consuming to detect patterns like "a a a a..."
+		if l.Peek() == scanner.Ident {
+			currentFieldName := l.TokenText()
+			if currentFieldName == prevFieldName {
+				repeatCount++
+				if repeatCount >= maxRepeatedTokens {
+					l.SyntaxError("invalid query")
+				}
+			} else {
+				repeatCount = 0
+				prevFieldName = currentFieldName
+			}
+		} else {
+			// Reset for non-field tokens (fragments, etc.)
+			repeatCount = 0
+			prevFieldName = ""
+		}
+
 		sels = append(sels, parseSelection(l))
 	}
 	l.ConsumeToken('}')

@@ -57,6 +57,11 @@ func (l *Lexer) Peek() rune {
 	return l.next
 }
 
+// TokenText returns the text of the current token without consuming it.
+func (l *Lexer) TokenText() string {
+	return l.sc.TokenText()
+}
+
 // ConsumeWhitespace consumes whitespace and tokens equivalent to whitespace (e.g. commas and comments).
 //
 // Consumed comment characters will build the description for the next type or field encountered.
