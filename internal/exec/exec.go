@@ -99,7 +99,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 	async := !serially && selected.HasAsyncSel(sels)
 
 	var fields []*fieldToExec
-	collectFieldsToResolve(sels, s, resolver, &fields, make(map[string]*fieldToExec, len(fields)))
+	collectFieldsToResolve(sels, s, resolver, &fields, make(map[string]*fieldToExec))
 
 	if async {
 		var wg sync.WaitGroup
