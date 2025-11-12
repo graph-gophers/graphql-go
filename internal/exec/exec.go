@@ -346,7 +346,7 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *ast.List, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *bytes.Buffer) {
 	l := resolver.Len()
 	entryouts := make([]*bytes.Buffer, l)
-	for i := 0; i < l; i++ {
+	for i := range l {
 		entryouts[i] = getBuffer()
 	}
 	defer func() {

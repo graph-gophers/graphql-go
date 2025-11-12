@@ -52,11 +52,11 @@ func TestBufferPool(t *testing.T) {
 			t.Skip("buffer didn't grow large enough for test")
 		}
 
-		putBuffer(buf) // Should not be added to pool
+		putBuffer(buf)
 
 		buf2 := getBuffer()
-		if buf2.Cap() > maxBufferCap {
-			t.Errorf("got oversized buffer from pool, capacity: %d", buf2.Cap())
+		if buf2 == buf {
+			t.Errorf("oversized buffer was added to the pool")
 		}
 		putBuffer(buf2)
 	})

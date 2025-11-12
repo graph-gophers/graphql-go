@@ -50,11 +50,9 @@ func getFieldMap() map[string]*fieldToExec {
 }
 
 func putFieldMap(m map[string]*fieldToExec) {
-	if len(m) > maxFieldMapSize {
+	if m == nil || len(m) > maxFieldMapSize {
 		return
 	}
-	for k := range m {
-		delete(m, k)
-	}
+	clear(m)
 	fieldMapPool.Put(m)
 }
