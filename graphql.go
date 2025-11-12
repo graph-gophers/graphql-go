@@ -28,7 +28,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 	s := &Schema{
 		schema:             schema.New(),
 		maxParallelism:     10,
-		maxPooledBufferCap: 16 * 1024, // 16KB
+		maxPooledBufferCap: 8 * 1024, // 8KB
 		tracer:             noop.Tracer{},
 		logger:             &log.DefaultLogger{},
 		panicHandler:       &errors.DefaultPanicHandler{},
@@ -149,7 +149,7 @@ func MaxParallelism(n int) SchemaOpt {
 }
 
 // MaxPooledBufferCap sets the maximum buffer capacity (in bytes) for pooled buffers.
-// Buffers larger than this will not be returned to the pool. The default is 16KB.
+// Buffers larger than this will not be returned to the pool. The default is 8KB.
 // Set to 0 to disable buffer pooling entirely (not recommended for most use cases).
 func MaxPooledBufferCap(n int) SchemaOpt {
 	return func(s *Schema) { s.maxPooledBufferCap = n }

@@ -68,7 +68,7 @@ opts := []graphql.SchemaOpt{graphql.UseFieldResolvers()}
 schema := graphql.MustParseSchema(s, &query{}, opts...)
 ```
 
-To tune performance, use `MaxPooledBufferCap(n)` to control buffer pooling. Buffers larger than `n` bytes won't be reused (default: 16KB). Increase this if your responses are typically large and you want to reduce allocations. Decrease it to limit memory usage in memory-constrained environments. Set to `0` to disable buffer pooling entirely.
+To tune performance, use `MaxPooledBufferCap(n)` to control buffer pooling. Buffers larger than `n` bytes won't be reused (default: 8KB). Increase this if your responses are typically large and you want to reduce allocations. Decrease it to limit memory usage in memory-constrained environments. Set to `0` to disable buffer pooling entirely.
 
 When using `UseFieldResolvers` schema option, a struct field will be used *only* when:
 - there is no method for a struct field
