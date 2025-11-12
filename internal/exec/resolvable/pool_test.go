@@ -13,7 +13,7 @@ func testBufferPool() *bufferPool {
 				return new(bytes.Buffer)
 			},
 		},
-		maxBufferCap: 64 * 1024,
+		maxBufferCap: 1024,
 	}
 }
 
@@ -34,7 +34,7 @@ func TestBufferPool(t *testing.T) {
 
 	t.Run("does not pool oversized buffers", func(t *testing.T) {
 		buf := s.Get()
-		large := make([]byte, 65*1024)
+		large := make([]byte, 1025)
 		buf.Write(large)
 
 		if buf.Cap() <= s.maxBufferCap {
