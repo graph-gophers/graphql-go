@@ -41,8 +41,8 @@ type extensionser interface {
 }
 
 func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *ast.OperationDefinition) ([]byte, []*errors.QueryError) {
-	out := getBuffer()
-	defer putBuffer(out)
+	out := s.BufferPool().Get()
+	defer s.BufferPool().Put(out)
 
 	func() {
 		defer r.handlePanic(ctx)
@@ -99,9 +99,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 	async := !serially && selected.HasAsyncSel(sels)
 
 	var fields []*fieldToExec
-	fieldMap := getFieldMap()
-	collectFieldsToResolve(sels, s, resolver, &fields, fieldMap)
-	putFieldMap(fieldMap)
+	collectFieldsToResolve(sels, s, resolver, &fields, make(map[string]*fieldToExec, len(fields)))
 
 	if async {
 		var wg sync.WaitGroup
@@ -110,14 +108,14 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 			go func(f *fieldToExec) {
 				defer wg.Done()
 				defer r.handlePanic(ctx)
-				f.out = getBuffer()
+				f.out = s.BufferPool().Get()
 				execFieldSelection(ctx, r, s, f, &pathSegment{path, f.field.Alias}, true)
 			}(f)
 		}
 		wg.Wait()
 	} else {
 		for _, f := range fields {
-			f.out = getBuffer()
+			f.out = s.BufferPool().Get()
 			execFieldSelection(ctx, r, s, f, &pathSegment{path, f.field.Alias}, true)
 		}
 	}
@@ -131,7 +129,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 			out.Reset()
 			out.Write([]byte("null"))
 			for _, field := range fields {
-				putBuffer(field.out)
+				s.BufferPool().Put(field.out)
 			}
 			return
 		}
@@ -148,7 +146,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 	out.WriteByte('}')
 
 	for _, f := range fields {
-		putBuffer(f.out)
+		s.BufferPool().Put(f.out)
 	}
 }
 
@@ -347,11 +345,11 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 	l := resolver.Len()
 	entryouts := make([]*bytes.Buffer, l)
 	for i := range l {
-		entryouts[i] = getBuffer()
+		entryouts[i] = s.BufferPool().Get()
 	}
 	defer func() {
 		for _, buf := range entryouts {
-			putBuffer(buf)
+			s.BufferPool().Put(buf)
 		}
 	}()
 
@@ -395,6 +393,15 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 		out.Write(entryout.Bytes())
 	}
 	out.WriteByte(']')
+}
+
+func copyBuffer(buf *bytes.Buffer) []byte {
+	if buf.Len() == 0 {
+		return nil
+	}
+	result := make([]byte, buf.Len())
+	copy(result, buf.Bytes())
+	return result
 }
 
 func unwrapNonNull(t ast.Type) (ast.Type, bool) {

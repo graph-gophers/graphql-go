@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- [IMPROVEMENT] Implement buffer and map pooling to reduce allocations and memory usage
+- [IMPROVEMENT] Implement buffer pooling to reduce allocations and memory usage, add MaxPooledBufferCap option to tune memory usage
 
 [v1.8.0](https://github.com/graph-gophers/graphql-go/releases/tag/v1.8.0) Release v1.8.0
 

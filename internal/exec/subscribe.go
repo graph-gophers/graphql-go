@@ -122,7 +122,7 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 					Tracer:  r.Tracer,
 					Logger:  r.Logger,
 				}
-				out := getBuffer()
+				out := s.BufferPool().Get()
 				func() {
 					timeout := r.SubscribeResolverTimeout
 					if timeout == 0 {
@@ -136,8 +136,8 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 					func() {
 						defer subR.handlePanic(subCtx)
 
-						buf := getBuffer()
-						defer putBuffer(buf)
+						buf := s.BufferPool().Get()
+						defer s.BufferPool().Put(buf)
 						subR.execSelectionSet(subCtx, f.sels, f.field.Type, &pathSegment{nil, f.field.Alias}, s, resp, buf)
 
 						propagateChildError := false
@@ -153,13 +153,13 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 					}()
 
 					if err := subCtx.Err(); err != nil {
-						putBuffer(out)
+						s.BufferPool().Put(out)
 						c <- &Response{Errors: []*errors.QueryError{errors.Errorf("%s", err)}}
 						return
 					}
 
 					data := copyBuffer(out)
-					putBuffer(out)
+					s.BufferPool().Put(out)
 
 					// Send response within timeout
 					// TODO: maybe block until sent?

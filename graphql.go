@@ -26,11 +26,12 @@ import (
 // resolver, then the schema can not be executed, but it may be inspected (e.g. with [Schema.ToJSON] or [Schema.AST]).
 func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (*Schema, error) {
 	s := &Schema{
-		schema:         schema.New(),
-		maxParallelism: 10,
-		tracer:         noop.Tracer{},
-		logger:         &log.DefaultLogger{},
-		panicHandler:   &errors.DefaultPanicHandler{},
+		schema:             schema.New(),
+		maxParallelism:     10,
+		maxPooledBufferCap: 16 * 1024, // 16KB
+		tracer:             noop.Tracer{},
+		logger:             &log.DefaultLogger{},
+		panicHandler:       &errors.DefaultPanicHandler{},
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -51,7 +52,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		return nil, err
 	}
 
-	r, err := resolvable.ApplyResolver(s.schema, resolver, s.useFieldResolvers)
+	r, err := resolvable.ApplyResolver(s.schema, resolver, s.useFieldResolvers, s.maxPooledBufferCap)
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +79,7 @@ type Schema struct {
 	maxQueryLength           int
 	maxDepth                 int
 	maxParallelism           int
+	maxPooledBufferCap       int
 	tracer                   tracer.Tracer
 	validationTracer         tracer.ValidationTracer
 	logger                   log.Logger
@@ -144,6 +146,13 @@ func MaxParallelism(n int) SchemaOpt {
 	return func(s *Schema) {
 		s.maxParallelism = n
 	}
+}
+
+// MaxPooledBufferCap sets the maximum buffer capacity (in bytes) for pooled buffers.
+// Buffers larger than this will not be returned to the pool. The default is 16KB.
+// Set to 0 to disable buffer pooling entirely (not recommended for most use cases).
+func MaxPooledBufferCap(n int) SchemaOpt {
+	return func(s *Schema) { s.maxPooledBufferCap = n }
 }
 
 // MaxQueryLength specifies the maximum allowed query length in bytes. The default is 0 which disables max length checking.
