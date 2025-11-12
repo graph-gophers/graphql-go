@@ -61,14 +61,11 @@ For more realistic usecases check our [examples section](https://github.com/grap
 ### Resolvers
 
 A resolver must have one method or field for each field of the GraphQL type it resolves. The method or field name has to be [exported](https://golang.org/ref/spec#Exported_identifiers) and match the schema's field's name in a non-case-sensitive way.
-
 You can use struct fields as resolvers by using `SchemaOpt: UseFieldResolvers()`. For example,
 ```
 opts := []graphql.SchemaOpt{graphql.UseFieldResolvers()}
 schema := graphql.MustParseSchema(s, &query{}, opts...)
-```
-
-To tune performance, use `MaxPooledBufferCap(n)` to control buffer pooling. Buffers larger than `n` bytes won't be reused (default: 8KB). Increase this if your responses are typically large and you want to reduce allocations. Decrease it to limit memory usage in memory-constrained environments. Set to `0` to disable buffer pooling entirely.
+```   
 
 When using `UseFieldResolvers` schema option, a struct field will be used *only* when:
 - there is no method for a struct field
@@ -152,6 +149,7 @@ schema := graphql.MustParseSchema(sdl, &RootResolver{}, nil)
 - `UseFieldResolvers()` specifies whether to use struct field resolvers.
 - `MaxDepth(n int)` specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
 - `MaxParallelism(n int)` specifies the maximum number of resolvers per request allowed to run in parallel. The default is 10.
+- `MaxPooledBufferCap(n int)` specifies the maximum buffer size in bytes that will be pooled. Increase to reduce allocations, set to `0` to disable buffer pooling. The default is 8KB.
 - `Tracer(tracer trace.Tracer)` is used to trace queries and fields. It defaults to `noop.Tracer`.
 - `Logger(logger log.Logger)` is used to log panics during query execution. It defaults to `exec.DefaultLogger`.
 - `PanicHandler(panicHandler errors.PanicHandler)` is used to transform panics into errors during query execution. It defaults to `errors.DefaultPanicHandler`.
