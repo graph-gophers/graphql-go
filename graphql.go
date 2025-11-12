@@ -151,8 +151,8 @@ func MaxParallelism(n int) SchemaOpt {
 // MaxPooledBufferCap sets the maximum buffer capacity (in bytes) for pooled buffers.
 // Buffers larger than this will not be returned to the pool. The default is 8KB.
 // Set to 0 to disable buffer pooling entirely (not recommended for most use cases).
-func MaxPooledBufferCap(n int) SchemaOpt {
-	return func(s *Schema) { s.maxPooledBufferCap = n }
+func MaxPooledBufferCap(nBytes int) SchemaOpt {
+	return func(s *Schema) { s.maxPooledBufferCap = nBytes }
 }
 
 // MaxQueryLength specifies the maximum allowed query length in bytes. The default is 0 which disables max length checking.
