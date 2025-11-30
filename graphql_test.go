@@ -163,6 +163,47 @@ func (r *discussPlanResolver) DismissVader(ctx context.Context) (string, error) 
 	return "", errors.New("I find your lack of faith disturbing")
 }
 
+func TestParseSchema_multipleExecutable(t *testing.T) {
+	t.Parallel()
+
+	// Multiple executable schemas, created from the same shared definition.
+	// These can apply distinct options, and resolve queries independently
+	s1 := graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.MaxDepth(2))
+	s2 := graphql.MustWithResolver(s1, &starwars.Resolver{}, graphql.MaxQueryLength(20))
+
+	query := `
+		query {
+			hero {
+				id
+				name
+				friends {
+					name
+				}
+			}
+		}`
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: s1,
+			Query:  query,
+			ExpectedErrors: []*gqlerrors.QueryError{{
+				Message: `Field "name" has depth 3 that exceeds max depth 2`,
+				Rule:    "MaxDepthExceeded",
+				Locations: []gqlerrors.Location{
+					{Line: 7, Column: 6},
+				},
+			}},
+		},
+		{
+			Schema: s2,
+			Query:  query,
+			ExpectedErrors: []*gqlerrors.QueryError{{
+				Message: `query length 75 exceeds the maximum allowed query length of 20 bytes`,
+			}},
+		},
+	})
+}
+
 func TestHelloWorld(t *testing.T) {
 	t.Parallel()
 

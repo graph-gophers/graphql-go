@@ -490,3 +490,75 @@ func Example_resolverFieldTag() {
 	//   }
 	// }
 }
+
+func Example_multipleExecutableSchemas() {
+	schema1 := graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.MaxDepth(8))
+	schema2 := graphql.MustWithResolver(schema1, &starwars.Resolver{}, graphql.MaxDepth(4))
+
+	query := `
+	  query {
+	    hero(episode:EMPIRE) {
+	      name
+	      friendsConnection(first: 1) {
+		    friends {
+	          name
+	          friendsConnection(first: 1) {
+	            friends {
+	              id
+	            }
+	          }
+	        }
+	      }
+	    }
+	  }`
+
+	res1 := schema1.Exec(context.Background(), query, "", nil)
+	res2 := schema2.Exec(context.Background(), query, "", nil)
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+
+	if err := enc.Encode(res1); err != nil {
+		panic(err)
+	}
+
+	if err := enc.Encode(res2); err != nil {
+		panic(err)
+	}
+
+	// output:
+	// {
+	//   "data": {
+	//     "hero": {
+	//       "name": "Luke Skywalker",
+	//       "friendsConnection": {
+	//         "friends": [
+	//           {
+	//             "name": "Han Solo",
+	//             "friendsConnection": {
+	//               "friends": [
+	//                 {
+	//                   "id": "1000"
+	//                 }
+	//               ]
+	//             }
+	//           }
+	//         ]
+	//       }
+	//     }
+	//   }
+	// }
+	// {
+	//   "errors": [
+	//     {
+	//       "message": "Field \"friends\" has depth 5 that exceeds max depth 4",
+	//       "locations": [
+	//         {
+	//           "line": 9,
+	//           "column": 14
+	//         }
+	//       ]
+	//     }
+	//   ]
+	// }
+}

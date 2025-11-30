@@ -25,15 +25,50 @@ import (
 // the Go type signature of the resolvers does not match the schema. If nil is passed as the
 // resolver, then the schema can not be executed, but it may be inspected (e.g. with [Schema.ToJSON] or [Schema.AST]).
 func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (*Schema, error) {
+	var defOpts []SchemaDefOpt
+	var resOpts []SchemaResolveOpt
+
+	for _, opt := range opts {
+		if o, ok := opt.(SchemaDefOpt); ok {
+			defOpts = append(defOpts, o)
+		}
+
+		if o, ok := opt.(SchemaResolveOpt); ok {
+			resOpts = append(resOpts, o)
+		}
+	}
+
+	d := &schemaDef{schema: schema.New()}
+	for _, opt := range defOpts {
+		opt.apply(d)
+	}
+
+	if err := schema.Parse(d.schema, schemaString, d.useStringDescriptions); err != nil {
+		return nil, err
+	}
+
+	if err := d.validateSchema(); err != nil {
+		return nil, err
+	}
+
 	s := &Schema{
-		schema:         schema.New(),
+		schemaDef:      d,
 		maxParallelism: 10,
 		tracer:         noop.Tracer{},
 		logger:         &log.DefaultLogger{},
 		panicHandler:   &errors.DefaultPanicHandler{},
 	}
+
+	return WithResolver(s, resolver, resOpts...)
+}
+
+// WithResolver creates a clone of the schema, applying the new resolver to the clone.
+// Existing options on the original schema are preserved, but can be overridden by providing new options.
+func WithResolver(orig *Schema, resolver interface{}, opts ...SchemaResolveOpt) (*Schema, error) {
+	s := *orig
+
 	for _, opt := range opts {
-		opt(s)
+		opt.apply(&s)
 	}
 
 	if s.validationTracer == nil {
@@ -44,20 +79,13 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 		}
 	}
 
-	if err := schema.Parse(s.schema, schemaString, s.useStringDescriptions); err != nil {
-		return nil, err
-	}
-	if err := s.validateSchema(); err != nil {
-		return nil, err
-	}
-
 	r, err := resolvable.ApplyResolver(s.schema, resolver, s.useFieldResolvers)
 	if err != nil {
 		return nil, err
 	}
 	s.res = r
 
-	return s, nil
+	return &s, nil
 }
 
 // MustParseSchema calls ParseSchema and panics on error.
@@ -69,10 +97,21 @@ func MustParseSchema(schemaString string, resolver interface{}, opts ...SchemaOp
 	return s
 }
 
+// MustWithResolver creates a clone of the schema, applying the new resolver to the clone. Panics on error.
+// See [WithResolver].
+func MustWithResolver(s *Schema, resolver interface{}, opts ...SchemaResolveOpt) *Schema {
+	s, err := WithResolver(s, resolver, opts...)
+	if err != nil {
+		panic(err)
+	}
+
+	return s
+}
+
 // Schema represents a GraphQL schema with an optional resolver.
 type Schema struct {
-	schema *ast.Schema
-	res    *resolvable.Schema
+	*schemaDef
+	res *resolvable.Schema
 
 	allowIntrospection       func(ctx context.Context) bool
 	maxQueryLength           int
@@ -82,11 +121,17 @@ type Schema struct {
 	validationTracer         tracer.ValidationTracer
 	logger                   log.Logger
 	panicHandler             errors.PanicHandler
-	useStringDescriptions    bool
 	subscribeResolverTimeout time.Duration
 	useFieldResolvers        bool
 	disableFieldSelections   bool
 	overlapPairLimit         int
+}
+
+// schemaDef represents a GraphQL schema definition, without a resolver.
+type schemaDef struct {
+	schema *ast.Schema
+
+	useStringDescriptions bool
 }
 
 // AST returns the abstract syntax tree of the GraphQL schema definition.
@@ -102,25 +147,57 @@ func (s *Schema) ASTSchema() *ast.Schema {
 	return s.schema
 }
 
-// SchemaOpt is an option to pass to [ParseSchema] or [MustParseSchema].
-type SchemaOpt func(*Schema)
+// SchemaOpt is an option for creating a GraphQL schema.
+type SchemaOpt interface {
+	schemaOpt()
+}
+
+// SchemaResolveOpt is an option for creating a resolvable GraphQL schema.
+type SchemaResolveOpt interface {
+	SchemaOpt
+
+	apply(*Schema)
+}
+
+type schemaResolveOptFunc func(*Schema)
+
+func (f schemaResolveOptFunc) apply(d *Schema) {
+	f(d)
+}
+
+func (schemaResolveOptFunc) schemaOpt() {}
+
+// SchemaDefOpt is an option for parsing a GraphQL schema definition.
+type SchemaDefOpt interface {
+	SchemaOpt
+
+	apply(*schemaDef)
+}
+
+type schemaDefOptFunc func(*schemaDef)
+
+func (f schemaDefOptFunc) apply(d *schemaDef) {
+	f(d)
+}
+
+func (schemaDefOptFunc) schemaOpt() {}
 
 // UseStringDescriptions enables the usage of double quoted and triple quoted
 // strings as descriptions as per the [June 2018 spec]. When this is not enabled,
 // comments are parsed as descriptions instead.
 //
 // [June 2018 spec]: https://facebook.github.io/graphql/June2018/
-func UseStringDescriptions() SchemaOpt {
-	return func(s *Schema) {
+func UseStringDescriptions() SchemaDefOpt {
+	return schemaDefOptFunc(func(s *schemaDef) {
 		s.useStringDescriptions = true
-	}
+	})
 }
 
 // UseFieldResolvers specifies whether to use struct fields as resolvers.
-func UseFieldResolvers() SchemaOpt {
-	return func(s *Schema) {
+func UseFieldResolvers() SchemaResolveOpt {
+	return schemaResolveOptFunc(func(s *Schema) {
 		s.useFieldResolvers = true
-	}
+	})
 }
 
 // DisableFieldSelections disables capturing child field selections for the
@@ -129,28 +206,30 @@ func UseFieldResolvers() SchemaOpt {
 // selection context is stored. This is an opt-out for applications that never intend
 // to use the feature and want to avoid even its small lazy overhead.
 func DisableFieldSelections() SchemaOpt {
-	return func(s *Schema) { s.disableFieldSelections = true }
+	return schemaResolveOptFunc(func(s *Schema) {
+		s.disableFieldSelections = true
+	})
 }
 
 // MaxDepth specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
-func MaxDepth(n int) SchemaOpt {
-	return func(s *Schema) {
+func MaxDepth(n int) SchemaResolveOpt {
+	return schemaResolveOptFunc(func(s *Schema) {
 		s.maxDepth = n
-	}
+	})
 }
 
 // MaxParallelism specifies the maximum number of resolvers per request allowed to run in parallel. The default is 10.
-func MaxParallelism(n int) SchemaOpt {
-	return func(s *Schema) {
+func MaxParallelism(n int) SchemaResolveOpt {
+	return schemaResolveOptFunc(func(s *Schema) {
 		s.maxParallelism = n
-	}
+	})
 }
 
 // MaxQueryLength specifies the maximum allowed query length in bytes. The default is 0 which disables max length checking.
-func MaxQueryLength(n int) SchemaOpt {
-	return func(s *Schema) {
+func MaxQueryLength(n int) SchemaResolveOpt {
+	return schemaResolveOptFunc(func(s *Schema) {
 		s.maxQueryLength = n
-	}
+	})
 }
 
 // OverlapValidationLimit caps the number of overlapping selection pairs that will be examined
@@ -158,37 +237,37 @@ func MaxQueryLength(n int) SchemaOpt {
 // When the cap is exceeded validation aborts early with an error (rule: OverlapValidationLimitExceeded)
 // to protect against maliciously constructed queries designed to exhaust memory/CPU.
 func OverlapValidationLimit(n int) SchemaOpt {
-	return func(s *Schema) { s.overlapPairLimit = n }
+	return schemaResolveOptFunc(func(s *Schema) { s.overlapPairLimit = n })
 }
 
 // Tracer is used to trace queries and fields. It defaults to [noop.Tracer].
-func Tracer(t tracer.Tracer) SchemaOpt {
-	return func(s *Schema) {
+func Tracer(t tracer.Tracer) SchemaResolveOpt {
+	return schemaResolveOptFunc(func(s *Schema) {
 		s.tracer = t
-	}
+	})
 }
 
 // ValidationTracer is used to trace validation errors. It defaults to [tracer.LegacyNoopValidationTracer].
 // Deprecated: context is needed to support tracing correctly. Use a tracer which implements [tracer.ValidationTracer].
-func ValidationTracer(tracer tracer.LegacyValidationTracer) SchemaOpt { //nolint:staticcheck
-	return func(s *Schema) {
+func ValidationTracer(tracer tracer.LegacyValidationTracer) SchemaResolveOpt { //nolint:staticcheck
+	return schemaResolveOptFunc(func(s *Schema) {
 		s.validationTracer = &validationBridgingTracer{tracer: tracer}
-	}
+	})
 }
 
 // Logger is used to log panics during query execution. It defaults to [log.DefaultLogger].
-func Logger(logger log.Logger) SchemaOpt {
-	return func(s *Schema) {
+func Logger(logger log.Logger) SchemaResolveOpt {
+	return schemaResolveOptFunc(func(s *Schema) {
 		s.logger = logger
-	}
+	})
 }
 
 // PanicHandler is used to customize the panic errors during query execution.
 // It defaults to [errors.DefaultPanicHandler].
-func PanicHandler(panicHandler errors.PanicHandler) SchemaOpt {
-	return func(s *Schema) {
+func PanicHandler(panicHandler errors.PanicHandler) SchemaResolveOpt {
+	return schemaResolveOptFunc(func(s *Schema) {
 		s.panicHandler = panicHandler
-	}
+	})
 }
 
 // RestrictIntrospection accepts a filter func. If this function returns false the introspection is disabled, otherwise it is enabled.
@@ -200,10 +279,10 @@ func PanicHandler(panicHandler errors.PanicHandler) SchemaOpt {
 //	}
 //
 // Do not use it together with [DisableIntrospection], otherwise the option added last takes precedence.
-func RestrictIntrospection(fn func(ctx context.Context) bool) SchemaOpt {
-	return func(s *Schema) {
+func RestrictIntrospection(fn func(ctx context.Context) bool) SchemaResolveOpt {
+	return schemaResolveOptFunc(func(s *Schema) {
 		s.allowIntrospection = fn
-	}
+	})
 }
 
 // DisableIntrospection disables introspection queries. This function is left for backwards compatibility reasons and is just a shorthand for:
@@ -214,19 +293,19 @@ func RestrictIntrospection(fn func(ctx context.Context) bool) SchemaOpt {
 //	graphql.RestrictIntrospection(filter)
 //
 // Deprecated: use [RestrictIntrospection] filter instead. Do not use it together with [RestrictIntrospection], otherwise the option added last takes precedence.
-func DisableIntrospection() SchemaOpt {
-	return func(s *Schema) {
+func DisableIntrospection() SchemaResolveOpt {
+	return schemaResolveOptFunc(func(s *Schema) {
 		s.allowIntrospection = func(context.Context) bool { return false }
-	}
+	})
 }
 
 // SubscribeResolverTimeout is an option to control the amount of time
 // we allow for a single subscribe message resolver to complete it's job
 // before it times out and returns an error to the subscriber.
-func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
-	return func(s *Schema) {
+func SubscribeResolverTimeout(timeout time.Duration) SchemaResolveOpt {
+	return schemaResolveOptFunc(func(s *Schema) {
 		s.subscribeResolverTimeout = timeout
-	}
+	})
 }
 
 // Response represents a typical response of a GraphQL server. It may be encoded to JSON directly or
@@ -347,20 +426,20 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	}
 }
 
-func (s *Schema) validateSchema() error {
+func (d *schemaDef) validateSchema() error {
 	// https://graphql.github.io/graphql-spec/June2018/#sec-Root-Operation-Types
 	// > The query root operation type must be provided and must be an Object type.
-	if err := validateRootOp(s.schema, "query", true); err != nil {
+	if err := validateRootOp(d.schema, "query", true); err != nil {
 		return err
 	}
 	// > The mutation root operation type is optional; if it is not provided, the service does not support mutations.
 	// > If it is provided, it must be an Object type.
-	if err := validateRootOp(s.schema, "mutation", false); err != nil {
+	if err := validateRootOp(d.schema, "mutation", false); err != nil {
 		return err
 	}
 	// > Similarly, the subscription root operation type is also optional; if it is not provided, the service does not
 	// > support subscriptions. If it is provided, it must be an Object type.
-	if err := validateRootOp(s.schema, "subscription", false); err != nil {
+	if err := validateRootOp(d.schema, "subscription", false); err != nil {
 		return err
 	}
 	return nil
