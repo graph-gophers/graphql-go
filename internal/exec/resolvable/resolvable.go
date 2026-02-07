@@ -17,17 +17,6 @@ const (
 	Subscription = "Subscription"
 )
 
-type Schema struct {
-	*Meta
-	ast.Schema
-	Query                Resolvable
-	Mutation             Resolvable
-	Subscription         Resolvable
-	QueryResolver        reflect.Value
-	MutationResolver     reflect.Value
-	SubscriptionResolver reflect.Value
-}
-
 type Resolvable interface {
 	isResolvable()
 }
@@ -113,7 +102,7 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *ast.Schema, resolver interface{}, useFieldResolvers bool) (*Schema, error) {
+func ApplyResolver(s *ast.Schema, resolver interface{}, useFieldResolvers bool, maxPooledBufferCap int) (*Schema, error) {
 	if resolver == nil {
 		return &Schema{Meta: newMeta(s), Schema: *s}, nil
 	}
@@ -183,16 +172,7 @@ func ApplyResolver(s *ast.Schema, resolver interface{}, useFieldResolvers bool) 
 		return nil, err
 	}
 
-	return &Schema{
-		Meta:                 newMeta(s),
-		Schema:               *s,
-		QueryResolver:        reflect.ValueOf(resolvers[Query]),
-		MutationResolver:     reflect.ValueOf(resolvers[Mutation]),
-		SubscriptionResolver: reflect.ValueOf(resolvers[Subscription]),
-		Query:                query,
-		Mutation:             mutation,
-		Subscription:         subscription,
-	}, nil
+	return newSchema(s, resolvers, query, mutation, subscription, maxPooledBufferCap), nil
 }
 
 type execBuilder struct {
