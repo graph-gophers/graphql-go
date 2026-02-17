@@ -41,7 +41,9 @@ type extensionser interface {
 }
 
 func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *ast.OperationDefinition) ([]byte, []*errors.QueryError) {
-	var out bytes.Buffer
+	out := s.BufferPool().Get()
+	defer s.BufferPool().Put(out)
+
 	func() {
 		defer r.handlePanic(ctx)
 		sels := selected.ApplyOperation(&r.Request, s, op)
@@ -63,14 +65,14 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *ast.Ope
 			return
 		}
 
-		r.execSelections(ctx, sels, nil, s, resolver, &out, op.Type == query.Mutation)
+		r.execSelections(ctx, sels, nil, s, resolver, out, op.Type == query.Mutation)
 	}()
 
 	if err := ctx.Err(); err != nil {
 		return nil, []*errors.QueryError{errors.Errorf("%s", err)}
 	}
 
-	return out.Bytes(), r.Errs
+	return copyBuffer(out), r.Errs
 }
 
 type fieldToValidate struct {
@@ -106,14 +108,14 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 			go func(f *fieldToExec) {
 				defer wg.Done()
 				defer r.handlePanic(ctx)
-				f.out = new(bytes.Buffer)
+				f.out = s.BufferPool().Get()
 				execFieldSelection(ctx, r, s, f, &pathSegment{path, f.field.Alias}, true)
 			}(f)
 		}
 		wg.Wait()
 	} else {
 		for _, f := range fields {
-			f.out = new(bytes.Buffer)
+			f.out = s.BufferPool().Get()
 			execFieldSelection(ctx, r, s, f, &pathSegment{path, f.field.Alias}, true)
 		}
 	}
@@ -126,6 +128,9 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 		if _, ok := f.field.Type.(*ast.NonNull); ok && resolvedToNull(f.out) {
 			out.Reset()
 			out.Write([]byte("null"))
+			for _, field := range fields {
+				s.BufferPool().Put(field.out)
+			}
 			return
 		}
 
@@ -139,6 +144,10 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 		out.Write(f.out.Bytes())
 	}
 	out.WriteByte('}')
+
+	for _, f := range fields {
+		s.BufferPool().Put(f.out)
+	}
 }
 
 func collectFieldsToResolve(sels []selected.Selection, s *resolvable.Schema, resolver reflect.Value, fields *[]*fieldToExec, fieldByAlias map[string]*fieldToExec) {
@@ -334,7 +343,15 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 
 func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *ast.List, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *bytes.Buffer) {
 	l := resolver.Len()
-	entryouts := make([]bytes.Buffer, l)
+	entryouts := make([]*bytes.Buffer, l)
+	for i := range l {
+		entryouts[i] = s.BufferPool().Get()
+	}
+	defer func() {
+		for _, buf := range entryouts {
+			s.BufferPool().Put(buf)
+		}
+	}()
 
 	if selected.HasAsyncSel(sels) {
 		// Limit the number of concurrent goroutines spawned as it can lead to large
@@ -346,7 +363,7 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 			go func(i int) {
 				defer func() { <-sem }()
 				defer r.handlePanic(ctx)
-				r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), &entryouts[i])
+				r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), entryouts[i])
 			}(i)
 		}
 		for i := 0; i < concurrency; i++ {
@@ -354,7 +371,7 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 		}
 	} else {
 		for i := 0; i < l; i++ {
-			r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), &entryouts[i])
+			r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), entryouts[i])
 		}
 	}
 
@@ -364,7 +381,7 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 	for i, entryout := range entryouts {
 		// If the list wraps a non-null type and one of the list elements
 		// resolves to null, then the entire list resolves to null.
-		if listOfNonNull && resolvedToNull(&entryout) {
+		if listOfNonNull && resolvedToNull(entryout) {
 			out.Reset()
 			out.WriteString("null")
 			return
@@ -376,6 +393,15 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 		out.Write(entryout.Bytes())
 	}
 	out.WriteByte(']')
+}
+
+func copyBuffer(buf *bytes.Buffer) []byte {
+	if buf.Len() == 0 {
+		return nil
+	}
+	result := make([]byte, buf.Len())
+	copy(result, buf.Bytes())
+	return result
 }
 
 func unwrapNonNull(t ast.Type) (ast.Type, bool) {

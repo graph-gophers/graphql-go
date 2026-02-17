@@ -1,7 +1,6 @@
 package exec
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -123,7 +122,7 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 					Tracer:  r.Tracer,
 					Logger:  r.Logger,
 				}
-				var out bytes.Buffer
+				out := s.BufferPool().Get()
 				func() {
 					timeout := r.SubscribeResolverTimeout
 					if timeout == 0 {
@@ -137,31 +136,36 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 					func() {
 						defer subR.handlePanic(subCtx)
 
-						var buf bytes.Buffer
-						subR.execSelectionSet(subCtx, f.sels, f.field.Type, &pathSegment{nil, f.field.Alias}, s, resp, &buf)
+						buf := s.BufferPool().Get()
+						defer s.BufferPool().Put(buf)
+						subR.execSelectionSet(subCtx, f.sels, f.field.Type, &pathSegment{nil, f.field.Alias}, s, resp, buf)
 
 						propagateChildError := false
-						if _, nonNullChild := f.field.Type.(*ast.NonNull); nonNullChild && resolvedToNull(&buf) {
+						if _, nonNullChild := f.field.Type.(*ast.NonNull); nonNullChild && resolvedToNull(buf) {
 							propagateChildError = true
 						}
 
 						if !propagateChildError {
-							out.WriteString(fmt.Sprintf(`{"%s":`, f.field.Alias))
+							fmt.Fprintf(out, `{"%s":`, f.field.Alias)
 							out.Write(buf.Bytes())
 							out.WriteString(`}`)
 						}
 					}()
 
 					if err := subCtx.Err(); err != nil {
+						s.BufferPool().Put(out)
 						c <- &Response{Errors: []*errors.QueryError{errors.Errorf("%s", err)}}
 						return
 					}
+
+					data := copyBuffer(out)
+					s.BufferPool().Put(out)
 
 					// Send response within timeout
 					// TODO: maybe block until sent?
 					select {
 					case <-subCtx.Done():
-					case c <- &Response{Data: out.Bytes(), Errors: subR.Errs}:
+					case c <- &Response{Data: data, Errors: subR.Errs}:
 					}
 				}()
 			}

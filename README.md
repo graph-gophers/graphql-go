@@ -149,6 +149,7 @@ schema := graphql.MustParseSchema(sdl, &RootResolver{}, nil)
 - `UseFieldResolvers()` specifies whether to use struct field resolvers.
 - `MaxDepth(n int)` specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
 - `MaxParallelism(n int)` specifies the maximum number of resolvers per request allowed to run in parallel. The default is 10.
+- `MaxPooledBufferCap(nBytes int)` specifies the maximum buffer size in bytes that will be pooled. Increase to reduce allocations, set to `0` to disable buffer pooling. The default is 8KB.
 - `Tracer(tracer trace.Tracer)` is used to trace queries and fields. It defaults to `noop.Tracer`.
 - `Logger(logger log.Logger)` is used to log panics during query execution. It defaults to `exec.DefaultLogger`.
 - `PanicHandler(panicHandler errors.PanicHandler)` is used to transform panics into errors during query execution. It defaults to `errors.DefaultPanicHandler`.
@@ -273,6 +274,18 @@ type Tracer interface {
 }
 ```
 
-
 ### [Examples](https://github.com/graph-gophers/graphql-go/wiki/Examples)
 
+## Testing
+
+### Run All Tests
+
+```bash
+go test ./... -count=1
+```
+
+### Run Memory Benchmarks
+
+```bash
+go test -run=^$ -bench='BenchmarkMemory.*' -benchmem .
+```

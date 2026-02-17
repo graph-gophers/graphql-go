@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## Unreleased
+
+- [IMPROVEMENT] Implement buffer pooling to reduce allocations and memory usage, add MaxPooledBufferCap option to tune memory usage
+
 [v1.8.0](https://github.com/graph-gophers/graphql-go/releases/tag/v1.8.0) Release v1.8.0
 
 * [FEATURE] Added `DecodeSelectedFieldArgs` helper function to decode argument values for any (nested) selected field path directly from a resolver context, enabling efficient multi-level prefetching without per-resolver argument reflection. This enables selective, multi‑level batching (Category → Products → Reviews) by loading only requested fields, mitigating N+1 issues despite complex filters or pagination.
