@@ -124,6 +124,7 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 					Logger:                  r.Logger,
 					DisableMemoryPooling:    r.DisableMemoryPooling,
 					MaxPooledBufferCapacity: r.MaxPooledBufferCapacity,
+					PanicHandler:            r.PanicHandler,
 				}
 				var out bytes.Buffer
 				func() {
