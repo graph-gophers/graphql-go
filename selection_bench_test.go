@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	graphql "github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/example/starwars"
 )
 
 // This benchmark compares query execution when resolvers do NOT call the
@@ -113,5 +114,83 @@ func BenchmarkFieldSelections_WithSelectedFieldNames(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		_ = schema.Exec(ctx, lazyBenchQuery, "", nil)
+	}
+}
+
+const (
+	memoryPoolSmallQuery = `query SmallQuery { hero { id name } }`
+	memoryPoolWideQuery  = `query WideQuery { hero { id name appearsIn friends { id name appearsIn } } }`
+	memoryPoolNestQuery  = `query NestedQuery { hero { id name friends { id name friends { id name } } } }`
+)
+
+func memoryPoolBenchmarkSchema(enableMemoryPooling bool) *graphql.Schema {
+	if enableMemoryPooling {
+		return graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
+	}
+	return graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.DisableMemoryPooling())
+}
+
+func benchmarkQueryForShape(shape string) string {
+	switch shape {
+	case "Small":
+		return memoryPoolSmallQuery
+	case "Wide":
+		return memoryPoolWideQuery
+	default:
+		return memoryPoolNestQuery
+	}
+}
+
+var memoryPoolBenchSink *graphql.Response // prevent compiler optimizations
+
+func BenchmarkQueryExecution_MemoryPooling(b *testing.B) {
+	ctx := context.Background()
+	modes := []struct {
+		name    string
+		enabled bool
+	}{
+		{name: "WithPool", enabled: true},
+		{name: "WithoutPool", enabled: false},
+	}
+	shapes := []string{"Small", "Wide", "Nested"}
+
+	for _, mode := range modes {
+		schema := memoryPoolBenchmarkSchema(mode.enabled)
+		for _, shape := range shapes {
+			query := benchmarkQueryForShape(shape)
+			b.Run(mode.name+"/"+shape, func(b *testing.B) {
+				b.ReportAllocs()
+				for b.Loop() {
+					memoryPoolBenchSink = schema.Exec(ctx, query, "", nil)
+				}
+			})
+		}
+	}
+}
+
+func BenchmarkQueryExecution_MemoryPoolingParallel(b *testing.B) {
+	ctx := context.Background()
+	modes := []struct {
+		name    string
+		enabled bool
+	}{
+		{name: "WithPool", enabled: true},
+		{name: "WithoutPool", enabled: false},
+	}
+	shapes := []string{"Small", "Wide", "Nested"}
+
+	for _, mode := range modes {
+		schema := memoryPoolBenchmarkSchema(mode.enabled)
+		for _, shape := range shapes {
+			query := benchmarkQueryForShape(shape)
+			b.Run(mode.name+"/"+shape, func(b *testing.B) {
+				b.ReportAllocs()
+				b.RunParallel(func(pb *testing.PB) {
+					for pb.Next() {
+						memoryPoolBenchSink = schema.Exec(ctx, query, "", nil)
+					}
+				})
+			})
+		}
 	}
 }
