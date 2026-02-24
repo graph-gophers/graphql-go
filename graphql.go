@@ -102,11 +102,13 @@ func (s *Schema) Clone(resolver any, opts ...SchemaOpt) (*Schema, error) {
 		panicHandler:             s.panicHandler,
 		allowIntrospection:       s.allowIntrospection,
 		maxQueryLength:           s.maxQueryLength,
+		maxPooledBufferCapacity:  s.maxPooledBufferCapacity,
 		maxDepth:                 s.maxDepth,
 		useStringDescriptions:    s.useStringDescriptions,
 		subscribeResolverTimeout: s.subscribeResolverTimeout,
 		useFieldResolvers:        s.useFieldResolvers,
 		disableFieldSelections:   s.disableFieldSelections,
+		disableMemoryPooling:     s.disableMemoryPooling,
 		overlapPairLimit:         s.overlapPairLimit,
 	}
 
