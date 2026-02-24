@@ -119,9 +119,11 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 						Vars:   r.Vars,
 						Schema: r.Schema,
 					},
-					Limiter: r.Limiter,
-					Tracer:  r.Tracer,
-					Logger:  r.Logger,
+					Limiter:                 r.Limiter,
+					Tracer:                  r.Tracer,
+					Logger:                  r.Logger,
+					DisableMemoryPooling:    r.DisableMemoryPooling,
+					MaxPooledBufferCapacity: r.MaxPooledBufferCapacity,
 				}
 				var out bytes.Buffer
 				func() {

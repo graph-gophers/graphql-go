@@ -149,11 +149,13 @@ schema := graphql.MustParseSchema(sdl, &RootResolver{}, nil)
 - `UseFieldResolvers()` specifies whether to use struct field resolvers.
 - `MaxDepth(n int)` specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
 - `MaxParallelism(n int)` specifies the maximum number of resolvers per request allowed to run in parallel. The default is 10.
+- `MaxPooledBufferCap(n int)` specifies the maximum buffer capacity of buffers stored in the internal memory pool. Defaults to 16KB. Buffers larger than this limit are discarded instead of pooled.
 - `Tracer(tracer trace.Tracer)` is used to trace queries and fields. It defaults to `noop.Tracer`.
 - `Logger(logger log.Logger)` is used to log panics during query execution. It defaults to `exec.DefaultLogger`.
 - `PanicHandler(panicHandler errors.PanicHandler)` is used to transform panics into errors during query execution. It defaults to `errors.DefaultPanicHandler`.
 - `DisableIntrospection()` disables introspection queries.
 - `DisableFieldSelections()` disables capturing child field selections used by helper APIs (see below).
+- `DisableMemoryPooling()` disables internal execution-path memory pooling. Pooling is enabled by default; this option is intended for diagnostics and benchmark comparisons.
 - `OverlapValidationLimit(n int)` sets a hard cap on examined overlap pairs during validation; exceeding it emits `OverlapValidationLimitExceeded` error.
 
 ### Field Selection Inspection Helpers

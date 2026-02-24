@@ -5768,3 +5768,73 @@ func TestMultiCloneScenarioWithNilBase(t *testing.T) {
 		t.Errorf("Schema public deep query: expected validation error, got none")
 	}
 }
+
+func TestDisableMemoryPooling_QueryParity(t *testing.T) {
+	t.Parallel()
+
+	pooled := graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
+	nonPooled := graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.DisableMemoryPooling())
+
+	query := `{ hero { id name appearsIn } }`
+	baseline := pooled.Exec(context.Background(), query, "", nil)
+
+	gqltesting.RunTest(t, &gqltesting.Test{
+		Schema:         nonPooled,
+		Query:          query,
+		ExpectedResult: string(baseline.Data),
+		ExpectedErrors: baseline.Errors,
+	})
+}
+
+func TestDisableMemoryPooling_ErrorParity(t *testing.T) {
+	t.Parallel()
+
+	pooled := graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
+	nonPooled := graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.DisableMemoryPooling())
+
+	query := `{ invalidField }`
+	baseline := pooled.Exec(context.Background(), query, "", nil)
+
+	gqltesting.RunTest(t, &gqltesting.Test{
+		Schema:         nonPooled,
+		Query:          query,
+		ExpectedResult: string(baseline.Data),
+		ExpectedErrors: baseline.Errors,
+	})
+}
+
+func TestDisableMemoryPooling_OptionCompatibility(t *testing.T) {
+	t.Parallel()
+
+	schema := graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.DisableMemoryPooling(), graphql.DisableFieldSelections())
+	gqltesting.RunTest(t, &gqltesting.Test{
+		Schema: schema,
+		Query:  `{ hero { id name } }`,
+		ExpectedResult: `
+			{
+				"hero": {
+					"id": "2001",
+					"name": "R2-D2"
+				}
+			}
+		`,
+	})
+}
+
+func TestMaxPooledBufferCap_OptionCompatibility(t *testing.T) {
+	t.Parallel()
+
+	schema := graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.MaxPooledBufferCap(8<<10))
+	gqltesting.RunTest(t, &gqltesting.Test{
+		Schema: schema,
+		Query:  `{ hero { id name } }`,
+		ExpectedResult: `
+			{
+				"hero": {
+					"id": "2001",
+					"name": "R2-D2"
+				}
+			}
+		`,
+	})
+}

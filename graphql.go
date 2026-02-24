@@ -22,19 +22,25 @@ import (
 	"github.com/graph-gophers/graphql-go/trace/tracer"
 )
 
+const defaultMaxPooledBufferCapacity = 16 << 10 // 16KB
+
 // ParseSchema parses a GraphQL schema and attaches the given root resolver. It returns an error if
 // the Go type signature of the resolvers does not match the schema. If nil is passed as the
 // resolver, then the schema can not be executed, but it may be inspected (e.g. with [Schema.ToJSON] or [Schema.AST]).
 func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (*Schema, error) {
 	s := &Schema{
-		schema:         schema.New(),
-		maxParallelism: 10,
-		tracer:         noop.Tracer{},
-		logger:         &log.DefaultLogger{},
-		panicHandler:   &errors.DefaultPanicHandler{},
+		schema:                  schema.New(),
+		maxParallelism:          10,
+		tracer:                  noop.Tracer{},
+		logger:                  &log.DefaultLogger{},
+		panicHandler:            &errors.DefaultPanicHandler{},
+		maxPooledBufferCapacity: defaultMaxPooledBufferCapacity,
 	}
 	for _, opt := range opts {
 		opt(s)
+	}
+	if !s.disableMemoryPooling && s.maxPooledBufferCapacity <= 0 {
+		s.maxPooledBufferCapacity = defaultMaxPooledBufferCapacity
 	}
 
 	if s.validationTracer == nil {
@@ -183,6 +189,8 @@ type Schema struct {
 	subscribeResolverTimeout time.Duration
 	useFieldResolvers        bool
 	disableFieldSelections   bool
+	disableMemoryPooling     bool
+	maxPooledBufferCapacity  int
 	overlapPairLimit         int
 }
 
@@ -227,6 +235,22 @@ func UseFieldResolvers() SchemaOpt {
 // to use the feature and want to avoid even its small lazy overhead.
 func DisableFieldSelections() SchemaOpt {
 	return func(s *Schema) { s.disableFieldSelections = true }
+}
+
+// DisableMemoryPooling disables internal memory pooling in the execution path.
+// Pooling is enabled by default and this option is intended for diagnostics and
+// benchmark comparison against non-pooled execution behavior.
+func DisableMemoryPooling() SchemaOpt {
+	return func(s *Schema) { s.disableMemoryPooling = true }
+}
+
+// MaxPooledBufferCap sets the maximum buffer capacity (in bytes) that can
+// be returned to the internal memory pool. Buffers larger than this limit are
+// discarded instead of pooled. The default is 16KB.
+func MaxPooledBufferCap(n int) SchemaOpt {
+	return func(s *Schema) {
+		s.maxPooledBufferCapacity = n
+	}
 }
 
 // MaxDepth specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
@@ -420,11 +444,13 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 			Schema:             s.schema,
 			AllowIntrospection: s.allowIntrospection == nil || s.allowIntrospection(ctx), // allow introspection by default, i.e. when allowIntrospection is nil
 		},
-		Limiter:                make(chan struct{}, s.maxParallelism),
-		Tracer:                 s.tracer,
-		Logger:                 s.logger,
-		PanicHandler:           s.panicHandler,
-		DisableFieldSelections: s.disableFieldSelections,
+		Limiter:                 make(chan struct{}, s.maxParallelism),
+		Tracer:                  s.tracer,
+		Logger:                  s.logger,
+		PanicHandler:            s.panicHandler,
+		DisableFieldSelections:  s.disableFieldSelections,
+		DisableMemoryPooling:    s.disableMemoryPooling,
+		MaxPooledBufferCapacity: s.maxPooledBufferCapacity,
 	}
 	varTypes := make(map[string]*introspection.Type)
 	for _, v := range op.Vars {
