@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/graph-gophers/graphql-go/ast"
@@ -69,10 +70,106 @@ func MustParseSchema(schemaString string, resolver interface{}, opts ...SchemaOp
 	return s
 }
 
+// Clone creates a new Schema instance with the same AST but a different resolver.
+// The new schema inherits configuration settings from the parent schema, which can be
+// overridden using SchemaOpt functions. The original schema is not modified.
+// It returns an error if the resolver type signature does not match the schema.
+//
+// Example: Create multiple schemas with the same GraphQL definition but different resolvers:
+//
+//	baseSchema := graphql.MustParseSchema(schemaDefinition, nil)
+//	schema1, _ := baseSchema.Clone(resolver1)
+//	schema2, _ := baseSchema.Clone(resolver2)
+//
+// Example: Create a clone with different configuration:
+//
+//	privateSchema := graphql.MustParseSchema(schema, resolver, graphql.MaxDepth(10))
+//	publicSchema, _ := privateSchema.Clone(resolver, graphql.MaxDepth(3))
+func (s *Schema) Clone(resolver any, opts ...SchemaOpt) (*Schema, error) {
+	// Create new schema with shared AST and copied configuration
+	clone := &Schema{
+		schema:                   s.schema,
+		maxParallelism:           s.maxParallelism,
+		tracer:                   s.tracer,
+		validationTracer:         s.validationTracer,
+		logger:                   s.logger,
+		panicHandler:             s.panicHandler,
+		allowIntrospection:       s.allowIntrospection,
+		maxQueryLength:           s.maxQueryLength,
+		maxDepth:                 s.maxDepth,
+		useStringDescriptions:    s.useStringDescriptions,
+		subscribeResolverTimeout: s.subscribeResolverTimeout,
+		useFieldResolvers:        s.useFieldResolvers,
+		disableFieldSelections:   s.disableFieldSelections,
+		overlapPairLimit:         s.overlapPairLimit,
+	}
+
+	for _, opt := range opts {
+		opt(clone)
+	}
+
+	res, err := resolvable.ApplyResolver(clone.schema, resolver, clone.useFieldResolvers)
+	if err != nil {
+		return nil, err
+	}
+	clone.res = res
+
+	return clone, nil
+}
+
+// MustClone calls [Schema.Clone] and panics on error.
+//
+// Example: Clone a schema in initialization code:
+//
+//	publicSchema := baseSchema.MustClone(&resolver{}, graphql.MaxDepth(3))
+func (s *Schema) MustClone(resolver any, opts ...SchemaOpt) *Schema {
+	clone, err := s.Clone(resolver, opts...)
+	if err != nil {
+		panic(err)
+	}
+	return clone
+}
+
+// ApplyResolver attaches a resolver to a schema that was created without one.
+// This enables deferred resolver binding for nil-resolver schemas. It can only be called once per schema.
+// If the schema already has a resolver applied (either from [ParseSchema] or [ApplyResolver]), it returns an error.
+//
+// Example: Attach a resolver to an introspection-only schema:
+//
+//	schema, _ := graphql.ParseSchema(schemaString, nil)
+//	// Schema can be introspected but not executed
+//	_ = schema.ApplyResolver(resolver)
+//	// Now schema can be executed
+//
+// Example: Share a parsed schema definition across multiple resolvers (deferred binding):
+//
+//	baseSchema, _ := graphql.ParseSchema(schemaString, nil)
+//	// Create independent executable schemas from the same base
+//	_ = baseSchema.Clone(resolver1)
+//	_ = baseSchema.Clone(resolver2)
+func (s *Schema) ApplyResolver(resolver any) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Check if resolver was already applied (either from ParseSchema or previous ApplyResolver call)
+	if s.res.QueryResolver.IsValid() {
+		return fmt.Errorf("resolver already applied to schema")
+	}
+
+	res, err := resolvable.ApplyResolver(s.schema, resolver, s.useFieldResolvers)
+	if err != nil {
+		return err
+	}
+
+	s.res = res
+	return nil
+}
+
 // Schema represents a GraphQL schema with an optional resolver.
 type Schema struct {
 	schema *ast.Schema
 	res    *resolvable.Schema
+	mu     sync.Mutex
 
 	allowIntrospection       func(ctx context.Context) bool
 	maxQueryLength           int
