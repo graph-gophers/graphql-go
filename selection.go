@@ -68,7 +68,7 @@ func SortedSelectedFieldNames(ctx context.Context) []string {
 //	var args BooksArgs
 //	ok, err := graphql.DecodeSelectedFieldArgs(ctx, "books", &args)
 //	if ok { /* use args.Top */ }
-func DecodeSelectedFieldArgs(ctx context.Context, path string, dst interface{}) (bool, error) {
+func DecodeSelectedFieldArgs(ctx context.Context, path string, dst any) (bool, error) {
 	if dst == nil {
 		return false, nil
 	}

@@ -55,7 +55,7 @@ func TestTime_MarshalJSON(t *testing.T) {
 
 func TestTime_UnmarshalGraphQL(t *testing.T) {
 	type args struct {
-		input interface{}
+		input any
 	}
 	ref := time.Date(2021, time.April, 20, 12, 3, 23, 551476231, time.UTC)
 	refZeroNano := time.Unix(ref.Unix(), 0)

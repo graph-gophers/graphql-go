@@ -84,7 +84,7 @@ var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver
 
 type ResolverError interface {
 	error
-	Extensions() map[string]interface{}
+	Extensions() map[string]any
 }
 
 type resolverNotFoundError struct {
@@ -96,8 +96,8 @@ func (e resolverNotFoundError) Error() string {
 	return fmt.Sprintf("Error [%s]: %s", e.Code, e.Message)
 }
 
-func (e resolverNotFoundError) Extensions() map[string]interface{} {
-	return map[string]interface{}{
+func (e resolverNotFoundError) Extensions() map[string]any {
+	return map[string]any{
 		"code":    e.Code,
 		"message": e.Message,
 	}
@@ -418,7 +418,6 @@ func TestRootOperations_invalidSchema(t *testing.T) {
 	}
 
 	for name, tt := range testTable {
-		tt := tt
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
@@ -744,7 +743,7 @@ func TestNilInterface(t *testing.T) {
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
 					Message:       "x",
-					Path:          []interface{}{"b"},
+					Path:          []any{"b"},
 					ResolverError: errors.New("x"),
 				},
 			},
@@ -782,9 +781,9 @@ func TestErrorPropagationInLists(t *testing.T) {
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
 					Message:       droidNotFoundError.Error(),
-					Path:          []interface{}{"findDroids", 1, "name"},
+					Path:          []any{"findDroids", 1, "name"},
 					ResolverError: droidNotFoundError,
-					Extensions:    map[string]interface{}{"code": droidNotFoundError.Code, "message": droidNotFoundError.Message},
+					Extensions:    map[string]any{"code": droidNotFoundError.Code, "message": droidNotFoundError.Message},
 				},
 			},
 		},
@@ -824,9 +823,9 @@ func TestErrorPropagationInLists(t *testing.T) {
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
 					Message:       droidNotFoundError.Error(),
-					Path:          []interface{}{"findDroids", 1, "name"},
+					Path:          []any{"findDroids", 1, "name"},
 					ResolverError: droidNotFoundError,
-					Extensions:    map[string]interface{}{"code": droidNotFoundError.Code, "message": droidNotFoundError.Message},
+					Extensions:    map[string]any{"code": droidNotFoundError.Code, "message": droidNotFoundError.Message},
 				},
 			},
 		},
@@ -858,7 +857,7 @@ func TestErrorPropagationInLists(t *testing.T) {
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
 					Message: `graphql: got nil for non-null "Droid"`,
-					Path:    []interface{}{"findNilDroids", 1},
+					Path:    []any{"findNilDroids", 1},
 				},
 			},
 		},
@@ -936,7 +935,7 @@ func TestErrorPropagationInLists(t *testing.T) {
 				{
 					Message:       errQuote.Error(),
 					ResolverError: errQuote,
-					Path:          []interface{}{"findDroids", 0, "quotes"},
+					Path:          []any{"findDroids", 0, "quotes"},
 				},
 			},
 		},
@@ -971,11 +970,11 @@ func TestErrorPropagationInLists(t *testing.T) {
 				{
 					Message:       errQuote.Error(),
 					ResolverError: errQuote,
-					Path:          []interface{}{"findNilDroids", 0, "quotes"},
+					Path:          []any{"findNilDroids", 0, "quotes"},
 				},
 				{
 					Message: `graphql: got nil for non-null "Droid"`,
-					Path:    []interface{}{"findNilDroids", 1},
+					Path:    []any{"findNilDroids", 1},
 				},
 			},
 		},
@@ -1014,9 +1013,9 @@ func TestErrorWithExtensions(t *testing.T) {
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
 					Message:       droidNotFoundError.Error(),
-					Path:          []interface{}{"FindDroid"},
+					Path:          []any{"FindDroid"},
 					ResolverError: droidNotFoundError,
-					Extensions:    map[string]interface{}{"code": droidNotFoundError.Code, "message": droidNotFoundError.Message},
+					Extensions:    map[string]any{"code": droidNotFoundError.Code, "message": droidNotFoundError.Message},
 				},
 			},
 		},
@@ -1050,7 +1049,7 @@ func TestErrorWithNoExtensions(t *testing.T) {
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
 					Message:       err.Error(),
-					Path:          []interface{}{"DismissVader"},
+					Path:          []any{"DismissVader"},
 					ResolverError: err,
 					Extensions:    nil,
 				},
@@ -1251,7 +1250,7 @@ func TestVariables(t *testing.T) {
 					}
 				}
 			`,
-			Variables: map[string]interface{}{
+			Variables: map[string]any{
 				"episode": "JEDI",
 			},
 			ExpectedResult: `
@@ -1272,7 +1271,7 @@ func TestVariables(t *testing.T) {
 					}
 				}
 			`,
-			Variables: map[string]interface{}{
+			Variables: map[string]any{
 				"episode": "EMPIRE",
 			},
 			ExpectedResult: `
@@ -1322,7 +1321,7 @@ func TestSkipDirective(t *testing.T) {
 					}
 				}
 			`,
-			Variables: map[string]interface{}{
+			Variables: map[string]any{
 				"episode":        "JEDI",
 				"withoutFriends": true,
 			},
@@ -1347,7 +1346,7 @@ func TestSkipDirective(t *testing.T) {
 					}
 				}
 			`,
-			Variables: map[string]interface{}{
+			Variables: map[string]any{
 				"episode":        "JEDI",
 				"withoutFriends": false,
 			},
@@ -1391,7 +1390,7 @@ func TestIncludeDirective(t *testing.T) {
 					}
 				}
 			`,
-			Variables: map[string]interface{}{
+			Variables: map[string]any{
 				"episode":     "JEDI",
 				"withFriends": false,
 			},
@@ -1420,7 +1419,7 @@ func TestIncludeDirective(t *testing.T) {
 					}
 				}
 			`,
-			Variables: map[string]interface{}{
+			Variables: map[string]any{
 				"episode":     "JEDI",
 				"withFriends": true,
 			},
@@ -1582,7 +1581,7 @@ func TestSpecifiedByDirective(t *testing.T) {
 					}
 				}
 			`,
-			Variables: map[string]interface{}{},
+			Variables: map[string]any{},
 			ExpectedResult: `
 				{
 					"__type": {
@@ -1677,7 +1676,7 @@ func TestEnums(t *testing.T) {
 					}
 				}
 			`,
-			Variables: map[string]interface{}{"episode": "JEDI"},
+			Variables: map[string]any{"episode": "JEDI"},
 			ExpectedResult: `
 				{
 					"hero": {
@@ -1696,7 +1695,7 @@ func TestEnums(t *testing.T) {
 					}
 				}
 			`,
-			Variables: map[string]interface{}{"episode": "FINAL_FRONTIER"},
+			Variables: map[string]any{"episode": "FINAL_FRONTIER"},
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
 					Message:   "Variable \"episode\" has invalid value FINAL_FRONTIER.\nExpected type \"Episode\", found FINAL_FRONTIER.",
@@ -1761,7 +1760,7 @@ func TestEnums(t *testing.T) {
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
 					Message: "Invalid value STAR_TREK.\nExpected type Episode, found STAR_TREK.",
-					Path:    []interface{}{"hero", "appearsIn", 0},
+					Path:    []any{"hero", "appearsIn", 0},
 				},
 			},
 		},
@@ -1802,7 +1801,7 @@ func TestInlineFragments(t *testing.T) {
 					}
 				}
 			`,
-			Variables: map[string]interface{}{
+			Variables: map[string]any{
 				"episode": "JEDI",
 			},
 			ExpectedResult: `
@@ -1830,7 +1829,7 @@ func TestInlineFragments(t *testing.T) {
 					}
 				}
 			`,
-			Variables: map[string]interface{}{
+			Variables: map[string]any{
 				"episode": "EMPIRE",
 			},
 			ExpectedResult: `
@@ -2179,9 +2178,9 @@ func TestMutation(t *testing.T) {
 					}
 				}
 			`,
-			Variables: map[string]interface{}{
+			Variables: map[string]any{
 				"ep": "JEDI",
-				"review": map[string]interface{}{
+				"review": map[string]any{
 					"stars":      5,
 					"commentary": "This is a great movie!",
 				},
@@ -2206,9 +2205,9 @@ func TestMutation(t *testing.T) {
 					}
 				}
 			`,
-			Variables: map[string]interface{}{
+			Variables: map[string]any{
 				"ep": "EMPIRE",
-				"review": map[string]interface{}{
+				"review": map[string]any{
 					"stars": float64(4),
 				},
 			},
@@ -2910,7 +2909,7 @@ func TestTime(t *testing.T) {
 					b: addHour
 				}
 			`,
-			Variables: map[string]interface{}{
+			Variables: map[string]any{
 				"t": time.Date(2000, 2, 3, 4, 5, 6, 0, time.UTC),
 			},
 			ExpectedResult: `
@@ -2999,7 +2998,7 @@ func (IntEnum) ImplementsGraphQLType(name string) bool {
 	return name == "IntEnum"
 }
 
-func (e *IntEnum) UnmarshalGraphQL(input interface{}) error {
+func (e *IntEnum) UnmarshalGraphQL(input any) error {
 	if str, ok := input.(string); ok {
 		switch str {
 		case "Int0":
@@ -3276,7 +3275,7 @@ func (r *inputArgumentsObjectMismatch3) Hello(args struct{ Input *struct{ Thing 
 
 func TestInputArguments_failSchemaParsing(t *testing.T) {
 	type args struct {
-		Resolver interface{}
+		Resolver any
 		Schema   string
 		Opts     []graphql.SchemaOpt
 	}
@@ -3404,7 +3403,6 @@ func TestInputArguments_failSchemaParsing(t *testing.T) {
 	}
 
 	for name, tt := range testTable {
-		tt := tt
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
@@ -3527,7 +3525,7 @@ func TestErrorPropagation(t *testing.T) {
 				{
 					Message:       errExample.Error(),
 					ResolverError: errExample,
-					Path:          []interface{}{"triggerError"},
+					Path:          []any{"triggerError"},
 				},
 			},
 		},
@@ -3566,7 +3564,7 @@ func TestErrorPropagation(t *testing.T) {
 				{
 					Message:       errExample.Error(),
 					ResolverError: errExample,
-					Path:          []interface{}{"child", "triggerError"},
+					Path:          []any{"child", "triggerError"},
 				},
 			},
 		},
@@ -3609,7 +3607,7 @@ func TestErrorPropagation(t *testing.T) {
 				{
 					Message:       errExample.Error(),
 					ResolverError: errExample,
-					Path:          []interface{}{"child", "child", "triggerError"},
+					Path:          []any{"child", "child", "triggerError"},
 				},
 			},
 		},
@@ -3655,7 +3653,7 @@ func TestErrorPropagation(t *testing.T) {
 				{
 					Message:       errExample.Error(),
 					ResolverError: errExample,
-					Path:          []interface{}{"child", "child", "triggerError"},
+					Path:          []any{"child", "child", "triggerError"},
 				},
 			},
 		},
@@ -3691,7 +3689,7 @@ func TestErrorPropagation(t *testing.T) {
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
 					Message: nilChildErrorString,
-					Path:    []interface{}{"child", "nilChild"},
+					Path:    []any{"child", "nilChild"},
 				},
 			},
 		},
@@ -3731,7 +3729,7 @@ func TestErrorPropagation(t *testing.T) {
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
 					Message: nilChildErrorString,
-					Path:    []interface{}{"child", "nilChild"},
+					Path:    []any{"child", "nilChild"},
 				},
 			},
 		},
@@ -3775,12 +3773,12 @@ func TestErrorPropagation(t *testing.T) {
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
 					Message: nilChildErrorString,
-					Path:    []interface{}{"child", "child", "child", "nilChild"},
+					Path:    []any{"child", "child", "child", "nilChild"},
 				},
 				{
 					Message:       errExample.Error(),
 					ResolverError: errExample,
-					Path:          []interface{}{"child", "child", "triggerError"},
+					Path:          []any{"child", "child", "triggerError"},
 				},
 			},
 		},
@@ -3819,7 +3817,7 @@ func TestErrorPropagation(t *testing.T) {
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
 					Message: nilChildErrorString,
-					Path:    []interface{}{"child", "child", "nilChild"},
+					Path:    []any{"child", "child", "nilChild"},
 				},
 			},
 		},
@@ -3976,7 +3974,7 @@ func TestSchema_Exec_without_resolver(t *testing.T) {
 		Schema string
 	}
 	type want struct {
-		Panic interface{}
+		Panic any
 	}
 	testTable := []struct {
 		Name string
@@ -4018,7 +4016,7 @@ func TestSchema_Exec_without_resolver(t *testing.T) {
 					t.Fail()
 				}
 			}()
-			_ = s.Exec(context.Background(), tt.Args.Query, "", map[string]interface{}{})
+			_ = s.Exec(context.Background(), tt.Args.Query, "", map[string]any{})
 		})
 	}
 }
@@ -4101,7 +4099,7 @@ func TestPointerReturnForNonNull(t *testing.T) {
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
 					Message: `graphql: got nil for non-null "Hello"`,
-					Path:    []interface{}{"pointerReturn", "value"},
+					Path:    []any{"pointerReturn", "value"},
 				},
 			},
 		},
@@ -4301,19 +4299,19 @@ type fieldTrace struct {
 	typeName  string
 	fieldName string
 	isTrivial bool
-	args      map[string]interface{}
+	args      map[string]any
 	err       *gqlerrors.QueryError
 }
 
 type queryTrace struct {
 	document  string
 	opName    string
-	variables map[string]interface{}
+	variables map[string]any
 	varTypes  map[string]*introspection.Type
 	errors    []*gqlerrors.QueryError
 }
 
-func (t *testTracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, func(*gqlerrors.QueryError)) {
+func (t *testTracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]any) (context.Context, func(*gqlerrors.QueryError)) {
 	return ctx, func(qe *gqlerrors.QueryError) {
 		t.mu.Lock()
 		defer t.mu.Unlock()
@@ -4331,7 +4329,7 @@ func (t *testTracer) TraceField(ctx context.Context, label, typeName, fieldName 
 	}
 }
 
-func (t *testTracer) TraceQuery(ctx context.Context, document string, opName string, vars map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, func([]*gqlerrors.QueryError)) {
+func (t *testTracer) TraceQuery(ctx context.Context, document string, opName string, vars map[string]any, varTypes map[string]*introspection.Type) (context.Context, func([]*gqlerrors.QueryError)) {
 	return ctx, func(qe []*gqlerrors.QueryError) {
 		t.mu.Lock()
 		defer t.mu.Unlock()
@@ -4370,7 +4368,7 @@ func TestTracer(t *testing.T) {
 	}
 	`
 	opName := "TestTracer"
-	variables := map[string]interface{}{
+	variables := map[string]any{
 		"id": "1002",
 	}
 
@@ -4502,7 +4500,7 @@ func TestQueryVariablesValidation(t *testing.T) {
 					match
 				}
 			}`,
-		Variables: map[string]interface{}{"filter": map[string]interface{}{}},
+		Variables: map[string]any{"filter": map[string]any{}},
 		ExpectedErrors: []*gqlerrors.QueryError{{
 			Message:   "Variable \"required\" has invalid value null.\nExpected type \"String!\", found null.",
 			Locations: []gqlerrors.Location{{Line: 3, Column: 5}},
@@ -4756,7 +4754,7 @@ type errRootResolver7 struct {
 }
 
 // Subscription is invalid because it returns an invalid resolver.
-func (*errRootResolver7) Subscription() interface{} {
+func (*errRootResolver7) Subscription() any {
 	a := struct {
 		Name string
 	}{Name: "invalid"}
@@ -4871,7 +4869,7 @@ func TestSeparateResolvers(t *testing.T) {
 	// test errors with invalid resolvers
 	tests := []struct {
 		name     string
-		resolver interface{}
+		resolver any
 		opts     []graphql.SchemaOpt
 		wantErr  string
 	}{
@@ -5002,7 +5000,7 @@ func TestGraphqlNames(t *testing.T) {
 					Hello: String!
 					HELLO: String!
 				}`,
-				func() interface{} {
+				func() any {
 					type helloTagResolver struct {
 						Hello           string
 						HelloUnderscore string `graphql:"_hello"`
@@ -5048,7 +5046,7 @@ func Test_fieldFunc(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: graphql.MustParseSchema(sdl,
-				func() interface{} {
+				func() any {
 					type helloTagResolver struct {
 						Hello func(args struct{ Name string }) string
 					}
@@ -5073,7 +5071,7 @@ func Test_fieldFunc(t *testing.T) {
 		},
 		{
 			Schema: graphql.MustParseSchema(sdl,
-				func() interface{} {
+				func() any {
 					type helloTagResolver struct {
 						Greet func(ctx context.Context, args struct{ Name string }) (string, error) `graphql:"hello"`
 					}
@@ -5489,7 +5487,7 @@ func TestApplyResolverConcurrency(t *testing.T) {
 		var wg sync.WaitGroup
 
 		wg.Add(numGoroutines)
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			go func() {
 				defer wg.Done()
 				err := schema.ApplyResolver(&starwars.Resolver{})
@@ -5507,7 +5505,7 @@ func TestApplyResolverConcurrency(t *testing.T) {
 
 	t.Run("multiple goroutines racing on fresh schema", func(t *testing.T) {
 		const numIterations = 5
-		for iter := 0; iter < numIterations; iter++ {
+		for iter := range numIterations {
 			schema, err := graphql.ParseSchema(starwars.Schema, nil)
 			if err != nil {
 				t.Fatalf("ParseSchema: unexpected error: %v", err)
@@ -5518,7 +5516,7 @@ func TestApplyResolverConcurrency(t *testing.T) {
 			var wg sync.WaitGroup
 
 			wg.Add(numGoroutines)
-			for i := 0; i < numGoroutines; i++ {
+			for range numGoroutines {
 				go func() {
 					defer wg.Done()
 					err := schema.ApplyResolver(&starwars.Resolver{})

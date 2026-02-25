@@ -94,9 +94,9 @@ func cacheable(r *http.Request) bool {
 }
 
 type params struct {
-	Query         string                 `json:"query"`
-	OperationName string                 `json:"operationName"`
-	Variables     map[string]interface{} `json:"variables"`
+	Query         string         `json:"query"`
+	OperationName string         `json:"operationName"`
+	Variables     map[string]any `json:"variables"`
 }
 
 var page = []byte(`

@@ -15,7 +15,7 @@ import (
 // Tracer implements the graphql-go Tracer interface and creates OpenTracing spans.
 type Tracer struct{}
 
-func (Tracer) TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, func([]*errors.QueryError)) {
+func (Tracer) TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]any, varTypes map[string]*introspection.Type) (context.Context, func([]*errors.QueryError)) {
 	span, spanCtx := opentracing.StartSpanFromContext(ctx, "GraphQL request")
 	span.SetTag("graphql.query", queryString)
 
@@ -40,7 +40,7 @@ func (Tracer) TraceQuery(ctx context.Context, queryString string, operationName 
 	}
 }
 
-func (Tracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, func(*errors.QueryError)) {
+func (Tracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]any) (context.Context, func(*errors.QueryError)) {
 	if trivial {
 		return ctx, noop
 	}

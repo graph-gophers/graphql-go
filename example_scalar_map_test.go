@@ -9,14 +9,14 @@ import (
 	"github.com/graph-gophers/graphql-go"
 )
 
-type Map map[string]interface{}
+type Map map[string]any
 
 func (Map) ImplementsGraphQLType(name string) bool {
 	return name == "Map"
 }
 
-func (m *Map) UnmarshalGraphQL(input interface{}) error {
-	val, ok := input.(map[string]interface{})
+func (m *Map) UnmarshalGraphQL(input any) error {
+	val, ok := input.(map[string]any)
 	if !ok {
 		return fmt.Errorf("wrong type")
 	}

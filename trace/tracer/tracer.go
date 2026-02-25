@@ -15,8 +15,8 @@ type (
 )
 
 type Tracer interface {
-	TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, QueryFinishFunc)
-	TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, FieldFinishFunc)
+	TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]any, varTypes map[string]*introspection.Type) (context.Context, QueryFinishFunc)
+	TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]any) (context.Context, FieldFinishFunc)
 }
 
 type ValidationTracer interface {

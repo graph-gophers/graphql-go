@@ -69,7 +69,7 @@ func TestSchema_ToJSON(t *testing.T) {
 }
 
 func formatJSON(data []byte) ([]byte, error) {
-	var v interface{}
+	var v any
 	if err := json.Unmarshal(data, &v); err != nil {
 		return nil, err
 	}

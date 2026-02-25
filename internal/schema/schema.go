@@ -2,6 +2,8 @@ package schema
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"text/scanner"
 
 	"github.com/graph-gophers/graphql-go/ast"
@@ -19,12 +21,8 @@ func New() *ast.Schema {
 		Directives: make(map[string]*ast.DirectiveDefinition),
 	}
 	m := newMeta()
-	for n, t := range m.Types {
-		s.Types[n] = t
-	}
-	for n, d := range m.Directives {
-		s.Directives[n] = d
-	}
+	maps.Copy(s.Types, m.Types)
+	maps.Copy(s.Directives, m.Directives)
 	return s
 }
 
@@ -317,13 +315,7 @@ func resolveDirectives(s *ast.Schema, directives ast.DirectiveList, loc string) 
 		if !ok {
 			return errors.Errorf("directive %q not found", dirName)
 		}
-		validLoc := false
-		for _, l := range dd.Locations {
-			if l == loc {
-				validLoc = true
-				break
-			}
-		}
+		validLoc := slices.Contains(dd.Locations, loc)
 		if !validLoc {
 			return errors.Errorf("invalid location %q for directive %q (must be one of %v)", loc, dirName, dd.Locations)
 		}

@@ -40,7 +40,7 @@ func (State) ImplementsGraphQLType(name string) bool {
 }
 
 // UnmarshalGraphQL tries to unmarshal a type from a given GraphQL value.
-func (s *State) UnmarshalGraphQL(input interface{}) error {
+func (s *State) UnmarshalGraphQL(input any) error {
 	var err error
 	switch input := input.(type) {
 	case string:

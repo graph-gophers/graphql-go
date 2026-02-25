@@ -17,7 +17,7 @@ func (NullID) ImplementsGraphQLType(name string) bool {
 	return name == "ID"
 }
 
-func (s *NullID) UnmarshalGraphQL(input interface{}) error {
+func (s *NullID) UnmarshalGraphQL(input any) error {
 	s.Set = true
 
 	if input == nil {
@@ -42,7 +42,7 @@ func (NullString) ImplementsGraphQLType(name string) bool {
 	return name == "String"
 }
 
-func (s *NullString) UnmarshalGraphQL(input interface{}) error {
+func (s *NullString) UnmarshalGraphQL(input any) error {
 	s.Set = true
 
 	if input == nil {
@@ -72,7 +72,7 @@ func (NullBool) ImplementsGraphQLType(name string) bool {
 	return name == "Boolean"
 }
 
-func (s *NullBool) UnmarshalGraphQL(input interface{}) error {
+func (s *NullBool) UnmarshalGraphQL(input any) error {
 	s.Set = true
 
 	if input == nil {
@@ -102,7 +102,7 @@ func (NullInt) ImplementsGraphQLType(name string) bool {
 	return name == "Int"
 }
 
-func (s *NullInt) UnmarshalGraphQL(input interface{}) error {
+func (s *NullInt) UnmarshalGraphQL(input any) error {
 	s.Set = true
 
 	if input == nil {
@@ -139,7 +139,7 @@ func (NullFloat) ImplementsGraphQLType(name string) bool {
 	return name == "Float"
 }
 
-func (s *NullFloat) UnmarshalGraphQL(input interface{}) error {
+func (s *NullFloat) UnmarshalGraphQL(input any) error {
 	s.Set = true
 
 	if input == nil {
@@ -177,7 +177,7 @@ func (NullTime) ImplementsGraphQLType(name string) bool {
 	return name == "Time"
 }
 
-func (s *NullTime) UnmarshalGraphQL(input interface{}) error {
+func (s *NullTime) UnmarshalGraphQL(input any) error {
 	s.Set = true
 
 	if input == nil {

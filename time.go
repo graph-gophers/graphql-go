@@ -22,7 +22,7 @@ func (Time) ImplementsGraphQLType(name string) bool {
 //
 // This function will be called whenever you use the
 // time scalar as an input
-func (t *Time) UnmarshalGraphQL(input interface{}) error {
+func (t *Time) UnmarshalGraphQL(input any) error {
 	switch input := input.(type) {
 	case time.Time:
 		t.Time = input

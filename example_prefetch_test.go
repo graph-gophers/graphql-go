@@ -166,10 +166,7 @@ func (r *pfRoot) Category(ctx context.Context, args struct{ ID graphql.ID }) *pf
 			start = len(filtered)
 		}
 	}
-	end := start + int(firstVal)
-	if end > len(filtered) {
-		end = len(filtered)
-	}
+	end := min(start+int(firstVal), len(filtered))
 	slice := filtered[start:end]
 	cr.prefetchedProducts = make([]*pfProduct, len(slice))
 	for i := range slice {

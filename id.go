@@ -12,7 +12,7 @@ func (ID) ImplementsGraphQLType(name string) bool {
 	return name == "ID"
 }
 
-func (id *ID) UnmarshalGraphQL(input interface{}) error {
+func (id *ID) UnmarshalGraphQL(input any) error {
 	var err error
 	switch input := input.(type) {
 	case string:

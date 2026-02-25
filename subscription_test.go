@@ -347,7 +347,6 @@ func TestRootOperations_invalidSubscriptionSchema(t *testing.T) {
 	}
 
 	for name, tt := range testTable {
-		tt := tt
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 

@@ -24,7 +24,7 @@ type Test struct {
 	Rule   string
 	Schema string
 	Query  string
-	Vars   map[string]interface{}
+	Vars   map[string]any
 	Errors []*errors.QueryError
 }
 

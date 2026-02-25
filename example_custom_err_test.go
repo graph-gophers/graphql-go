@@ -49,8 +49,8 @@ func (e productNotFoundError) Error() string {
 }
 
 // Extensions provides additional error context according to the spec https://spec.graphql.org/October2021/#sel-GAPHRPZCAACCBx6b.
-func (e productNotFoundError) Extensions() map[string]interface{} {
-	return map[string]interface{}{
+func (e productNotFoundError) Extensions() map[string]any {
+	return map[string]any{
 		"code":    e.Code,
 		"message": e.Message,
 		"traceId": e.TraceID,

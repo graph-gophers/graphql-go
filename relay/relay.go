@@ -11,7 +11,7 @@ import (
 	graphql "github.com/graph-gophers/graphql-go"
 )
 
-func MarshalID(kind string, spec interface{}) graphql.ID {
+func MarshalID(kind string, spec any) graphql.ID {
 	d, err := json.Marshal(spec)
 	if err != nil {
 		panic(fmt.Errorf("relay.MarshalID: %s", err))
@@ -31,7 +31,7 @@ func UnmarshalKind(id graphql.ID) string {
 	return string(s[:i])
 }
 
-func UnmarshalSpec(id graphql.ID, v interface{}) error {
+func UnmarshalSpec(id graphql.ID, v any) error {
 	s, err := base64.URLEncoding.DecodeString(string(id))
 	if err != nil {
 		return err
@@ -49,9 +49,9 @@ type Handler struct {
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var params struct {
-		Query         string                 `json:"query"`
-		OperationName string                 `json:"operationName"`
-		Variables     map[string]interface{} `json:"variables"`
+		Query         string         `json:"query"`
+		OperationName string         `json:"operationName"`
+		Variables     map[string]any `json:"variables"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

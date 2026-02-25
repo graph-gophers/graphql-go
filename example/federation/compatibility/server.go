@@ -189,7 +189,7 @@ func entities(depProds map[string]DeprecatedProduct, invs map[graphql.ID]Invento
 }
 
 type Entity struct {
-	entity interface{}
+	entity any
 }
 
 func (e *Entity) ToProduct() (*Product, bool) {

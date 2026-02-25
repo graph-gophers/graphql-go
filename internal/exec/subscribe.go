@@ -73,7 +73,7 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 		if _, nonNullChild := f.field.Type.(*ast.NonNull); nonNullChild {
 			return sendAndReturnClosed(&Response{Errors: []*errors.QueryError{err}})
 		}
-		return sendAndReturnClosed(&Response{Data: []byte(fmt.Sprintf(`{"%s":null}`, f.field.Alias)), Errors: []*errors.QueryError{err}})
+		return sendAndReturnClosed(&Response{Data: fmt.Appendf(nil, `{"%s":null}`, f.field.Alias), Errors: []*errors.QueryError{err}})
 	}
 
 	if ctxErr := ctx.Err(); ctxErr != nil {

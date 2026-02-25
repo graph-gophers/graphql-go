@@ -78,7 +78,7 @@ func (r *adminResolver) ToUser() (*user, bool) {
 }
 
 type searchResult struct {
-	result interface{}
+	result any
 }
 
 func (r *searchResult) ToUser() (*user, bool) {

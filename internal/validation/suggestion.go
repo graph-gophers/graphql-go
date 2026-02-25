@@ -55,17 +55,3 @@ func levenshteinDistance(s1, s2 string) int {
 	}
 	return column[len(s1)]
 }
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}

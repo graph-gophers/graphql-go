@@ -8,14 +8,14 @@ import (
 
 // Logger is the interface used to log panics that occur during query execution. It is settable via graphql.ParseSchema.
 type Logger interface {
-	LogPanic(ctx context.Context, value interface{})
+	LogPanic(ctx context.Context, value any)
 }
 
 // LoggerFunc is a function type that implements the Logger interface.
-type LoggerFunc func(ctx context.Context, value interface{})
+type LoggerFunc func(ctx context.Context, value any)
 
 // LogPanic calls the LoggerFunc with the given context and panic value.
-func (f LoggerFunc) LogPanic(ctx context.Context, value interface{}) {
+func (f LoggerFunc) LogPanic(ctx context.Context, value any) {
 	f(ctx, value)
 }
 
@@ -23,7 +23,7 @@ func (f LoggerFunc) LogPanic(ctx context.Context, value interface{}) {
 type DefaultLogger struct{}
 
 // LogPanic is used to log recovered panic values that occur during query execution.
-func (l *DefaultLogger) LogPanic(ctx context.Context, value interface{}) {
+func (l *DefaultLogger) LogPanic(ctx context.Context, value any) {
 	const size = 64 << 10
 	buf := make([]byte, size)
 	buf = buf[:runtime.Stack(buf, false)]

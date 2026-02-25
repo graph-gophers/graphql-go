@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"text/scanner"
@@ -39,11 +40,11 @@ type context struct {
 	overlapLimitHit      bool
 }
 
-func (c *context) addErr(loc errors.Location, rule string, format string, a ...interface{}) {
+func (c *context) addErr(loc errors.Location, rule string, format string, a ...any) {
 	c.addErrMultiLoc([]errors.Location{loc}, rule, format, a...)
 }
 
-func (c *context) addErrMultiLoc(locs []errors.Location, rule string, format string, a ...interface{}) {
+func (c *context) addErrMultiLoc(locs []errors.Location, rule string, format string, a ...any) {
 	c.errs = append(c.errs, &errors.QueryError{
 		Message:   fmt.Sprintf(format, a...),
 		Locations: locs,
@@ -69,7 +70,7 @@ func newContext(s *ast.Schema, doc *ast.ExecutableDefinition, maxDepth int, over
 	}
 }
 
-func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string]interface{}, maxDepth int, overlapPairLimit int) []*errors.QueryError {
+func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string]any, maxDepth int, overlapPairLimit int) []*errors.QueryError {
 	c := newContext(s, doc, maxDepth, overlapPairLimit)
 
 	opNames := make(nameSet, len(doc.Operations))
@@ -201,7 +202,7 @@ func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string
 	return c.errs
 }
 
-func validateValue(c *opContext, v *ast.InputValueDefinition, val interface{}, t ast.Type) {
+func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Type) {
 	switch t := t.(type) {
 	case *ast.NonNull:
 		if val == nil {
@@ -213,7 +214,7 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val interface{}, t
 		if val == nil {
 			return
 		}
-		vv, ok := val.([]interface{})
+		vv, ok := val.([]any)
 		if !ok {
 			// Input coercion rules allow single items without wrapping array
 			validateValue(c, v, val, t.OfType)
@@ -241,7 +242,7 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val interface{}, t
 		if val == nil {
 			return
 		}
-		in, ok := val.(map[string]interface{})
+		in, ok := val.(map[string]any)
 		if !ok {
 			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid type %T.\nExpected type \"%s\", found %s.", v.Name.Name, val, t, val)
 			return
@@ -477,10 +478,8 @@ func validateSelection(c *opContext, sel ast.Selection, t ast.NamedType) {
 
 func compatible(a, b ast.Type) bool {
 	for _, pta := range possibleTypes(a) {
-		for _, ptb := range possibleTypes(b) {
-			if pta == ptb {
-				return true
-			}
+		if slices.Contains(possibleTypes(b), pta) {
+			return true
 		}
 	}
 	return false
@@ -818,13 +817,7 @@ func validateDirectives(c *opContext, loc string, directives ast.DirectiveList) 
 			continue
 		}
 
-		locOK := false
-		for _, allowedLoc := range dd.Locations {
-			if loc == allowedLoc {
-				locOK = true
-				break
-			}
-		}
+		locOK := slices.Contains(dd.Locations, loc)
 		if !locOK {
 			c.addErr(d.Name.Loc, "KnownDirectivesRule", "Directive %q may not be used on %s.", "@"+dirName, loc)
 		}
@@ -1157,7 +1150,7 @@ func isLeaf(t ast.Type) bool {
 	}
 }
 
-func isNull(lit interface{}) bool {
+func isNull(lit any) bool {
 	_, ok := lit.(*ast.NullValue)
 	return ok
 }

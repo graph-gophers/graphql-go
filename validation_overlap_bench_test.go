@@ -15,7 +15,7 @@ func buildLargeQuery(count int) string {
 	var b strings.Builder
 	b.Grow(20 + count*8)
 	b.WriteString("query{root{")
-	for i := 0; i < count; i++ {
+	for i := range count {
 		b.WriteString("f")
 		b.WriteString(strconv.Itoa(i))
 		b.WriteString(":id ")
@@ -35,7 +35,7 @@ func buildFragmentedQuery(total int) string {
 	var topSel strings.Builder
 	topSel.Grow(32 + top*8)
 	topSel.WriteString("query{root{")
-	for i := 0; i < top; i++ {
+	for i := range top {
 		topSel.WriteString("t")
 		topSel.WriteString(strconv.Itoa(i))
 		topSel.WriteString(":id ")
@@ -44,14 +44,14 @@ func buildFragmentedQuery(total int) string {
 	var frags strings.Builder
 	frags.Grow(32 + (fragA+fragB)*8)
 	frags.WriteString(" fragment FragA on Thing {")
-	for i := 0; i < fragA; i++ {
+	for i := range fragA {
 		frags.WriteString(" a")
 		frags.WriteString(strconv.Itoa(i))
 		frags.WriteString(":id")
 	}
 	frags.WriteString(" }")
 	frags.WriteString(" fragment FragB on Thing {")
-	for i := 0; i < fragB; i++ {
+	for i := range fragB {
 		frags.WriteString(" b")
 		frags.WriteString(strconv.Itoa(i))
 		frags.WriteString(":id")
