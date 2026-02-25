@@ -21,7 +21,7 @@ func TestNullID_ImplementsUnmarshaler(t *testing.T) {
 
 func TestNullID_UnmarshalGraphQL(t *testing.T) {
 	type args struct {
-		input interface{}
+		input any
 	}
 
 	good := graphql.ID("1234")
@@ -106,7 +106,7 @@ func TestNullInt_ImplementsUnmarshaler(t *testing.T) {
 
 func TestNullInt_UnmarshalGraphQL(t *testing.T) {
 	type args struct {
-		input interface{}
+		input any
 	}
 
 	a := float64(math.MaxInt32 + 1)
@@ -217,7 +217,7 @@ func TestNullFloat_ImplementsUnmarshaler(t *testing.T) {
 
 func TestNullFloat_UnmarshalGraphQL(t *testing.T) {
 	type args struct {
-		input interface{}
+		input any
 	}
 
 	good := float64(1234)

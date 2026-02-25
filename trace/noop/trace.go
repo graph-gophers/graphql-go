@@ -11,11 +11,11 @@ import (
 // Tracer is a no-op tracer that does nothing.
 type Tracer struct{}
 
-func (Tracer) TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, func([]*errors.QueryError)) {
+func (Tracer) TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]any, varTypes map[string]*introspection.Type) (context.Context, func([]*errors.QueryError)) {
 	return ctx, func(errs []*errors.QueryError) {}
 }
 
-func (Tracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, func(*errors.QueryError)) {
+func (Tracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]any) (context.Context, func(*errors.QueryError)) {
 	return ctx, func(err *errors.QueryError) {}
 }
 

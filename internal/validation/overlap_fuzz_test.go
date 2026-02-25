@@ -2,6 +2,7 @@ package validation_test
 
 import (
 	"math/rand"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,32 +36,34 @@ func FuzzValidateOverlapMixed(f *testing.F) {
 
 		// Build fragments.
 		fragBodies := make([]string, fragCount)
-		for i := 0; i < fragCount; i++ {
+		for i := range fragCount {
 			// each fragment gets subset of fields
-			var body string
+			var body strings.Builder
 			innerFields := 5 + r.Intn(20)
-			for j := 0; j < innerFields; j++ {
-				body += " f" + nameIdx(r.Intn(500)) + ":id"
+			for range innerFields {
+				body.WriteString(" f" + nameIdx(r.Intn(500)) + ":id")
 			}
-			fragBodies[i] = "fragment F" + nameIdx(i) + " on Thing{" + body + " }"
+			fragBodies[i] = "fragment F" + nameIdx(i) + " on Thing{" + body.String() + " }"
 		}
 
 		// Root selection
-		sel := "query{root{"
-		for i := 0; i < fieldCount; i++ {
-			sel += " a" + nameIdx(r.Intn(1000)) + ":id"
+		var sel strings.Builder
+		sel.WriteString("query{root{")
+		for range fieldCount {
+			sel.WriteString(" a" + nameIdx(r.Intn(1000)) + ":id")
 		}
 		// Sprinkle fragment spreads
-		for i := 0; i < fragCount; i++ {
-			sel += " ...F" + nameIdx(i)
+		for i := range fragCount {
+			sel.WriteString(" ...F" + nameIdx(i))
 		}
-		sel += "}}"
-		queryText := sel
+		sel.WriteString("}}")
+		var queryText strings.Builder
+		queryText.WriteString(sel.String())
 		for _, fb := range fragBodies {
-			queryText += fb
+			queryText.WriteString(fb)
 		}
 
-		doc, err := query.Parse(queryText)
+		doc, err := query.Parse(queryText.String())
 		if err != nil {
 			return
 		} // parser fuzzing not our goal

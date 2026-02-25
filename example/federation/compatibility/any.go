@@ -106,13 +106,13 @@ func (Any) ImplementsGraphQLType(name string) bool {
 	return name == "_Any"
 }
 
-func (a *Any) UnmarshalGraphQL(input interface{}) error {
+func (a *Any) UnmarshalGraphQL(input any) error {
 	var data []byte
 	switch val := input.(type) {
 	case string: // json wrapped in quotes
 		v := fmt.Sprint(val) // turns all the `\"` into `"`
 		data = []byte(v)
-	case map[string]interface{}:
+	case map[string]any:
 		var err error
 		data, err = json.Marshal(val)
 		if err != nil {

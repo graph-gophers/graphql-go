@@ -47,7 +47,7 @@ func (r *Request) handlePanic(ctx context.Context) {
 }
 
 type extensionser interface {
-	Extensions() map[string]interface{}
+	Extensions() map[string]any
 }
 
 func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *ast.OperationDefinition) ([]byte, []*errors.QueryError) {
@@ -95,7 +95,7 @@ type fieldToExec struct {
 	out      *bytes.Buffer
 }
 
-func (f *fieldToExec) resolve(ctx context.Context) (output interface{}, err error) {
+func (f *fieldToExec) resolve(ctx context.Context) (output any, err error) {
 	return f.field.Resolve(ctx, f.resolver)
 }
 
@@ -308,7 +308,7 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 	t, nonNull := unwrapNonNull(typ)
 
 	// a reflect.Value of a nil interface will show up as an Invalid value
-	if resolver.Kind() == reflect.Invalid || ((resolver.Kind() == reflect.Ptr || resolver.Kind() == reflect.Interface) && resolver.IsNil()) {
+	if resolver.Kind() == reflect.Invalid || ((resolver.Kind() == reflect.Pointer || resolver.Kind() == reflect.Interface) && resolver.IsNil()) {
 		// If a field of a non-null type resolves to null (either because the
 		// function to resolve the field returned null or because an error occurred),
 		// add an error to the "errors" list in the response.
@@ -329,7 +329,7 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 
 	// Any pointers or interfaces at this point should be non-nil, so we can get the actual value of them
 	// for serialization
-	if resolver.Kind() == reflect.Ptr || resolver.Kind() == reflect.Interface {
+	if resolver.Kind() == reflect.Pointer || resolver.Kind() == reflect.Interface {
 		resolver = resolver.Elem()
 	}
 
@@ -388,7 +388,7 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 		var wg sync.WaitGroup
 		wg.Add(l)
 		sem := make(chan struct{}, concurrency)
-		for i := 0; i < l; i++ {
+		for i := range l {
 			entryouts[i] = r.acquireBuffer()
 			sem <- struct{}{}
 			go func(i int) {
@@ -400,7 +400,7 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 		}
 		wg.Wait()
 	} else {
-		for i := 0; i < l; i++ {
+		for i := range l {
 			entryouts[i] = r.acquireBuffer()
 			r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), entryouts[i])
 		}
@@ -441,10 +441,10 @@ func unwrapNonNull(t ast.Type) (ast.Type, bool) {
 
 type pathSegment struct {
 	parent *pathSegment
-	value  interface{}
+	value  any
 }
 
-func (p *pathSegment) toSlice() []interface{} {
+func (p *pathSegment) toSlice() []any {
 	if p == nil {
 		return nil
 	}

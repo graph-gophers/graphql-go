@@ -9,7 +9,7 @@ import (
 )
 
 func ExampleLoggerFunc() {
-	logfn := log.LoggerFunc(func(ctx context.Context, err interface{}) {
+	logfn := log.LoggerFunc(func(ctx context.Context, err any) {
 		// Here you can handle the panic, e.g., log it or send it to an error tracking service.
 		fmt.Printf("graphql: panic occurred: %v", err)
 	})

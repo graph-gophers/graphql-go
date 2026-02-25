@@ -56,12 +56,12 @@ func (f *Field) UseMethodResolver() bool {
 	return f.MethodIndex != -1 || f.IsFieldFunc
 }
 
-func (f *Field) Resolve(ctx context.Context, resolver reflect.Value, args interface{}) (output interface{}, err error) {
+func (f *Field) Resolve(ctx context.Context, resolver reflect.Value, args any) (output any, err error) {
 	if !f.UseMethodResolver() {
 		res := resolver
 
 		// TODO extract out unwrapping ptr logic to a common place
-		if res.Kind() == reflect.Ptr {
+		if res.Kind() == reflect.Pointer {
 			res = res.Elem()
 		}
 
@@ -113,7 +113,7 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *ast.Schema, resolver interface{}, useFieldResolvers bool) (*Schema, error) {
+func ApplyResolver(s *ast.Schema, resolver any, useFieldResolvers bool) (*Schema, error) {
 	if resolver == nil {
 		return &Schema{Meta: newMeta(s), Schema: *s}, nil
 	}
@@ -122,7 +122,7 @@ func ApplyResolver(s *ast.Schema, resolver interface{}, useFieldResolvers bool) 
 
 	var query, mutation, subscription Resolvable
 
-	resolvers := map[string]interface{}{}
+	resolvers := map[string]any{}
 
 	rv := reflect.ValueOf(resolver)
 	// use separate resolvers in case Query, Mutation and/or Subscription methods are defined
@@ -263,7 +263,7 @@ func (b *execBuilder) makeExec(t ast.Type, resolverType reflect.Type) (Resolvabl
 	}
 
 	if !nonNull {
-		if resolverType.Kind() != reflect.Ptr {
+		if resolverType.Kind() != reflect.Pointer {
 			return nil, fmt.Errorf("%s is not a pointer", resolverType)
 		}
 		resolverType = resolverType.Elem()
@@ -314,7 +314,7 @@ func makeScalarExec(t *ast.ScalarTypeDefinition, resolverType reflect.Type) (Res
 
 func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinition, possibleTypes []*ast.ObjectTypeDefinition, interfaces []*ast.InterfaceTypeDefinition, nonNull bool, resolverType reflect.Type) (*Object, error) {
 	if !nonNull {
-		if resolverType.Kind() != reflect.Ptr && resolverType.Kind() != reflect.Interface {
+		if resolverType.Kind() != reflect.Pointer && resolverType.Kind() != reflect.Interface {
 			return nil, fmt.Errorf("%s is not a pointer or interface", resolverType)
 		}
 	}
@@ -410,8 +410,8 @@ func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinitio
 }
 
 var (
-	contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
-	errorType   = reflect.TypeOf((*error)(nil)).Elem()
+	contextType = reflect.TypeFor[context.Context]()
+	errorType   = reflect.TypeFor[error]()
 )
 
 func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m reflect.Method, sf reflect.StructField, methodIndex int, fieldIndex []int, methodHasReceiver bool) (*Field, error) {
@@ -593,7 +593,7 @@ func stripUnderscore(s string) string {
 }
 
 func unwrapPtr(t reflect.Type) reflect.Type {
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		return t.Elem()
 	}
 	return t

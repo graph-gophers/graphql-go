@@ -12,7 +12,7 @@ import (
 )
 
 type packer interface {
-	Pack(value interface{}) (reflect.Value, error)
+	Pack(value any) (reflect.Value, error)
 }
 
 type Builder struct {
@@ -78,7 +78,7 @@ func (b *Builder) assignPacker(target *packer, schemaType ast.Type, reflectType 
 func (b *Builder) makePacker(schemaType ast.Type, reflectType reflect.Type) (packer, error) {
 	t, nonNull := unwrapNonNull(schemaType)
 	if !nonNull {
-		if reflectType.Kind() == reflect.Ptr {
+		if reflectType.Kind() == reflect.Pointer {
 			elemType := reflectType.Elem()
 			addPtr := true
 			if _, ok := t.(*ast.InputObject); ok {
@@ -168,7 +168,7 @@ func (b *Builder) makeNonNullPacker(schemaType ast.Type, reflectType reflect.Typ
 func (b *Builder) MakeStructPacker(values []*ast.InputValueDefinition, typ reflect.Type) (*StructPacker, error) {
 	structType := typ
 	usePtr := false
-	if typ.Kind() == reflect.Ptr {
+	if typ.Kind() == reflect.Pointer {
 		structType = typ.Elem()
 		usePtr = true
 	}
@@ -192,7 +192,7 @@ func (b *Builder) MakeStructPacker(values []*ast.InputValueDefinition, typ refle
 			return nil, fmt.Errorf("field %q must be exported", sf.Name)
 		}
 		if _, ok := v.Type.(*ast.NonNull); ok {
-			if sf.Type.Kind() == reflect.Ptr {
+			if sf.Type.Kind() == reflect.Pointer {
 				return nil, fmt.Errorf("field %q must be a non-pointer since the parameter is required", sf.Name)
 			}
 		}
@@ -235,12 +235,12 @@ type structPackerField struct {
 	packer packer
 }
 
-func (p *StructPacker) Pack(value interface{}) (reflect.Value, error) {
+func (p *StructPacker) Pack(value any) (reflect.Value, error) {
 	if value == nil {
 		return reflect.Value{}, errors.Errorf("got null for non-null")
 	}
 
-	values := value.(map[string]interface{})
+	values := value.(map[string]any)
 	v := reflect.New(p.structType)
 	v.Elem().Set(p.defaultStruct)
 	for _, f := range p.fields {
@@ -263,10 +263,10 @@ type listPacker struct {
 	elem      packer
 }
 
-func (e *listPacker) Pack(value interface{}) (reflect.Value, error) {
-	list, ok := value.([]interface{})
+func (e *listPacker) Pack(value any) (reflect.Value, error) {
+	list, ok := value.([]any)
 	if !ok {
-		list = []interface{}{value}
+		list = []any{value}
 	}
 
 	v := reflect.MakeSlice(e.sliceType, len(list), len(list))
@@ -286,7 +286,7 @@ type nullPacker struct {
 	addPtr     bool
 }
 
-func (p *nullPacker) Pack(value interface{}) (reflect.Value, error) {
+func (p *nullPacker) Pack(value any) (reflect.Value, error) {
 	if value == nil && !isNullable(p.valueType) {
 		return reflect.Zero(p.valueType), nil
 	}
@@ -309,7 +309,7 @@ type ValuePacker struct {
 	ValueType reflect.Type
 }
 
-func (p *ValuePacker) Pack(value interface{}) (reflect.Value, error) {
+func (p *ValuePacker) Pack(value any) (reflect.Value, error) {
 	if value == nil {
 		return reflect.Value{}, errors.Errorf("got null for non-null")
 	}
@@ -325,7 +325,7 @@ type unmarshalerPacker struct {
 	ValueType reflect.Type
 }
 
-func (p *unmarshalerPacker) Pack(value interface{}) (reflect.Value, error) {
+func (p *unmarshalerPacker) Pack(value any) (reflect.Value, error) {
 	if value == nil && !isNullable(p.ValueType) {
 		return reflect.Value{}, errors.Errorf("got null for non-null")
 	}
@@ -337,7 +337,7 @@ func (p *unmarshalerPacker) Pack(value interface{}) (reflect.Value, error) {
 	return v.Elem(), nil
 }
 
-func UnmarshalInput(typ reflect.Type, input interface{}) (interface{}, error) {
+func UnmarshalInput(typ reflect.Type, input any) (any, error) {
 	if reflect.TypeOf(input) == typ {
 		return input, nil
 	}

@@ -140,10 +140,7 @@ func (br *bookResolver) Title() string  { return br.b.Title }
 func (br *bookResolver) Reviews(ctx context.Context, args struct{ Last int32 }) ([]*reviewResolver, error) {
 	revs := br.root.reviewsByBook[br.b.ID]
 	if take := int(args.Last); take > 0 && take < len(revs) {
-		start := len(revs) - take
-		if start < 0 {
-			start = 0
-		}
+		start := max(len(revs)-take, 0)
 		revs = revs[start:]
 	}
 	out := make([]*reviewResolver, len(revs))

@@ -10,6 +10,6 @@ type Variable struct {
 	Loc  errors.Location
 }
 
-func (v Variable) Deserialize(vars map[string]interface{}) interface{} { return vars[v.Name] }
-func (v Variable) String() string                                      { return "$" + v.Name }
-func (v *Variable) Location() errors.Location                          { return v.Loc }
+func (v Variable) Deserialize(vars map[string]any) any { return vars[v.Name] }
+func (v Variable) String() string                      { return "$" + v.Name }
+func (v *Variable) Location() errors.Location          { return v.Loc }

@@ -27,7 +27,7 @@ type Tracer struct {
 	Tracer oteltrace.Tracer
 }
 
-func (t *Tracer) TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, func([]*errors.QueryError)) {
+func (t *Tracer) TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]any, varTypes map[string]*introspection.Type) (context.Context, func([]*errors.QueryError)) {
 	spanCtx, span := t.Tracer.Start(ctx, "GraphQL Request")
 
 	var attributes []attribute.KeyValue
@@ -53,7 +53,7 @@ func (t *Tracer) TraceQuery(ctx context.Context, queryString string, operationNa
 	}
 }
 
-func (t *Tracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, func(*errors.QueryError)) {
+func (t *Tracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]any) (context.Context, func(*errors.QueryError)) {
 	if trivial {
 		return ctx, func(*errors.QueryError) {}
 	}

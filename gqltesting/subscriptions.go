@@ -23,7 +23,7 @@ type TestSubscription struct {
 	Schema          *graphql.Schema
 	Query           string
 	OperationName   string
-	Variables       map[string]interface{}
+	Variables       map[string]any
 	ExpectedResults []TestResponse
 	ExpectedErr     error
 }

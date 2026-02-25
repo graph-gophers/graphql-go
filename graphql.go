@@ -27,7 +27,7 @@ const defaultMaxPooledBufferCapacity = 16 << 10 // 16KB
 // ParseSchema parses a GraphQL schema and attaches the given root resolver. It returns an error if
 // the Go type signature of the resolvers does not match the schema. If nil is passed as the
 // resolver, then the schema can not be executed, but it may be inspected (e.g. with [Schema.ToJSON] or [Schema.AST]).
-func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (*Schema, error) {
+func ParseSchema(schemaString string, resolver any, opts ...SchemaOpt) (*Schema, error) {
 	s := &Schema{
 		schema:                  schema.New(),
 		maxParallelism:          10,
@@ -68,7 +68,7 @@ func ParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) (
 }
 
 // MustParseSchema calls ParseSchema and panics on error.
-func MustParseSchema(schemaString string, resolver interface{}, opts ...SchemaOpt) *Schema {
+func MustParseSchema(schemaString string, resolver any, opts ...SchemaOpt) *Schema {
 	s, err := ParseSchema(schemaString, resolver, opts...)
 	if err != nil {
 		panic(err)
@@ -358,9 +358,9 @@ func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
 //
 // [spec]: https://github.com/facebook/graphql/commit/7b40390d48680b15cb93e02d46ac5eb249689876#diff-757cea6edf0288677a9eea4cfc801d87R107
 type Response struct {
-	Errors     []*errors.QueryError   `json:"errors,omitempty"`
-	Data       json.RawMessage        `json:"data,omitempty"`
-	Extensions map[string]interface{} `json:"extensions,omitempty"`
+	Errors     []*errors.QueryError `json:"errors,omitempty"`
+	Data       json.RawMessage      `json:"data,omitempty"`
+	Extensions map[string]any       `json:"extensions,omitempty"`
 }
 
 // Validate validates the given query with the schema.
@@ -369,7 +369,7 @@ func (s *Schema) Validate(queryString string) []*errors.QueryError {
 }
 
 // ValidateWithVariables validates the given query with the schema and the input variables.
-func (s *Schema) ValidateWithVariables(queryString string, variables map[string]interface{}) []*errors.QueryError {
+func (s *Schema) ValidateWithVariables(queryString string, variables map[string]any) []*errors.QueryError {
 	doc, qErr := query.Parse(queryString)
 	if qErr != nil {
 		return []*errors.QueryError{qErr}
@@ -385,14 +385,14 @@ func (s *Schema) ValidateWithVariables(queryString string, variables map[string]
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
 // without a resolver. If the context get cancelled, no further resolvers will be called and a
 // the context error will be returned as soon as possible (not immediately).
-func (s *Schema) Exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}) *Response {
+func (s *Schema) Exec(ctx context.Context, queryString string, operationName string, variables map[string]any) *Response {
 	if !s.res.QueryResolver.IsValid() {
 		panic("schema created without resolver, can not exec")
 	}
 	return s.exec(ctx, queryString, operationName, variables, s.res)
 }
 
-func (s *Schema) exec(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, res *resolvable.Schema) *Response {
+func (s *Schema) exec(ctx context.Context, queryString string, operationName string, variables map[string]any, res *resolvable.Schema) *Response {
 	if s.maxQueryLength > 0 && len(queryString) > s.maxQueryLength {
 		return &Response{Errors: []*errors.QueryError{errors.Errorf("query length %d exceeds the maximum allowed query length of %d bytes", len(queryString), s.maxQueryLength)}}
 	}
@@ -431,7 +431,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 
 	// Fill in variables with the defaults from the operation
 	if variables == nil {
-		variables = make(map[string]interface{}, len(op.Vars))
+		variables = make(map[string]any, len(op.Vars))
 	}
 	for _, v := range op.Vars {
 		if _, ok := variables[v.Name.Name]; !ok && v.Default != nil {

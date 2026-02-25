@@ -35,7 +35,7 @@ type Lazy struct {
 // if a matching field was found. The returned map MUST NOT be mutated by
 // callers (it is the internal map). Paths follow the same format produced by
 // SelectedFieldNames (e.g. "books", "books.reviews").
-func (l *Lazy) Args(path string) (map[string]interface{}, bool) {
+func (l *Lazy) Args(path string) (map[string]any, bool) {
 	if l == nil || len(path) == 0 {
 		return nil, false
 	}
@@ -48,7 +48,7 @@ func (l *Lazy) Args(path string) (map[string]interface{}, bool) {
 	return nil, false
 }
 
-func matchArgsRecursive(sel selected.Selection, want, prefix string) (map[string]interface{}, bool) {
+func matchArgsRecursive(sel selected.Selection, want, prefix string) (map[string]any, bool) {
 	switch s := sel.(type) {
 	case *selected.SchemaField:
 		name := s.Name
@@ -151,7 +151,7 @@ func FromContext(ctx context.Context) *Lazy {
 
 // DecodeArgsInto decodes the argument map for the dot path into dst (pointer to struct).
 // Returns (true,nil) if decoded, (false,nil) if path missing. Caches per path+type.
-func (l *Lazy) DecodeArgsInto(path string, dst interface{}) (bool, error) {
+func (l *Lazy) DecodeArgsInto(path string, dst any) (bool, error) {
 	if l == nil || dst == nil {
 		return false, nil
 	}
@@ -160,7 +160,7 @@ func (l *Lazy) DecodeArgsInto(path string, dst interface{}) (bool, error) {
 		return false, nil
 	}
 	rv := reflect.ValueOf(dst)
-	if rv.Kind() != reflect.Ptr || rv.IsNil() {
+	if rv.Kind() != reflect.Pointer || rv.IsNil() {
 		return false, fmt.Errorf("destination must be non-nil pointer")
 	}
 	rv = rv.Elem()
@@ -205,7 +205,7 @@ func (l *Lazy) DecodeArgsInto(path string, dst interface{}) (bool, error) {
 	return true, nil
 }
 
-func assignArg(dst reflect.Value, src interface{}) error {
+func assignArg(dst reflect.Value, src any) error {
 	if !dst.IsValid() {
 		return nil
 	}
@@ -226,7 +226,7 @@ func assignArg(dst reflect.Value, src interface{}) error {
 		}
 		dst.Set(reflect.ValueOf(coerced))
 	case reflect.Struct:
-		m, ok := src.(map[string]interface{})
+		m, ok := src.(map[string]any)
 		if !ok {
 			return fmt.Errorf("expected map for struct, got %T", src)
 		}
@@ -257,7 +257,7 @@ func assignArg(dst reflect.Value, src interface{}) error {
 			}
 		}
 		dst.Set(out)
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if dst.IsNil() {
 			dst.Set(reflect.New(dst.Type().Elem()))
 		}
