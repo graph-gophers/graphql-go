@@ -140,16 +140,17 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 					func() {
 						defer subR.handlePanic(subCtx)
 
-						var buf bytes.Buffer
-						subR.execSelectionSet(subCtx, f.sels, f.field.Type, &pathSegment{nil, f.field.Alias}, s, resp, &buf)
+						buf := subR.acquireBuffer()
+						defer subR.releaseBuffer(buf)
+						subR.execSelectionSet(subCtx, f.sels, f.field.Type, &pathSegment{nil, f.field.Alias}, s, resp, buf)
 
 						propagateChildError := false
-						if _, nonNullChild := f.field.Type.(*ast.NonNull); nonNullChild && resolvedToNull(&buf) {
+						if _, nonNullChild := f.field.Type.(*ast.NonNull); nonNullChild && resolvedToNull(buf) {
 							propagateChildError = true
 						}
 
 						if !propagateChildError {
-							out.WriteString(fmt.Sprintf(`{"%s":`, f.field.Alias))
+							fmt.Fprintf(&out, `{"%s":`, f.field.Alias)
 							out.Write(buf.Bytes())
 							out.WriteString(`}`)
 						}
