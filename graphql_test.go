@@ -1662,7 +1662,7 @@ func TestEnums(t *testing.T) {
 				{
 					Message:   "Argument \"episode\" has invalid value WRATH_OF_KHAN.\nExpected type \"Episode\", found WRATH_OF_KHAN.",
 					Locations: []gqlerrors.Location{{Column: 20, Line: 3}},
-					Rule:      "ArgumentsOfCorrectType",
+					Rule:      "ValuesOfCorrectTypeRule",
 				},
 			},
 		},
@@ -2591,6 +2591,14 @@ func TestIntrospection(t *testing.T) {
 											}
 										}
 									]
+								},
+								{
+									"name": "oneOf",
+									"description": "Marks an input object type as requiring exactly one of its fields to be provided.",
+									"locations": [
+										"INPUT_OBJECT"
+									],
+									"args": []
 								},
 								{
 									"name": "skip",
@@ -4478,7 +4486,7 @@ func TestQueryVariablesValidation(t *testing.T) {
 		ExpectedErrors: []*gqlerrors.QueryError{{
 			Message:   "Argument \"filter\" has invalid value {}.\nIn field \"required\": Expected \"String!\", found null.",
 			Locations: []gqlerrors.Location{{Line: 3, Column: 27}},
-			Rule:      "ArgumentsOfCorrectType",
+			Rule:      "ValuesOfCorrectTypeRule",
 		}},
 	}, {
 		Schema: graphql.MustParseSchema(`
@@ -5834,5 +5842,182 @@ func TestMaxPooledBufferCap_OptionCompatibility(t *testing.T) {
 				}
 			}
 		`,
+	})
+}
+
+type oneOfSearchResolver struct{}
+
+type oneOfUser struct {
+	id    string
+	email string
+}
+
+type oneOfSearchUserArgs struct {
+	Input struct {
+		ID    *string
+		Email *string
+	}
+}
+
+func (r *oneOfSearchResolver) SearchUser(args oneOfSearchUserArgs) *oneOfUser {
+	if args.Input.ID != nil {
+		return &oneOfUser{id: *args.Input.ID, email: "user@example.com"}
+	}
+	if args.Input.Email != nil {
+		return &oneOfUser{id: "123", email: *args.Input.Email}
+	}
+	return nil
+}
+
+func (u *oneOfUser) ID() graphql.ID {
+	return graphql.ID(u.id)
+}
+
+func (u *oneOfUser) Email() string {
+	return u.email
+}
+
+func TestOneOfInputValidation(t *testing.T) {
+	t.Parallel()
+
+	schema := graphql.MustParseSchema(`
+		schema {
+			query: Query
+		}
+
+		type Query {
+			searchUser(input: SearchInput!): User
+		}
+
+		input SearchInput @oneOf {
+			id: String
+			email: String
+		}
+
+		type User {
+			id: ID!
+			email: String!
+		}
+	`, &oneOfSearchResolver{})
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: schema,
+			Query: `
+				{
+					searchUser(input: {}) {
+						id
+					}
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: `OneOf Input Object "SearchInput" must specify exactly one key.`,
+					Rule:    "ValuesOfCorrectTypeRule",
+					Locations: []gqlerrors.Location{
+						{Line: 3, Column: 24},
+					},
+				},
+			},
+		},
+		{
+			Schema: schema,
+			Query: `
+				{
+					searchUser(input: { id: "456" }) {
+						id
+						email
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"searchUser": {
+						"id": "456",
+						"email": "user@example.com"
+					}
+				}
+			`,
+		},
+		{
+			Schema: schema,
+			Query: `
+				{
+					searchUser(input: { email: "test@example.com" }) {
+						id
+						email
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"searchUser": {
+						"id": "123",
+						"email": "test@example.com"
+					}
+				}
+			`,
+		},
+		{
+			Schema: schema,
+			Query: `
+				{
+					searchUser(input: { id: "123", email: "test@example.com" }) {
+						id
+					}
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: `OneOf Input Object "SearchInput" must specify exactly one key.`,
+					Rule:    "ValuesOfCorrectTypeRule",
+					Locations: []gqlerrors.Location{
+						{Line: 3, Column: 24},
+					},
+				},
+			},
+		},
+		{
+			Schema: schema,
+			Query: `
+				query($id: String) {
+					searchUser(input: { id: $id }) {
+						id
+					}
+				}
+			`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: `Variable "$id" is of type "String" but must be non-nullable to be used for OneOf Input Object "SearchInput".`,
+					Rule:    "VariablesInAllowedPositionRule",
+					Locations: []gqlerrors.Location{
+						{Line: 2, Column: 11},
+						{Line: 3, Column: 30},
+					},
+				},
+			},
+		},
+		{
+			Schema: schema,
+			Query: `
+				query($id: String!) {
+					searchUser(input: { id: $id }) {
+						id
+						email
+					}
+				}
+			`,
+			Variables: map[string]any{
+				"id": "789",
+			},
+			ExpectedResult: `
+				{
+					"searchUser": {
+						"id": "789",
+						"email": "user@example.com"
+					}
+				}
+			`,
+		},
 	})
 }

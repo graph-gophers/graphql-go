@@ -369,7 +369,7 @@ func validateSelectionSet(c *opContext, sels []ast.Selection, t ast.NamedType) {
 				if c.overlapLimitHit {
 					break
 				}
-				c.validateOverlap(fa, fld, nil, nil)
+				c.validateOverlap(fld, fa, nil, nil)
 			}
 			// Compare fragment with following fragments
 			for _, fb := range fragments[i+1:] {
@@ -592,10 +592,10 @@ func (c *context) validateOverlap(a, b ast.Selection, reasons *[]string, locs *[
 	// Optimisation 1: store only one direction of the pair to halve memory and lookups.
 	pa := reflect.ValueOf(a).Pointer()
 	pb := reflect.ValueOf(b).Pointer()
-	if pb < pa { // canonical ordering
-		a, b = b, a
-	}
 	key := selectionPair{a: a, b: b}
+	if pb < pa { // canonical ordering for key only
+		key = selectionPair{a: b, b: a}
+	}
 	if _, ok := c.overlapValidated[key]; ok {
 		return
 	}
@@ -626,9 +626,6 @@ func (c *context) validateOverlap(a, b ast.Selection, reasons *[]string, locs *[
 	case *ast.Field:
 		switch b := b.(type) {
 		case *ast.Field:
-			if b.Alias.Loc.Before(a.Alias.Loc) {
-				a, b = b, a
-			}
 			if reasons2, locs2 := c.validateFieldOverlap(a, b); len(reasons2) != 0 {
 				locs2 = append(locs2, a.Alias.Loc, b.Alias.Loc)
 				if reasons == nil {
@@ -888,7 +885,7 @@ func validateArgumentTypes(c *opContext, args ast.ArgumentList, argDecls ast.Arg
 		}
 		value := selArg.Value
 		if ok, reason := validateValueType(c, value, arg.Type); !ok {
-			c.addErr(value.Location(), "ArgumentsOfCorrectType", "Argument %q has invalid value %s.\n%s", arg.Name.Name, value, reason)
+			c.addErr(value.Location(), "ValuesOfCorrectTypeRule", "Argument %q has invalid value %s.\n%s", arg.Name.Name, value, reason)
 		}
 	}
 	for _, decl := range argDecls {
@@ -1040,6 +1037,39 @@ func validateValueType(c *opContext, v ast.Value, t ast.Type) (bool, string) {
 				}
 			}
 		}
+
+		// Validate @oneOf constraint: exactly one non-null field must be provided
+		if t.Directives.Get("oneOf") != nil {
+			if len(v.Fields) != 1 {
+				c.addErr(v.Location(), "ValuesOfCorrectTypeRule", "OneOf Input Object %q must specify exactly one key.", t.Name)
+				return true, ""
+			}
+
+			f := v.Fields[0]
+
+			// Check for explicit null values
+			if _, isNull := f.Value.(*ast.NullValue); isNull {
+				c.addErr(v.Location(), "ValuesOfCorrectTypeRule", "Field %q must be non-null.", t.Name+"."+f.Name.Name)
+				return true, ""
+			}
+
+			// Check for nullable variables
+			if varRef, isVar := f.Value.(*ast.Variable); isVar {
+				for _, op := range c.ops {
+					if varDef := op.Vars.Get(varRef.Name); varDef != nil {
+						if _, ok := varDef.Type.(*ast.NonNull); !ok {
+							varType := varDef.Type
+							if resolved := resolveType(c.context, varDef.Type); resolved != nil {
+								varType = resolved
+							}
+							c.addErrMultiLoc([]errors.Location{varDef.Loc, varRef.Loc}, "VariablesInAllowedPositionRule", "Variable %q is of type %q but must be non-nullable to be used for OneOf Input Object %q.", "$"+varRef.Name, varType, t.Name)
+							return true, ""
+						}
+					}
+				}
+			}
+		}
+
 		return true, ""
 	}
 

@@ -1,6 +1,5 @@
 {
   "include": [
-    "run.ts",
     "node_modules/graphql/**/*.ts"
   ],
   "compilerOptions": {

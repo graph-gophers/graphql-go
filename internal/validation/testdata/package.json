@@ -15,7 +15,7 @@
   },
   "scripts": {
     "create-patches": "npx patch-package graphql",
-    "export": "node --loader ts-node/esm export.ts",
+    "export": "node export.cjs",
     "postinstall": "patch-package",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

@@ -48,6 +48,14 @@
         "name": "include"
       },
       {
+        "args": [],
+        "description": "Marks an input object type as requiring exactly one of its fields to be provided.",
+        "locations": [
+          "INPUT_OBJECT"
+        ],
+        "name": "oneOf"
+      },
+      {
         "args": [
           {
             "defaultValue": null,
