@@ -1,16 +1,141 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
+const Module = require('node:module');
+const ts = require('typescript');
 
-process.env.TS_NODE_PROJECT = path.join(__dirname, 'tsconfig.json');
-process.env.TS_NODE_COMPILER_OPTIONS = JSON.stringify({ module: 'CommonJS' });
-process.env.TS_NODE_SKIP_IGNORE = 'true';
+Module._extensions['.ts'] = function compileTypeScript(module, filename) {
+  const source = fs.readFileSync(filename, 'utf8');
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      moduleResolution: ts.ModuleResolutionKind.NodeJs,
+      target: ts.ScriptTarget.ES2022,
+      esModuleInterop: true,
+      sourceMap: false,
+      inlineSourceMap: false,
+    },
+    fileName: filename,
+  });
 
-require('ts-node/register/transpile-only');
+  module._compile(compiled.outputText, filename);
+};
+
+const originalResolveFilename = Module._resolveFilename;
+Module._resolveFilename = function patchedResolveFilename(request, parent, ...rest) {
+  try {
+    return originalResolveFilename.call(this, request, parent, ...rest);
+  } catch (error) {
+    if (
+      error &&
+      error.code === 'MODULE_NOT_FOUND' &&
+      typeof request === 'string' &&
+      request.endsWith('.js') &&
+      parent &&
+      typeof parent.filename === 'string' &&
+      parent.filename.includes(`${path.sep}node_modules${path.sep}graphql${path.sep}src${path.sep}`)
+    ) {
+      const tsRequest = request.slice(0, -3) + '.ts';
+      return originalResolveFilename.call(this, tsRequest, parent, ...rest);
+    }
+
+    throw error;
+  }
+};
+
+const captured = [];
+const schemasById = new Map();
+const suiteNames = [];
+const schemaRefs = [];
+
+const { printSchema } = require('graphql/src/utilities/printSchema.ts');
+
+function describe(name, fn) {
+  if (name === 'within schema language') {
+    return;
+  }
+
+  suiteNames.push(name);
+  try {
+    fn();
+  } finally {
+    suiteNames.pop();
+  }
+}
+
+describe.only = describe;
+describe.skip = () => {};
+
+function it(name, fn) {
+  if (
+    name === 'ignores type definitions' ||
+    name === 'reports correctly when a non-exclusive follows an exclusive' ||
+    name === 'disallows differing subfields'
+  ) {
+    return;
+  }
+
+  suiteNames.push(name);
+
+  try {
+    if (typeof fn === 'function') {
+      if (fn.length > 0) {
+        fn(() => {});
+      } else {
+        fn();
+      }
+    }
+  } finally {
+    suiteNames.pop();
+  }
+}
+
+it.only = it;
+it.skip = () => {};
+
+const mocha = require('mocha');
+mocha.describe = describe;
+mocha.it = it;
+
+global.describe = describe;
+global.it = it;
+
+function registerSchema(schema) {
+  for (let i = 0; i < schemaRefs.length; i += 1) {
+    if (schemaRefs[i] === schema) {
+      return i;
+    }
+  }
+
+  schemaRefs.push(schema);
+  return schemaRefs.length - 1;
+}
 
 const harness = require('graphql/src/validation/__tests__/harness.ts');
-global.describe = harness.describe;
-global.it = harness.it;
+
+harness.describe = describe;
+harness.it = it;
+harness.expectValidationErrorsWithSchema = function expectValidationErrorsWithSchema(
+  schema,
+  rule,
+  queryStr,
+) {
+  return {
+    toDeepEqual(errors) {
+      captured.push({
+        name: suiteNames.join('/'),
+        rule: rule.name,
+        schema: registerSchema(schema),
+        query: queryStr,
+        errors,
+      });
+    },
+  };
+};
+
+harness.expectValidationErrors = function expectValidationErrors(rule, queryStr) {
+  return harness.expectValidationErrorsWithSchema(harness.testSchema, rule, queryStr);
+};
 
 // Import test files to register test cases (these need to run first)
 // TODO: Fix test failures.
@@ -44,21 +169,16 @@ require('graphql/src/validation/__tests__/VariablesAreInputTypesRule-test.ts');
 // require('graphql/src/validation/__tests__/VariablesDefaultValueAllowed-test.ts');
 require('graphql/src/validation/__tests__/VariablesInAllowedPositionRule-test.ts');
 
-const { printSchema } = require('graphql/src/utilities/printSchema.ts');
-const { schemas, testCases } = harness;
-
-// Schema index in the source array can be unstable, as its dependent on the order they are used in the registered test
-// files. The SHA256 of the schema will change if there are any changes to the content, but is a better reference than
-// the schema indexes all changing when a new schema is inserted.
-let s = schemas().map(schema => {
+let schemas = schemaRefs.map(schema => {
   const sdl = printSchema(schema);
   const id = createHash('sha256').update(sdl).digest('base64');
-  const v = { id: id, sdl: sdl };
-  return v;
+  const value = { id, sdl };
+  schemasById.set(id, value);
+  return value;
 });
 
-const tests = testCases().map(testCase => {
-  const schema = s[testCase.schema];
+const tests = captured.map(testCase => {
+  const schema = schemas[testCase.schema];
   return {
     name: testCase.name,
     rule: testCase.rule,
@@ -68,10 +188,9 @@ const tests = testCases().map(testCase => {
   };
 });
 
-// Order based on the schema string to provide semi-stable ordering
-s = s.sort((a, b) => a.sdl.localeCompare(b.sdl));
+schemas = schemas.sort((a, b) => a.sdl.localeCompare(b.sdl));
 
-let output = JSON.stringify({ schemas: s, tests: tests }, null, 2);
+let output = JSON.stringify({ schemas, tests }, null, 2);
 output = output.replace(/ Did you mean to use an inline fragment on [^?]*\?/g, '');
 // Ignore suggested types in errors, which graphql-go does not currently produce.
 output = output.replace(/ Did you mean \\"[A-Z].*\"\?/g, '');

@@ -31,10 +31,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "allowSyntheticDefaultImports": true
-  },
-  "ts-node": {
-    "esm": true,
-    // Dependencies would normally be skipped, however we've got to checkout graphql-js as a source package
-    "skipIgnore": true
   }
 }
