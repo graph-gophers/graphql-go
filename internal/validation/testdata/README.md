@@ -12,18 +12,15 @@ go generate .
 
 ## How it works
 
-A Node.js project is used to pull in graphql-js as a dependency, and automatically patch that via `patch-package`. These
-patches replace the `mocha` test functions `describe`, `it`, assertions and the test `harness`. This allows the
-expectations to be captured, and written to a JSON file. These test cases in the JSON file are then used to drive the Go
-tests.
+A Node.js project is used to pull in graphql-js as a dependency. The `export.cjs` script runs with Node,
+transpiles graphql-js TypeScript files on the fly, loads selected validation test files with a lightweight in-process Mocha shim, and captures expected validation errors into `tests.json`. These test cases in the JSON file are then used to drive the Go tests.
 
-## Updating patches
+## Updating dependency
 
-With changes to [graphql-js], the patches may need to be updated. To do this, update the `graphql` dependency under
-`node_modules`, and sync the patches with the following command:
+With changes to [graphql-js], update the dependency and regenerate `tests.json`:
 
 ```sh
-npm run create-patches
+go generate .
 ```
 
 [graphql-js]: https://github.com/graphql/graphql-js

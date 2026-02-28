@@ -76,6 +76,32 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 		s.RootOperationTypes[key] = t
 	}
 
+	// Validate that @oneOf directive is only used on INPUT_OBJECT types
+	for _, typeDef := range s.Types {
+		switch t := typeDef.(type) {
+		case *ast.ObjectTypeDefinition:
+			if t.Directives.Get("oneOf") != nil {
+				return errors.Errorf("directive \"@oneOf\" may only be used on INPUT_OBJECT types, not on %s", t.Name)
+			}
+		case *ast.InterfaceTypeDefinition:
+			if t.Directives.Get("oneOf") != nil {
+				return errors.Errorf("directive \"@oneOf\" may only be used on INPUT_OBJECT types, not on %s", t.Name)
+			}
+		case *ast.Union:
+			if t.Directives.Get("oneOf") != nil {
+				return errors.Errorf("directive \"@oneOf\" may only be used on INPUT_OBJECT types, not on %s", t.Name)
+			}
+		case *ast.EnumTypeDefinition:
+			if t.Directives.Get("oneOf") != nil {
+				return errors.Errorf("directive \"@oneOf\" may only be used on INPUT_OBJECT types, not on %s", t.Name)
+			}
+		case *ast.ScalarTypeDefinition:
+			if t.Directives.Get("oneOf") != nil {
+				return errors.Errorf("directive \"@oneOf\" may only be used on INPUT_OBJECT types, not on %s", t.Name)
+			}
+		}
+	}
+
 	// Interface types need validation: https://spec.graphql.org/draft/#sec-Interfaces.Interfaces-Implementing-Interfaces
 	for _, typeDef := range s.Types {
 		switch t := typeDef.(type) {
@@ -156,6 +182,47 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 		}
 		for _, value := range enum.EnumValuesDefinition {
 			if err := resolveDirectives(s, value.Directives, "ENUM_VALUE"); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Validate @oneOf input types and resolve directives on input objects
+	for _, typeDef := range s.Types {
+		input, ok := typeDef.(*ast.InputObject)
+		if !ok {
+			continue
+		}
+
+		if input.Directives.Get("oneOf") != nil {
+			// @oneOf is only valid on INPUT_OBJECT types - check is implicit since we're checking InputObject type
+
+			// Validate that input type has at least one field
+			if len(input.Values) == 0 {
+				return errors.Errorf("OneOf Input Object %q must define at least one field", input.Name)
+			}
+
+			// Validate that all fields are nullable (not NonNull)
+			for _, field := range input.Values {
+				if _, ok := field.Type.(*ast.NonNull); ok {
+					return errors.Errorf("OneOf input field %s.%s must be nullable.", input.Name, field.Name.Name)
+				}
+			}
+
+			// Validate that no fields have default values
+			for _, field := range input.Values {
+				if field.Default != nil {
+					return errors.Errorf("OneOf input field %s.%s cannot have a default value.", input.Name, field.Name.Name)
+				}
+			}
+		}
+
+		// Resolve directives on input and input fields
+		if err := resolveDirectives(s, input.Directives, "INPUT_OBJECT"); err != nil {
+			return err
+		}
+		for _, field := range input.Values {
+			if err := resolveDirectives(s, field.Directives, "INPUT_FIELD_DEFINITION"); err != nil {
 				return err
 			}
 		}

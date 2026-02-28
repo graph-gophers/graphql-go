@@ -5,18 +5,13 @@
   "description": "Extracts test data from github.com/graphql/graphql-js",
   "main": "",
   "devDependencies": {
-    "@types/chai": "4.3.4",
-    "chai": "^4.3.7",
+    "chai": "^6.2.2",
     "graphql": "github:graphql/graphql-js",
-    "patch-package": "^8.0.0",
-    "postinstall-postinstall": "^2.1.0",
-    "ts-node": "10.9.1",
-    "typescript": "5.0.4"
+    "mocha": "^11.7.5",
+    "typescript": "^5.9.2"
   },
   "scripts": {
-    "create-patches": "npx patch-package graphql",
-    "export": "node --loader ts-node/esm export.ts",
-    "postinstall": "patch-package",
+    "export": "node export.cjs",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
