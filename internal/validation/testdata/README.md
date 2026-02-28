@@ -15,7 +15,7 @@ go generate .
 A Node.js project is used to pull in graphql-js as a dependency. The `export.cjs` script runs with Node,
 transpiles graphql-js TypeScript files on the fly, loads selected validation test files with a lightweight in-process Mocha shim, and captures expected validation errors into `tests.json`. These test cases in the JSON file are then used to drive the Go tests.
 
-## Updating patches
+## Updating dependency
 
 With changes to [graphql-js], update the dependency and regenerate `tests.json`:
 

@@ -44,7 +44,6 @@ Module._resolveFilename = function patchedResolveFilename(request, parent, ...re
 };
 
 const captured = [];
-const schemasById = new Map();
 const suiteNames = [];
 const schemaRefs = [];
 
@@ -172,9 +171,7 @@ require('graphql/src/validation/__tests__/VariablesInAllowedPositionRule-test.ts
 let schemas = schemaRefs.map(schema => {
   const sdl = printSchema(schema);
   const id = createHash('sha256').update(sdl).digest('base64');
-  const value = { id, sdl };
-  schemasById.set(id, value);
-  return value;
+  return { id, sdl };
 });
 
 const tests = captured.map(testCase => {
