@@ -28,66 +28,28 @@ type Test struct {
 	Errors []*errors.QueryError
 }
 
+var skippedValidationTests = map[string]struct{}{
+	// known-rule-overlap: extra error under PossibleFragmentSpreadsRule.
+	"Validate: Possible fragment spreads/ignores incorrect type (caught by FragmentsOnCompositeTypesRule)": {},
+	// parser-mismatch: graphql-js fixture parses SDL as executable query.
+	"Validate: Directives Are Unique Per Location/unknown directives must be ignored": {},
+	"Validate: Executable definitions/with schema definition":                         {},
+	"Validate: Executable definitions/with type definition":                           {},
+	// schema-difference: meta schema always includes standard scalar types.
+	"Validate: Known type names/references to standard scalars that are missing in schema": {},
+	// unsupported-feature: experimental @stream directives.
+	"Validate: Overlapping fields can be merged/different stream directive label":               {},
+	"Validate: Overlapping fields can be merged/different stream directive initialCount":        {},
+	"Validate: Overlapping fields can be merged/different stream directive first missing args":  {},
+	"Validate: Overlapping fields can be merged/different stream directive second missing args": {},
+	"Validate: Overlapping fields can be merged/different stream directive extra argument":      {},
+	"Validate: Overlapping fields can be merged/mix of stream and no stream":                    {},
+	// unresolved-scalar-parse-literal: graphql-js can reject literal via scalar parseLiteral(undefined) behavior.
+	"Validate: Values of correct type/Invalid input object value/reports error for custom scalar that returns undefined": {},
+}
+
 func TestValidate(t *testing.T) {
-	skip := map[string]struct{}{
-		// Minor issue: reporting extra error under PossibleFragmentSpreadsRule which is not intended
-		"Validate: Possible fragment spreads/ignores incorrect type (caught by FragmentsOnCompositeTypesRule)": {},
-		// graphql-js test case parses SDL as if it was a query here, which fails since we only accept a query
-		"Validate: Directives Are Unique Per Location/unknown directives must be ignored": {},
-		// The meta schema always includes the standard types, so this isn't applicable
-		"Validate: Known type names/references to standard scalars that are missing in schema": {},
-		// Ignore tests using experimental @stream
-		"Validate: Overlapping fields can be merged/different stream directive label":               {},
-		"Validate: Overlapping fields can be merged/different stream directive initialCount":        {},
-		"Validate: Overlapping fields can be merged/different stream directive first missing args":  {},
-		"Validate: Overlapping fields can be merged/different stream directive second missing args": {},
-		"Validate: Overlapping fields can be merged/different stream directive extra argument":      {},
-		"Validate: Overlapping fields can be merged/mix of stream and no stream":                    {},
-		// ValuesOfCorrectTypeRule: Error message format differs from graphql-js. graphql-go includes argument name and type details, while graphql-js uses simpler coercion messages.
-		// TODO: Align error message format with graphql-js or update tests.json to match graphql-go's implementation.
-		"Validate: Values of correct type/Invalid String values/Int into String":                                                           {},
-		"Validate: Values of correct type/Invalid String values/Float into String":                                                         {},
-		"Validate: Values of correct type/Invalid String values/Boolean into String":                                                       {},
-		"Validate: Values of correct type/Invalid String values/Unquoted String into String":                                               {},
-		"Validate: Values of correct type/Invalid Int values/String into Int":                                                              {},
-		"Validate: Values of correct type/Invalid Int values/Big Int into Int":                                                             {},
-		"Validate: Values of correct type/Invalid Int values/Unquoted String into Int":                                                     {},
-		"Validate: Values of correct type/Invalid Int values/Simple Float into Int":                                                        {},
-		"Validate: Values of correct type/Invalid Int values/Float into Int":                                                               {},
-		"Validate: Values of correct type/Invalid Float values/String into Float":                                                          {},
-		"Validate: Values of correct type/Invalid Float values/Boolean into Float":                                                         {},
-		"Validate: Values of correct type/Invalid Float values/Unquoted into Float":                                                        {},
-		"Validate: Values of correct type/Invalid Boolean value/Int into Boolean":                                                          {},
-		"Validate: Values of correct type/Invalid Boolean value/Float into Boolean":                                                        {},
-		"Validate: Values of correct type/Invalid Boolean value/String into Boolean":                                                       {},
-		"Validate: Values of correct type/Invalid Boolean value/Unquoted into Boolean":                                                     {},
-		"Validate: Values of correct type/Invalid ID value/Float into ID":                                                                  {},
-		"Validate: Values of correct type/Invalid ID value/Boolean into ID":                                                                {},
-		"Validate: Values of correct type/Invalid ID value/Unquoted into ID":                                                               {},
-		"Validate: Values of correct type/Invalid Enum value/Int into Enum":                                                                {},
-		"Validate: Values of correct type/Invalid Enum value/Float into Enum":                                                              {},
-		"Validate: Values of correct type/Invalid Enum value/String into Enum":                                                             {},
-		"Validate: Values of correct type/Invalid Enum value/Boolean into Enum":                                                            {},
-		"Validate: Values of correct type/Invalid Enum value/Unknown Enum Value into Enum":                                                 {},
-		"Validate: Values of correct type/Invalid Enum value/Different case Enum Value into Enum":                                          {},
-		"Validate: Values of correct type/Invalid List value/Incorrect item type":                                                          {},
-		"Validate: Values of correct type/Invalid List value/Single value of incorrect type":                                               {},
-		"Validate: Values of correct type/Invalid non-nullable value/Incorrect value type":                                                 {},
-		"Validate: Values of correct type/Invalid non-nullable value/Incorrect value and missing argument (ProvidedRequiredArgumentsRule)": {},
-		"Validate: Values of correct type/Invalid non-nullable value/Null value":                                                           {},
-		"Validate: Values of correct type/Invalid input object value/Partial object, missing required":                                     {},
-		"Validate: Values of correct type/Invalid input object value/Partial object, invalid field type":                                   {},
-		"Validate: Values of correct type/Invalid input object value/Partial object, null to non-null field":                               {},
-		"Validate: Values of correct type/Invalid input object value/Partial object, unknown field arg":                                    {},
-		"Validate: Values of correct type/Invalid input object value/reports error for custom scalar that returns undefined":               {},
-		"Validate: Values of correct type/Invalid oneOf input object value/Invalid field type":                                             {},
-		"Validate: Values of correct type/Directive arguments/with directive with incorrect types":                                         {},
-		"Validate: Values of correct type/Variable default values/variables with invalid default null values":                              {},
-		"Validate: Values of correct type/Variable default values/variables with invalid default values":                                   {},
-		"Validate: Values of correct type/Variable default values/variables with complex invalid default values":                           {},
-		"Validate: Values of correct type/Variable default values/complex variables missing required field":                                {},
-		"Validate: Values of correct type/Variable default values/list variables with invalid item":                                        {},
-	}
+	skip := skippedValidationTests
 
 	f, err := os.Open("testdata/tests.json")
 	if err != nil {
@@ -130,8 +92,8 @@ func TestValidate(t *testing.T) {
 					got = append(got, err)
 				}
 			}
-			sortLocations(test.Errors)
-			sortLocations(got)
+			normalizeErrors(test.Errors)
+			normalizeErrors(got)
 			if !reflect.DeepEqual(test.Errors, got) {
 				t.Errorf("wrong errors for rule %q\nexpected: %v\ngot:      %v", test.Rule, test.Errors, got)
 			}
@@ -139,9 +101,30 @@ func TestValidate(t *testing.T) {
 	}
 }
 
-func sortLocations(errs []*errors.QueryError) {
+func normalizeErrors(errs []*errors.QueryError) {
 	for _, err := range errs {
 		locs := err.Locations
 		sort.Slice(locs, func(i, j int) bool { return locs[i].Before(locs[j]) })
 	}
+
+	sort.Slice(errs, func(i, j int) bool {
+		if errs[i].Message != errs[j].Message {
+			return errs[i].Message < errs[j].Message
+		}
+
+		il := errs[i].Locations
+		jl := errs[j].Locations
+		if len(il) == 0 || len(jl) == 0 {
+			return len(il) < len(jl)
+		}
+
+		if il[0].Line != jl[0].Line {
+			return il[0].Line < jl[0].Line
+		}
+		if il[0].Column != jl[0].Column {
+			return il[0].Column < jl[0].Column
+		}
+
+		return len(il) < len(jl)
+	})
 }

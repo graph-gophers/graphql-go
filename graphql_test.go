@@ -1660,7 +1660,7 @@ func TestEnums(t *testing.T) {
 			`,
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
-					Message:   "Argument \"episode\" has invalid value WRATH_OF_KHAN.\nExpected type \"Episode\", found WRATH_OF_KHAN.",
+					Message:   "Value \"WRATH_OF_KHAN\" does not exist in \"Episode\" enum.",
 					Locations: []gqlerrors.Location{{Column: 20, Line: 3}},
 					Rule:      "ValuesOfCorrectTypeRule",
 				},
@@ -2150,6 +2150,8 @@ func TestConnections(t *testing.T) {
 }
 
 func TestMutation(t *testing.T) {
+	starwars.ResetReviews()
+
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: starwarsSchema,
@@ -2557,7 +2559,8 @@ func TestIntrospection(t *testing.T) {
 									"locations": [
 										"FIELD_DEFINITION",
 										"ENUM_VALUE",
-										"ARGUMENT_DEFINITION"
+										"ARGUMENT_DEFINITION",
+										"INPUT_FIELD_DEFINITION"
 									],
 									"args": [
 										{
@@ -4484,7 +4487,7 @@ func TestQueryVariablesValidation(t *testing.T) {
         			}
         		}`,
 		ExpectedErrors: []*gqlerrors.QueryError{{
-			Message:   "Argument \"filter\" has invalid value {}.\nIn field \"required\": Expected \"String!\", found null.",
+			Message:   "Field \"SearchFilter.required\" of required type \"String!\" was not provided.",
 			Locations: []gqlerrors.Location{{Line: 3, Column: 27}},
 			Rule:      "ValuesOfCorrectTypeRule",
 		}},

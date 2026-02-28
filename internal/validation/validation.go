@@ -26,6 +26,11 @@ type fieldInfo struct {
 	parent ast.NamedType
 }
 
+type valueTypeIssue struct {
+	loc     errors.Location
+	message string
+}
+
 type context struct {
 	schema               *ast.Schema
 	doc                  *ast.ExecutableDefinition
@@ -113,8 +118,20 @@ func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string
 						c.addErr(v.Default.Location(), "DefaultValuesOfCorrectType", "Variable %q of type %q is required and will not use the default value. Perhaps you meant to use type %q.", "$"+v.Name.Name, t, nn.OfType)
 					}
 
-					if ok, reason := validateValueType(opc, v.Default, t); !ok {
-						c.addErr(v.Default.Location(), "DefaultValuesOfCorrectType", "Variable %q of type %q has invalid default value %s.\n%s", "$"+v.Name.Name, t, v.Default, reason)
+					if inputType := unwrapInputObjectType(t); inputType != nil {
+						if obj, ok := v.Default.(*ast.ObjectValue); ok {
+							issues := collectInputObjectValueIssues(opc, obj, inputType)
+							if len(issues) > 0 {
+								for _, issue := range issues {
+									c.addErr(issue.loc, "ValuesOfCorrectTypeRule", "%s", issue.message)
+								}
+								continue
+							}
+						}
+					}
+
+					if ok, errLoc, reason := validateValueType(opc, v.Default, t); !ok {
+						c.addErr(errLoc, "ValuesOfCorrectTypeRule", "%s", reason)
 					}
 				}
 			}
@@ -422,10 +439,42 @@ func validateSelection(c *opContext, sel ast.Selection, t ast.NamedType) {
 
 		validateArgumentLiterals(c, sel.Arguments)
 		if f != nil {
+			if reason, ok := deprecatedReason(f.Directives); ok && t != nil {
+				c.addErr(sel.Name.Loc, "NoDeprecatedCustomRule", "The field %s.%s is deprecated. %s", t.TypeName(), fieldName, reason)
+			}
+
 			validateArgumentTypes(c, sel.Arguments, f.Arguments, sel.Alias.Loc,
 				func() string { return fmt.Sprintf(`field "%s.%s"`, t, fieldName) },
 				func() string { return fmt.Sprintf("Field %q", fieldName) },
 			)
+
+			if t != nil {
+				for _, selArg := range sel.Arguments {
+					argDecl := f.Arguments.Get(selArg.Name.Name)
+					if argDecl == nil {
+						continue
+					}
+					if reason, ok := deprecatedReason(argDecl.Directives); ok {
+						c.addErr(selArg.Name.Loc, "NoDeprecatedCustomRule", "Field %q argument %q is deprecated. %s", t.TypeName()+"."+fieldName, selArg.Name.Name, reason)
+					}
+				}
+
+				for _, directive := range sel.Directives {
+					directiveDef, ok := c.schema.Directives[directive.Name.Name]
+					if !ok {
+						continue
+					}
+					for _, selArg := range directive.Arguments {
+						argDecl := directiveDef.Arguments.Get(selArg.Name.Name)
+						if argDecl == nil {
+							continue
+						}
+						if reason, ok := deprecatedReason(argDecl.Directives); ok {
+							c.addErr(selArg.Name.Loc, "NoDeprecatedCustomRule", "Directive %q argument %q is deprecated. %s", "@"+directive.Name.Name, selArg.Name.Name, reason)
+						}
+					}
+				}
+			}
 		}
 
 		var ft ast.Type
@@ -823,6 +872,18 @@ func validateDirectives(c *opContext, loc string, directives ast.DirectiveList) 
 			func() string { return fmt.Sprintf("directive %q", "@"+dirName) },
 			func() string { return fmt.Sprintf("Directive %q", "@"+dirName) },
 		)
+
+		if loc != "FIELD" {
+			for _, selArg := range d.Arguments {
+				argDecl := dd.Arguments.Get(selArg.Name.Name)
+				if argDecl == nil {
+					continue
+				}
+				if reason, ok := deprecatedReason(argDecl.Directives); ok {
+					c.addErr(selArg.Name.Loc, "NoDeprecatedCustomRule", "Directive %q argument %q is deprecated. %s", "@"+dirName, selArg.Name.Name, reason)
+				}
+			}
+		}
 	}
 
 	// Iterating in the declared order, rather than using the directiveNames ordering which is random
@@ -884,8 +945,8 @@ func validateArgumentTypes(c *opContext, args ast.ArgumentList, argDecls ast.Arg
 			continue
 		}
 		value := selArg.Value
-		if ok, reason := validateValueType(c, value, arg.Type); !ok {
-			c.addErr(value.Location(), "ValuesOfCorrectTypeRule", "Argument %q has invalid value %s.\n%s", arg.Name.Name, value, reason)
+		if ok, errLoc, reason := validateValueType(c, value, arg.Type); !ok {
+			c.addErr(errLoc, "ValuesOfCorrectTypeRule", "%s", reason)
 		}
 	}
 	for _, decl := range argDecls {
@@ -952,13 +1013,13 @@ func validateLiteral(c *opContext, l ast.Value) {
 				})
 				continue
 			}
-			validateValueType(c, l, resolveType(c.context, v.Type))
+			_, _, _ = validateValueType(c, l, resolveType(c.context, v.Type))
 			c.usedVars[op][v] = struct{}{}
 		}
 	}
 }
 
-func validateValueType(c *opContext, v ast.Value, t ast.Type) (bool, string) {
+func validateValueType(c *opContext, v ast.Value, t ast.Type) (bool, errors.Location, string) {
 	if v, ok := v.(*ast.Variable); ok {
 		for _, op := range c.ops {
 			if v2 := op.Vars.Get(v.Name); v2 != nil {
@@ -973,54 +1034,71 @@ func validateValueType(c *opContext, v ast.Value, t ast.Type) (bool, string) {
 				}
 			}
 		}
-		return true, ""
+		return true, errors.Location{}, ""
 	}
 
 	if nn, ok := t.(*ast.NonNull); ok {
 		if isNull(v) {
-			return false, fmt.Sprintf("Expected %q, found null.", t)
+			return false, v.Location(), fmt.Sprintf("Expected value of type %q, found null.", t)
 		}
 		t = nn.OfType
 	}
 	if isNull(v) {
-		return true, ""
+		return true, errors.Location{}, ""
 	}
 
 	switch t := t.(type) {
 	case *ast.ScalarTypeDefinition, *ast.EnumTypeDefinition:
 		if lit, ok := v.(*ast.PrimitiveValue); ok {
-			if validateBasicLit(lit, t) {
-				return true, ""
+			if ok, reason := validateBasicLit(lit, t); ok {
+				if enumType, isEnum := t.(*ast.EnumTypeDefinition); isEnum && lit.Type == scanner.Ident {
+					for _, option := range enumType.EnumValuesDefinition {
+						if option.EnumValue != lit.Text {
+							continue
+						}
+						if depReason, deprecated := deprecatedReason(option.Directives); deprecated {
+							c.addErr(lit.Location(), "NoDeprecatedCustomRule", "The enum value %q is deprecated. %s", enumType.Name+"."+option.EnumValue, depReason)
+						}
+						break
+					}
+				}
+				return true, errors.Location{}, ""
+			} else {
+				return false, lit.Location(), reason
 			}
-			return false, fmt.Sprintf("Expected type %q, found %s.", t, v)
 		}
-		return true, ""
+		return true, errors.Location{}, ""
 
 	case *ast.List:
 		list, ok := v.(*ast.ListValue)
 		if !ok {
 			return validateValueType(c, v, t.OfType) // single value instead of list
 		}
-		for i, entry := range list.Values {
-			if ok, reason := validateValueType(c, entry, t.OfType); !ok {
-				return false, fmt.Sprintf("In element #%d: %s", i, reason)
+		for _, entry := range list.Values {
+			if ok, errLoc, reason := validateValueType(c, entry, t.OfType); !ok {
+				return false, errLoc, reason
 			}
 		}
-		return true, ""
+		return true, errors.Location{}, ""
 
 	case *ast.InputObject:
+		orig := v
 		v, ok := v.(*ast.ObjectValue)
 		if !ok {
-			return false, fmt.Sprintf("Expected %q, found not an object.", t)
+			return false, orig.Location(), fmt.Sprintf("Expected value of type %q, found %s.", t, orig)
 		}
 		for _, f := range v.Fields {
 			name := f.Name.Name
 			iv := t.Values.Get(name)
 			if iv == nil {
-				return false, fmt.Sprintf("In field %q: Unknown field.", name)
+				suggestion := makeSuggestion("Did you mean", t.Values.Names(), name)
+				return false, f.Name.Loc, fmt.Sprintf("Field %q is not defined by type %q.%s", name, t.Name, suggestion)
 			}
-			if ok, reason := validateValueType(c, f.Value, iv.Type); !ok {
-				return false, fmt.Sprintf("In field %q: %s", name, reason)
+			if depReason, deprecated := deprecatedReason(iv.Directives); deprecated {
+				c.addErr(f.Name.Loc, "NoDeprecatedCustomRule", "The input field %s.%s is deprecated. %s", t.Name, iv.Name.Name, depReason)
+			}
+			if ok, errLoc, reason := validateValueType(c, f.Value, iv.Type); !ok {
+				return false, errLoc, reason
 			}
 		}
 		for _, iv := range t.Values {
@@ -1033,7 +1111,7 @@ func validateValueType(c *opContext, v ast.Value, t ast.Type) (bool, string) {
 			}
 			if !found {
 				if _, ok := iv.Type.(*ast.NonNull); ok && iv.Default == nil {
-					return false, fmt.Sprintf("In field %q: Expected %q, found null.", iv.Name.Name, iv.Type)
+					return false, v.Location(), fmt.Sprintf("Field %q of required type %q was not provided.", t.Name+"."+iv.Name.Name, iv.Type)
 				}
 			}
 		}
@@ -1042,7 +1120,7 @@ func validateValueType(c *opContext, v ast.Value, t ast.Type) (bool, string) {
 		if t.Directives.Get("oneOf") != nil {
 			if len(v.Fields) != 1 {
 				c.addErr(v.Location(), "ValuesOfCorrectTypeRule", "OneOf Input Object %q must specify exactly one key.", t.Name)
-				return true, ""
+				return true, errors.Location{}, ""
 			}
 
 			f := v.Fields[0]
@@ -1050,7 +1128,7 @@ func validateValueType(c *opContext, v ast.Value, t ast.Type) (bool, string) {
 			// Check for explicit null values
 			if _, isNull := f.Value.(*ast.NullValue); isNull {
 				c.addErr(v.Location(), "ValuesOfCorrectTypeRule", "Field %q must be non-null.", t.Name+"."+f.Name.Name)
-				return true, ""
+				return true, errors.Location{}, ""
 			}
 
 			// Check for nullable variables
@@ -1063,54 +1141,143 @@ func validateValueType(c *opContext, v ast.Value, t ast.Type) (bool, string) {
 								varType = resolved
 							}
 							c.addErrMultiLoc([]errors.Location{varDef.Loc, varRef.Loc}, "VariablesInAllowedPositionRule", "Variable %q is of type %q but must be non-nullable to be used for OneOf Input Object %q.", "$"+varRef.Name, varType, t.Name)
-							return true, ""
+							return true, errors.Location{}, ""
 						}
 					}
 				}
 			}
 		}
 
-		return true, ""
+		return true, errors.Location{}, ""
 	}
 
-	return false, fmt.Sprintf("Expected type %q, found %s.", t, v)
+	return false, v.Location(), fmt.Sprintf("Expected type %q, found %s.", t, v)
 }
 
-func validateBasicLit(v *ast.PrimitiveValue, t ast.Type) bool {
+func deprecatedReason(directives ast.DirectiveList) (string, bool) {
+	deprecated := directives.Get("deprecated")
+	if deprecated == nil {
+		return "", false
+	}
+	arg, ok := deprecated.Arguments.Get("reason")
+	if !ok {
+		return "No longer supported", true
+	}
+	reason, ok := arg.Deserialize(nil).(string)
+	if !ok || reason == "" {
+		return "No longer supported", true
+	}
+	return reason, true
+}
+
+func unwrapInputObjectType(t ast.Type) *ast.InputObject {
+	for {
+		switch tt := t.(type) {
+		case *ast.NonNull:
+			t = tt.OfType
+		case *ast.InputObject:
+			return tt
+		default:
+			return nil
+		}
+	}
+}
+
+func collectInputObjectValueIssues(c *opContext, obj *ast.ObjectValue, inputType *ast.InputObject) []valueTypeIssue {
+	issues := make([]valueTypeIssue, 0)
+	for _, field := range obj.Fields {
+		decl := inputType.Values.Get(field.Name.Name)
+		if decl == nil {
+			continue
+		}
+		if ok, errLoc, reason := validateValueType(c, field.Value, decl.Type); !ok {
+			issues = append(issues, valueTypeIssue{loc: errLoc, message: reason})
+		}
+	}
+	return issues
+}
+
+func validateBasicLit(v *ast.PrimitiveValue, t ast.Type) (bool, string) {
 	switch t := t.(type) {
 	case *ast.ScalarTypeDefinition:
 		switch t.Name {
 		case "Int":
-			if v.Type != scanner.Int {
-				return false
+			if v.Type == scanner.Int {
+				if validateBuiltInScalar(v.Text, "Int") {
+					return true, ""
+				}
+				return false, fmt.Sprintf("Int cannot represent non 32-bit signed integer value: %s", v)
 			}
-			return validateBuiltInScalar(v.Text, "Int")
+			return false, fmt.Sprintf("Int cannot represent non-integer value: %s", v)
 		case "Float":
-			return (v.Type == scanner.Int || v.Type == scanner.Float) && validateBuiltInScalar(v.Text, "Float")
+			if v.Type == scanner.Int || v.Type == scanner.Float {
+				if validateBuiltInScalar(v.Text, "Float") {
+					return true, ""
+				}
+			}
+			return false, fmt.Sprintf("Float cannot represent non numeric value: %s", v)
 		case "String":
-			return v.Type == scanner.String && validateBuiltInScalar(v.Text, "String")
+			if v.Type == scanner.String && validateBuiltInScalar(v.Text, "String") {
+				return true, ""
+			}
+			return false, fmt.Sprintf("String cannot represent a non string value: %s", v)
 		case "Boolean":
-			return v.Type == scanner.Ident && validateBuiltInScalar(v.Text, "Boolean")
+			if v.Type == scanner.Ident && validateBuiltInScalar(v.Text, "Boolean") {
+				return true, ""
+			}
+			return false, fmt.Sprintf("Boolean cannot represent a non boolean value: %s", v)
 		case "ID":
-			return (v.Type == scanner.Int && validateBuiltInScalar(v.Text, "Int")) || (v.Type == scanner.String && validateBuiltInScalar(v.Text, "String"))
+			if (v.Type == scanner.Int && validateBuiltInScalar(v.Text, "Int")) || (v.Type == scanner.String && validateBuiltInScalar(v.Text, "String")) {
+				return true, ""
+			}
+			return false, fmt.Sprintf("ID cannot represent a non-string and non-integer value: %s", v)
 		default:
 			// TODO: Type-check against expected type by Unmarshalling
-			return true
+			return true, ""
 		}
 
 	case *ast.EnumTypeDefinition:
-		if v.Type != scanner.Ident {
-			return false
-		}
+		values := make([]string, 0, len(t.EnumValuesDefinition))
 		for _, option := range t.EnumValuesDefinition {
-			if option.EnumValue == v.Text {
-				return true
-			}
+			values = append(values, option.EnumValue)
 		}
-		return false
-	}
 
-	return false
+		if v.Type == scanner.Ident {
+			if v.Text == "true" || v.Text == "false" {
+				return false, fmt.Sprintf("Enum %q cannot represent non-enum value: %s.", t.Name, v)
+			}
+
+			for _, option := range t.EnumValuesDefinition {
+				if option.EnumValue == v.Text {
+					return true, ""
+				}
+			}
+
+			suggestion := makeSuggestion("Did you mean the enum value", values, v.Text)
+			if suggestion == "" {
+				for _, option := range values {
+					if strings.EqualFold(option, v.Text) {
+						suggestion = fmt.Sprintf(" Did you mean the enum value %q?", option)
+						break
+					}
+				}
+			}
+			if suggestion != "" {
+				return false, fmt.Sprintf("Value %q does not exist in %q enum.%s", v.Text, t.Name, suggestion)
+			}
+			return false, fmt.Sprintf("Value %q does not exist in %q enum.", v.Text, t.Name)
+		}
+
+		candidate := strings.Trim(v.Text, "\"")
+		suggestion := makeSuggestion("Did you mean the enum value", values, candidate)
+		if suggestion != "" {
+			return false, fmt.Sprintf("Enum %q cannot represent non-enum value: %s.%s", t.Name, v, suggestion)
+		}
+		return false, fmt.Sprintf("Enum %q cannot represent non-enum value: %s.", t.Name, v)
+
+	default:
+		return false, fmt.Sprintf("Expected type %q, found %s.", t, v)
+	}
 }
 
 func validateBuiltInScalar(v string, n string) bool {

@@ -46,6 +46,7 @@ Module._resolveFilename = function patchedResolveFilename(request, parent, ...re
 const captured = [];
 const suiteNames = [];
 const schemaRefs = [];
+const graphqlRootDir = path.dirname(require.resolve('graphql/package.json'));
 
 const { printSchema } = require('graphql/src/utilities/printSchema.ts');
 
@@ -136,37 +137,29 @@ harness.expectValidationErrors = function expectValidationErrors(rule, queryStr)
   return harness.expectValidationErrorsWithSchema(harness.testSchema, rule, queryStr);
 };
 
-// Import test files to register test cases (these need to run first)
-// TODO: Fix test failures.
-// require('graphql/src/validation/__tests__/ExecutableDefinitions-test.ts');
-require('graphql/src/validation/__tests__/FieldsOnCorrectTypeRule-test.ts');
-require('graphql/src/validation/__tests__/FragmentsOnCompositeTypesRule-test.ts');
-require('graphql/src/validation/__tests__/KnownArgumentNamesRule-test.ts');
-require('graphql/src/validation/__tests__/KnownDirectivesRule-test.ts');
-require('graphql/src/validation/__tests__/KnownFragmentNamesRule-test.ts');
-require('graphql/src/validation/__tests__/KnownTypeNamesRule-test.ts');
-require('graphql/src/validation/__tests__/LoneAnonymousOperationRule-test.ts');
-require('graphql/src/validation/__tests__/NoFragmentCyclesRule-test.ts');
-require('graphql/src/validation/__tests__/NoUndefinedVariablesRule-test.ts');
-require('graphql/src/validation/__tests__/NoUnusedFragmentsRule-test.ts');
-require('graphql/src/validation/__tests__/NoUnusedVariablesRule-test.ts');
-require('graphql/src/validation/__tests__/OverlappingFieldsCanBeMergedRule-test.ts');
-require('graphql/src/validation/__tests__/PossibleFragmentSpreadsRule-test.ts');
-require('graphql/src/validation/__tests__/ProvidedRequiredArgumentsRule-test.ts');
-require('graphql/src/validation/__tests__/ScalarLeafsRule-test.ts');
-// TODO: Add support for subscriptions.
-// require('graphql/src/validation/__tests__/SingleFieldSubscriptions-test.ts');
-require('graphql/src/validation/__tests__/UniqueArgumentNamesRule-test.ts');
-require('graphql/src/validation/__tests__/UniqueDirectivesPerLocationRule-test.ts');
-require('graphql/src/validation/__tests__/UniqueFragmentNamesRule-test.ts');
-require('graphql/src/validation/__tests__/UniqueInputFieldNamesRule-test.ts');
-require('graphql/src/validation/__tests__/UniqueOperationNamesRule-test.ts');
-require('graphql/src/validation/__tests__/UniqueVariableNamesRule-test.ts');
-require('graphql/src/validation/__tests__/ValuesOfCorrectTypeRule-test.ts');
-require('graphql/src/validation/__tests__/VariablesAreInputTypesRule-test.ts');
-// TODO: Fix test failures.
-// require('graphql/src/validation/__tests__/VariablesDefaultValueAllowed-test.ts');
-require('graphql/src/validation/__tests__/VariablesInAllowedPositionRule-test.ts');
+const validationTestsDir = path.join(graphqlRootDir, 'src/validation/__tests__');
+const incompatibleSuites = new Set([
+  // graphql-go does not target single-field subscription parity in this fixture set yet.
+  'SingleFieldSubscriptionsRule-test.ts',
+  // graphql-go does not expose graphql-js custom validation rule MaxIntrospectionDepthRule.
+  'MaxIntrospectionDepthRule-test.ts',
+  // graphql-go does not expose graphql-js custom validation rule NoSchemaIntrospectionCustomRule.
+  'NoSchemaIntrospectionCustomRule-test.ts',
+]);
+
+const suiteFiles = fs
+  .readdirSync(validationTestsDir, { withFileTypes: true })
+  .filter(entry => entry.isFile() && entry.name.endsWith('-test.ts'))
+  .map(entry => entry.name)
+  .sort();
+
+for (const suiteFile of suiteFiles) {
+  if (incompatibleSuites.has(suiteFile)) {
+    continue;
+  }
+
+  require(path.join(validationTestsDir, suiteFile));
+}
 
 let schemas = schemaRefs.map(schema => {
   const sdl = printSchema(schema);
