@@ -9,7 +9,7 @@ Module._extensions['.ts'] = function compileTypeScript(module, filename) {
   const compiled = ts.transpileModule(source, {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
-      moduleResolution: ts.ModuleResolutionKind.NodeJs,
+      moduleResolution: ts.ModuleResolutionKind.Node10,
       target: ts.ScriptTarget.ES2022,
       esModuleInterop: true,
       sourceMap: false,
@@ -67,14 +67,6 @@ describe.only = describe;
 describe.skip = () => {};
 
 function it(name, fn) {
-  if (
-    name === 'ignores type definitions' ||
-    name === 'reports correctly when a non-exclusive follows an exclusive' ||
-    name === 'disallows differing subfields'
-  ) {
-    return;
-  }
-
   suiteNames.push(name);
 
   try {

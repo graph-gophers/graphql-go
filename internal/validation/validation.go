@@ -38,7 +38,7 @@ type context struct {
 	opErrs               map[*ast.OperationDefinition][]*errors.QueryError
 	usedVars             map[*ast.OperationDefinition]varSet
 	fieldMap             map[*ast.Field]fieldInfo
-	overlapValidated     map[selectionPair]struct{}
+	overlapValidated     map[selectionPair]bool
 	maxDepth             int
 	overlapPairLimit     int
 	overlapPairsObserved int
@@ -69,7 +69,7 @@ func newContext(s *ast.Schema, doc *ast.ExecutableDefinition, maxDepth int, over
 		opErrs:           make(map[*ast.OperationDefinition][]*errors.QueryError),
 		usedVars:         make(map[*ast.OperationDefinition]varSet),
 		fieldMap:         make(map[*ast.Field]fieldInfo),
-		overlapValidated: make(map[selectionPair]struct{}),
+		overlapValidated: make(map[selectionPair]bool),
 		maxDepth:         maxDepth,
 		overlapPairLimit: overlapPairLimit,
 	}
@@ -365,7 +365,7 @@ func validateSelectionSet(c *opContext, sels []ast.Selection, t ast.NamedType) {
 				if c.overlapLimitHit {
 					break
 				}
-				c.validateOverlap(a, b, nil, nil)
+				c.validateOverlap(a, b, nil, nil, false)
 			}
 		}
 	}
@@ -386,14 +386,14 @@ func validateSelectionSet(c *opContext, sels []ast.Selection, t ast.NamedType) {
 				if c.overlapLimitHit {
 					break
 				}
-				c.validateOverlap(fld, fa, nil, nil)
+				c.validateOverlap(fld, fa, nil, nil, false)
 			}
 			// Compare fragment with following fragments
 			for _, fb := range fragments[i+1:] {
 				if c.overlapLimitHit {
 					break
 				}
-				c.validateOverlap(fa, fb, nil, nil)
+				c.validateOverlap(fa, fb, nil, nil, false)
 			}
 		}
 	}
@@ -633,7 +633,7 @@ func detectFragmentCycleSel(c *context, sel ast.Selection, fragVisited map[*ast.
 	}
 }
 
-func (c *context) validateOverlap(a, b ast.Selection, reasons *[]string, locs *[]errors.Location) {
+func (c *context) validateOverlap(a, b ast.Selection, reasons *[]string, locs *[]errors.Location, parentMutuallyExclusive bool) {
 	if a == b {
 		return
 	}
@@ -645,10 +645,16 @@ func (c *context) validateOverlap(a, b ast.Selection, reasons *[]string, locs *[
 	if pb < pa { // canonical ordering for key only
 		key = selectionPair{a: b, b: a}
 	}
-	if _, ok := c.overlapValidated[key]; ok {
-		return
+	if existing, ok := c.overlapValidated[key]; ok {
+		// Mutually exclusive comparisons are always safe to skip once this pair was seen.
+		if parentMutuallyExclusive {
+			return
+		}
+		if !existing {
+			return
+		}
 	}
-	c.overlapValidated[key] = struct{}{}
+	c.overlapValidated[key] = parentMutuallyExclusive
 
 	if c.overlapPairLimit > 0 && !c.overlapLimitHit {
 		c.overlapPairsObserved++
@@ -675,7 +681,7 @@ func (c *context) validateOverlap(a, b ast.Selection, reasons *[]string, locs *[
 	case *ast.Field:
 		switch b := b.(type) {
 		case *ast.Field:
-			if reasons2, locs2 := c.validateFieldOverlap(a, b); len(reasons2) != 0 {
+			if reasons2, locs2 := c.validateFieldOverlap(a, b, parentMutuallyExclusive); len(reasons2) != 0 {
 				locs2 = append(locs2, a.Alias.Loc, b.Alias.Loc)
 				if reasons == nil {
 					c.addErrMultiLoc(locs2, "OverlappingFieldsCanBeMergedRule", "Fields %q conflict because %s. Use different aliases on the fields to fetch both if this was intentional.", a.Alias.Name, strings.Join(reasons2, " and "))
@@ -689,13 +695,13 @@ func (c *context) validateOverlap(a, b ast.Selection, reasons *[]string, locs *[
 
 		case *ast.InlineFragment:
 			for _, sel := range b.Selections {
-				c.validateOverlap(a, sel, reasons, locs)
+				c.validateOverlap(a, sel, reasons, locs, parentMutuallyExclusive)
 			}
 
 		case *ast.FragmentSpread:
 			if frag := c.doc.Fragments.Get(b.Name.Name); frag != nil {
 				for _, sel := range frag.Selections {
-					c.validateOverlap(a, sel, reasons, locs)
+					c.validateOverlap(a, sel, reasons, locs, parentMutuallyExclusive)
 				}
 			}
 
@@ -705,13 +711,13 @@ func (c *context) validateOverlap(a, b ast.Selection, reasons *[]string, locs *[
 
 	case *ast.InlineFragment:
 		for _, sel := range a.Selections {
-			c.validateOverlap(sel, b, reasons, locs)
+			c.validateOverlap(sel, b, reasons, locs, parentMutuallyExclusive)
 		}
 
 	case *ast.FragmentSpread:
 		if frag := c.doc.Fragments.Get(a.Name.Name); frag != nil {
 			for _, sel := range frag.Selections {
-				c.validateOverlap(sel, b, reasons, locs)
+				c.validateOverlap(sel, b, reasons, locs, parentMutuallyExclusive)
 			}
 		}
 
@@ -720,7 +726,7 @@ func (c *context) validateOverlap(a, b ast.Selection, reasons *[]string, locs *[
 	}
 }
 
-func (c *context) validateFieldOverlap(a, b *ast.Field) ([]string, []errors.Location) {
+func (c *context) validateFieldOverlap(a, b *ast.Field, parentMutuallyExclusive bool) ([]string, []errors.Location) {
 	if a.Alias.Name != b.Alias.Name {
 		return nil, nil
 	}
@@ -735,7 +741,8 @@ func (c *context) validateFieldOverlap(a, b *ast.Field) ([]string, []errors.Loca
 
 	at := c.fieldMap[a].parent
 	bt := c.fieldMap[b].parent
-	if at == nil || bt == nil || at == bt {
+	areMutuallyExclusive := parentMutuallyExclusive || mutuallyExclusiveParents(at, bt)
+	if !areMutuallyExclusive {
 		if a.Name.Name != b.Name.Name {
 			return []string{fmt.Sprintf("%q and %q are different fields", a.Name.Name, b.Name.Name)}, nil
 		}
@@ -781,21 +788,30 @@ func (c *context) validateFieldOverlap(a, b *ast.Field) ([]string, []errors.Loca
 			// Compare only against same-name fields + all non-field selections.
 			if matches := bFieldIndex[name]; len(matches) != 0 {
 				for _, bMatch := range matches {
-					c.validateOverlap(a2, bMatch, &reasons, &locs)
+					c.validateOverlap(a2, bMatch, &reasons, &locs, areMutuallyExclusive)
 				}
 			}
 			for _, bnf := range bNonField {
-				c.validateOverlap(a2, bnf, &reasons, &locs)
+				c.validateOverlap(a2, bnf, &reasons, &locs, areMutuallyExclusive)
 			}
 			continue
 		}
 		// For fragments / inline fragments we still need to compare against every selection in B.
 		for _, b2 := range b.SelectionSet {
-			c.validateOverlap(a2, b2, &reasons, &locs)
+			c.validateOverlap(a2, b2, &reasons, &locs, areMutuallyExclusive)
 		}
 	}
 
 	return reasons, locs
+}
+
+func mutuallyExclusiveParents(a, b ast.NamedType) bool {
+	if a == nil || b == nil || a == b {
+		return false
+	}
+	_, aIsObject := a.(*ast.ObjectTypeDefinition)
+	_, bIsObject := b.(*ast.ObjectTypeDefinition)
+	return aIsObject && bIsObject
 }
 
 func argumentsConflict(a, b ast.ArgumentList) bool {

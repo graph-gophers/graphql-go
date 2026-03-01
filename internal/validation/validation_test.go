@@ -28,28 +28,26 @@ type Test struct {
 	Errors []*errors.QueryError
 }
 
-var skippedValidationTests = map[string]struct{}{
-	// known-rule-overlap: extra error under PossibleFragmentSpreadsRule.
-	"Validate: Possible fragment spreads/ignores incorrect type (caught by FragmentsOnCompositeTypesRule)": {},
-	// parser-mismatch: graphql-js fixture parses SDL as executable query.
-	"Validate: Directives Are Unique Per Location/unknown directives must be ignored": {},
-	"Validate: Executable definitions/with schema definition":                         {},
-	"Validate: Executable definitions/with type definition":                           {},
-	// schema-difference: meta schema always includes standard scalar types.
-	"Validate: Known type names/references to standard scalars that are missing in schema": {},
-	// unsupported-feature: experimental @stream directives.
-	"Validate: Overlapping fields can be merged/different stream directive label":               {},
-	"Validate: Overlapping fields can be merged/different stream directive initialCount":        {},
-	"Validate: Overlapping fields can be merged/different stream directive first missing args":  {},
-	"Validate: Overlapping fields can be merged/different stream directive second missing args": {},
-	"Validate: Overlapping fields can be merged/different stream directive extra argument":      {},
-	"Validate: Overlapping fields can be merged/mix of stream and no stream":                    {},
-	// unresolved-scalar-parse-literal: graphql-js can reject literal via scalar parseLiteral(undefined) behavior.
-	"Validate: Values of correct type/Invalid input object value/reports error for custom scalar that returns undefined": {},
-}
-
 func TestValidate(t *testing.T) {
-	skip := skippedValidationTests
+	skip := map[string]struct{}{
+		// known-rule-overlap: extra error under PossibleFragmentSpreadsRule.
+		"Validate: Possible fragment spreads/ignores incorrect type (caught by FragmentsOnCompositeTypesRule)": {},
+		// parser-mismatch: graphql-js fixture parses SDL as executable query.
+		"Validate: Directives Are Unique Per Location/unknown directives must be ignored": {},
+		"Validate: Executable definitions/with schema definition":                         {},
+		"Validate: Executable definitions/with type definition":                           {},
+		// schema-difference: meta schema always includes standard scalar types.
+		"Validate: Known type names/references to standard scalars that are missing in schema": {},
+		// unsupported-feature: experimental @stream directives.
+		"Validate: Overlapping fields can be merged/different stream directive label":               {},
+		"Validate: Overlapping fields can be merged/different stream directive initialCount":        {},
+		"Validate: Overlapping fields can be merged/different stream directive first missing args":  {},
+		"Validate: Overlapping fields can be merged/different stream directive second missing args": {},
+		"Validate: Overlapping fields can be merged/different stream directive extra argument":      {},
+		"Validate: Overlapping fields can be merged/mix of stream and no stream":                    {},
+		// unresolved-scalar-parse-literal: graphql-js can reject literal via scalar parseLiteral(undefined) behavior.
+		"Validate: Values of correct type/Invalid input object value/reports error for custom scalar that returns undefined": {},
+	}
 
 	f, err := os.Open("testdata/tests.json")
 	if err != nil {
