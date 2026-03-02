@@ -284,6 +284,10 @@ type review struct {
 
 var reviews = make(map[string][]*review)
 
+func ResetReviews() {
+	reviews = make(map[string][]*review)
+}
+
 type Resolver struct{}
 
 func (*Resolver) Query() *QueryResolver {

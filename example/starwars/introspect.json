@@ -18,7 +18,8 @@
         "locations": [
           "FIELD_DEFINITION",
           "ENUM_VALUE",
-          "ARGUMENT_DEFINITION"
+          "ARGUMENT_DEFINITION",
+          "INPUT_FIELD_DEFINITION"
         ],
         "name": "deprecated"
       },

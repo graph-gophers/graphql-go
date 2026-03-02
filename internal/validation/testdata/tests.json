@@ -5,6 +5,18 @@
       "sdl": "directive @onQuery on QUERY\n\ndirective @onMutation on MUTATION\n\ndirective @onSubscription on SUBSCRIPTION\n\ndirective @onField on FIELD\n\ndirective @onFragmentDefinition on FRAGMENT_DEFINITION\n\ndirective @onFragmentSpread on FRAGMENT_SPREAD\n\ndirective @onInlineFragment on INLINE_FRAGMENT\n\ndirective @onVariableDefinition on VARIABLE_DEFINITION\n\ntype Query {\n  dummy: String\n}"
     },
     {
+      "id": "Ju1H8WKxt95vnuzAQz75L9JT/W+GwE3JLSv4p7w2Aa8=",
+      "sdl": "directive @someDirective(normalArg: String, deprecatedArg: String @deprecated(reason: \"Some arg reason.\")) on FIELD\n\ntype Query {\n  someField: String\n}"
+    },
+    {
+      "id": "tQLpFAeM24vdDKIIZe4kz+GZD5OL+HojfbN9WdPVaQE=",
+      "sdl": "directive @someDirective(someArg: InputType) on FIELD\n\ninput InputType {\n  normalField: String\n  deprecatedField: String @deprecated(reason: \"Some input field reason.\")\n}\n\ntype Query {\n  someField(someArg: InputType): String\n}"
+    },
+    {
+      "id": "2qyt7N2OkolAmpdwhY4sUNUs1tK69PbUrrMsIZYSeDI=",
+      "sdl": "enum EnumType {\n  NORMAL_VALUE\n  DEPRECATED_VALUE @deprecated(reason: \"Some enum reason.\")\n}\n\ntype Query {\n  someField(enumArg: EnumType): String\n}"
+    },
+    {
       "id": "FPFhio7mA1zxXhXd/8NCpbdwBrysWfBkn36GZ1uvDAA=",
       "sdl": "input SomeInput {\n  a: String\n  b: String\n}\n\ntype Query {\n  someField(arg: SomeInput): String\n}"
     },
@@ -45,11 +57,94 @@
       "sdl": "type Query {\n  invalidArg(arg: CustomScalar): String\n}\n\nscalar CustomScalar"
     },
     {
+      "id": "4j+i1Ccyc1jIBonw6um5nG/psLPZZF0gITulJ1ZTbFg=",
+      "sdl": "type Query {\n  normalField: String\n  deprecatedField: String @deprecated(reason: \"Some field reason.\")\n}"
+    },
+    {
       "id": "6+inK6Z824FQA4uBaUhxFXmMhc79+vKbamUi32/NtdQ=",
       "sdl": "type Query {\n  someField(a: String, b: String): String\n}"
+    },
+    {
+      "id": "HBXrgVi0mNZ9SLn1G8AUa2/quB8U1lIj0XtN51eWxJo=",
+      "sdl": "type Query {\n  someField(normalArg: String, deprecatedArg: String @deprecated(reason: \"Some arg reason.\")): String\n}"
     }
   ],
   "tests": [
+    {
+      "name": "Validate: Executable definitions/with only operation",
+      "rule": "ExecutableDefinitionsRule",
+      "schema": "70tUDwcPSZzv9khhs9WW2+o2xvsp13FhjrvVhLjYen4=",
+      "query": "\n      query Foo {\n        dog {\n          name\n        }\n      }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Executable definitions/with operation and fragment",
+      "rule": "ExecutableDefinitionsRule",
+      "schema": "70tUDwcPSZzv9khhs9WW2+o2xvsp13FhjrvVhLjYen4=",
+      "query": "\n      query Foo {\n        dog {\n          name\n          ...Frag\n        }\n      }\n\n      fragment Frag on Dog {\n        name\n      }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Executable definitions/with type definition",
+      "rule": "ExecutableDefinitionsRule",
+      "schema": "70tUDwcPSZzv9khhs9WW2+o2xvsp13FhjrvVhLjYen4=",
+      "query": "\n      query Foo {\n        dog {\n          name\n        }\n      }\n\n      type Cow {\n        name: String\n      }\n\n      extend type Dog {\n        color: String\n      }\n    ",
+      "errors": [
+        {
+          "message": "The \"Cow\" definition is not executable.",
+          "locations": [
+            {
+              "line": 8,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "message": "The \"Dog\" definition is not executable.",
+          "locations": [
+            {
+              "line": 12,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Executable definitions/with schema definition",
+      "rule": "ExecutableDefinitionsRule",
+      "schema": "70tUDwcPSZzv9khhs9WW2+o2xvsp13FhjrvVhLjYen4=",
+      "query": "\n      schema {\n        query: Query\n      }\n\n      type Query {\n        test: String\n      }\n\n      extend schema @directive\n    ",
+      "errors": [
+        {
+          "message": "The schema definition is not executable.",
+          "locations": [
+            {
+              "line": 2,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "message": "The \"Query\" definition is not executable.",
+          "locations": [
+            {
+              "line": 6,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "message": "The schema definition is not executable.",
+          "locations": [
+            {
+              "line": 10,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
     {
       "name": "Validate: Fields on correct type/Object field selection",
       "rule": "FieldsOnCorrectTypeRule",
@@ -996,6 +1091,188 @@
             {
               "line": 2,
               "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: no deprecated/no deprecated fields/ignores fields that are not deprecated",
+      "rule": "NoDeprecatedCustomRule",
+      "schema": "4j+i1Ccyc1jIBonw6um5nG/psLPZZF0gITulJ1ZTbFg=",
+      "query": "\n        {\n          normalField\n        }\n      ",
+      "errors": []
+    },
+    {
+      "name": "Validate: no deprecated/no deprecated fields/ignores unknown fields",
+      "rule": "NoDeprecatedCustomRule",
+      "schema": "4j+i1Ccyc1jIBonw6um5nG/psLPZZF0gITulJ1ZTbFg=",
+      "query": "\n        {\n          unknownField\n        }\n\n        fragment UnknownFragment on UnknownType {\n          deprecatedField\n        }\n      ",
+      "errors": []
+    },
+    {
+      "name": "Validate: no deprecated/no deprecated fields/reports error when a deprecated field is selected",
+      "rule": "NoDeprecatedCustomRule",
+      "schema": "4j+i1Ccyc1jIBonw6um5nG/psLPZZF0gITulJ1ZTbFg=",
+      "query": "\n        {\n          deprecatedField\n        }\n\n        fragment QueryFragment on Query {\n          deprecatedField\n        }\n      ",
+      "errors": [
+        {
+          "message": "The field Query.deprecatedField is deprecated. Some field reason.",
+          "locations": [
+            {
+              "line": 3,
+              "column": 11
+            }
+          ]
+        },
+        {
+          "message": "The field Query.deprecatedField is deprecated. Some field reason.",
+          "locations": [
+            {
+              "line": 7,
+              "column": 11
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: no deprecated/no deprecated arguments on fields/ignores arguments that are not deprecated",
+      "rule": "NoDeprecatedCustomRule",
+      "schema": "HBXrgVi0mNZ9SLn1G8AUa2/quB8U1lIj0XtN51eWxJo=",
+      "query": "\n        {\n          normalField(normalArg: \"\")\n        }\n      ",
+      "errors": []
+    },
+    {
+      "name": "Validate: no deprecated/no deprecated arguments on fields/ignores unknown arguments",
+      "rule": "NoDeprecatedCustomRule",
+      "schema": "HBXrgVi0mNZ9SLn1G8AUa2/quB8U1lIj0XtN51eWxJo=",
+      "query": "\n        {\n          someField(unknownArg: \"\")\n          unknownField(deprecatedArg: \"\")\n        }\n      ",
+      "errors": []
+    },
+    {
+      "name": "Validate: no deprecated/no deprecated arguments on fields/reports error when a deprecated argument is used",
+      "rule": "NoDeprecatedCustomRule",
+      "schema": "HBXrgVi0mNZ9SLn1G8AUa2/quB8U1lIj0XtN51eWxJo=",
+      "query": "\n        {\n          someField(deprecatedArg: \"\")\n        }\n      ",
+      "errors": [
+        {
+          "message": "Field \"Query.someField\" argument \"deprecatedArg\" is deprecated. Some arg reason.",
+          "locations": [
+            {
+              "line": 3,
+              "column": 21
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: no deprecated/no deprecated arguments on directives/ignores arguments that are not deprecated",
+      "rule": "NoDeprecatedCustomRule",
+      "schema": "Ju1H8WKxt95vnuzAQz75L9JT/W+GwE3JLSv4p7w2Aa8=",
+      "query": "\n        {\n          someField @someDirective(normalArg: \"\")\n        }\n      ",
+      "errors": []
+    },
+    {
+      "name": "Validate: no deprecated/no deprecated arguments on directives/ignores unknown arguments",
+      "rule": "NoDeprecatedCustomRule",
+      "schema": "Ju1H8WKxt95vnuzAQz75L9JT/W+GwE3JLSv4p7w2Aa8=",
+      "query": "\n        {\n          someField @someDirective(unknownArg: \"\")\n          someField @unknownDirective(deprecatedArg: \"\")\n        }\n      ",
+      "errors": []
+    },
+    {
+      "name": "Validate: no deprecated/no deprecated arguments on directives/reports error when a deprecated argument is used",
+      "rule": "NoDeprecatedCustomRule",
+      "schema": "Ju1H8WKxt95vnuzAQz75L9JT/W+GwE3JLSv4p7w2Aa8=",
+      "query": "\n        {\n          someField @someDirective(deprecatedArg: \"\")\n        }\n      ",
+      "errors": [
+        {
+          "message": "Directive \"@someDirective\" argument \"deprecatedArg\" is deprecated. Some arg reason.",
+          "locations": [
+            {
+              "line": 3,
+              "column": 36
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: no deprecated/no deprecated input fields/ignores input fields that are not deprecated",
+      "rule": "NoDeprecatedCustomRule",
+      "schema": "tQLpFAeM24vdDKIIZe4kz+GZD5OL+HojfbN9WdPVaQE=",
+      "query": "\n        {\n          someField(\n            someArg: { normalField: \"\" }\n          ) @someDirective(someArg: { normalField: \"\" })\n        }\n      ",
+      "errors": []
+    },
+    {
+      "name": "Validate: no deprecated/no deprecated input fields/ignores unknown input fields",
+      "rule": "NoDeprecatedCustomRule",
+      "schema": "tQLpFAeM24vdDKIIZe4kz+GZD5OL+HojfbN9WdPVaQE=",
+      "query": "\n        {\n          someField(\n            someArg: { unknownField: \"\" }\n          )\n\n          someField(\n            unknownArg: { unknownField: \"\" }\n          )\n\n          unknownField(\n            unknownArg: { unknownField: \"\" }\n          )\n        }\n      ",
+      "errors": []
+    },
+    {
+      "name": "Validate: no deprecated/no deprecated input fields/reports error when a deprecated input field is used",
+      "rule": "NoDeprecatedCustomRule",
+      "schema": "tQLpFAeM24vdDKIIZe4kz+GZD5OL+HojfbN9WdPVaQE=",
+      "query": "\n        {\n          someField(\n            someArg: { deprecatedField: \"\" }\n          ) @someDirective(someArg: { deprecatedField: \"\" })\n        }\n      ",
+      "errors": [
+        {
+          "message": "The input field InputType.deprecatedField is deprecated. Some input field reason.",
+          "locations": [
+            {
+              "line": 4,
+              "column": 24
+            }
+          ]
+        },
+        {
+          "message": "The input field InputType.deprecatedField is deprecated. Some input field reason.",
+          "locations": [
+            {
+              "line": 5,
+              "column": 39
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: no deprecated/no deprecated enum values/ignores enum values that are not deprecated",
+      "rule": "NoDeprecatedCustomRule",
+      "schema": "2qyt7N2OkolAmpdwhY4sUNUs1tK69PbUrrMsIZYSeDI=",
+      "query": "\n        {\n          normalField(enumArg: NORMAL_VALUE)\n        }\n      ",
+      "errors": []
+    },
+    {
+      "name": "Validate: no deprecated/no deprecated enum values/ignores unknown enum values",
+      "rule": "NoDeprecatedCustomRule",
+      "schema": "2qyt7N2OkolAmpdwhY4sUNUs1tK69PbUrrMsIZYSeDI=",
+      "query": "\n        query (\n          $unknownValue: EnumType = UNKNOWN_VALUE\n          $unknownType: UnknownType = UNKNOWN_VALUE\n        ) {\n          someField(enumArg: UNKNOWN_VALUE)\n          someField(unknownArg: UNKNOWN_VALUE)\n          unknownField(unknownArg: UNKNOWN_VALUE)\n        }\n\n        fragment SomeFragment on Query {\n          someField(enumArg: UNKNOWN_VALUE)\n        }\n      ",
+      "errors": []
+    },
+    {
+      "name": "Validate: no deprecated/no deprecated enum values/reports error when a deprecated enum value is used",
+      "rule": "NoDeprecatedCustomRule",
+      "schema": "2qyt7N2OkolAmpdwhY4sUNUs1tK69PbUrrMsIZYSeDI=",
+      "query": "\n        query (\n          $variable: EnumType = DEPRECATED_VALUE\n        ) {\n          someField(enumArg: DEPRECATED_VALUE)\n        }\n      ",
+      "errors": [
+        {
+          "message": "The enum value \"EnumType.DEPRECATED_VALUE\" is deprecated. Some enum reason.",
+          "locations": [
+            {
+              "line": 3,
+              "column": 33
+            }
+          ]
+        },
+        {
+          "message": "The enum value \"EnumType.DEPRECATED_VALUE\" is deprecated. Some enum reason.",
+          "locations": [
+            {
+              "line": 5,
+              "column": 30
             }
           ]
         }
@@ -2513,6 +2790,35 @@
       ]
     },
     {
+      "name": "Validate: Overlapping fields can be merged/return types must be unambiguous/reports correctly when a non-exclusive follows an exclusive",
+      "rule": "OverlappingFieldsCanBeMergedRule",
+      "schema": "lI0vTN4faZpDsH78EAqnHxgWvSXnGiiQrLUtNc+zVJw=",
+      "query": "\n          {\n            someBox {\n              ... on IntBox {\n                deepBox {\n                  ...X\n                }\n              }\n            }\n            someBox {\n              ... on StringBox {\n                deepBox {\n                  ...Y\n                }\n              }\n            }\n            memoed: someBox {\n              ... on IntBox {\n                deepBox {\n                  ...X\n                }\n              }\n            }\n            memoed: someBox {\n              ... on StringBox {\n                deepBox {\n                  ...Y\n                }\n              }\n            }\n            other: someBox {\n              ...X\n            }\n            other: someBox {\n              ...Y\n            }\n          }\n          fragment X on SomeBox {\n            scalar\n          }\n          fragment Y on SomeBox {\n            scalar: unrelatedField\n          }\n        ",
+      "errors": [
+        {
+          "message": "Fields \"other\" conflict because subfields \"scalar\" conflict because \"scalar\" and \"unrelatedField\" are different fields. Use different aliases on the fields to fetch both if this was intentional.",
+          "locations": [
+            {
+              "line": 31,
+              "column": 13
+            },
+            {
+              "line": 39,
+              "column": 13
+            },
+            {
+              "line": 34,
+              "column": 13
+            },
+            {
+              "line": 42,
+              "column": 13
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Validate: Overlapping fields can be merged/return types must be unambiguous/disallows differing return type nullability despite no overlap",
       "rule": "OverlappingFieldsCanBeMergedRule",
       "schema": "lI0vTN4faZpDsH78EAqnHxgWvSXnGiiQrLUtNc+zVJw=",
@@ -2570,6 +2876,27 @@
             {
               "line": 10,
               "column": 17
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Overlapping fields can be merged/return types must be unambiguous/disallows differing subfields",
+      "rule": "OverlappingFieldsCanBeMergedRule",
+      "schema": "lI0vTN4faZpDsH78EAqnHxgWvSXnGiiQrLUtNc+zVJw=",
+      "query": "\n          {\n            someBox {\n              ... on IntBox {\n                box: stringBox {\n                  val: scalar\n                  val: unrelatedField\n                }\n              }\n              ... on StringBox {\n                box: stringBox {\n                  val: scalar\n                }\n              }\n            }\n          }\n        ",
+      "errors": [
+        {
+          "message": "Fields \"val\" conflict because \"scalar\" and \"unrelatedField\" are different fields. Use different aliases on the fields to fetch both if this was intentional.",
+          "locations": [
+            {
+              "line": 6,
+              "column": 19
+            },
+            {
+              "line": 7,
+              "column": 19
             }
           ]
         }
