@@ -4359,6 +4359,54 @@ func (t *testTracer) TraceQuery(ctx context.Context, document string, opName str
 
 var _ tracer.Tracer = (*testTracer)(nil)
 
+type contextTracer struct{}
+
+type contextKey string
+
+const traceFieldKey contextKey = "traceField"
+
+func (contextTracer) TraceQuery(ctx context.Context, _ string, _ string, _ map[string]any, _ map[string]*introspection.Type) (context.Context, func([]*gqlerrors.QueryError)) {
+	return ctx, func([]*gqlerrors.QueryError) {}
+}
+
+func (contextTracer) TraceField(ctx context.Context, _, _, fieldName string, _ bool, _ map[string]any) (context.Context, func(*gqlerrors.QueryError)) {
+	return context.WithValue(ctx, traceFieldKey, fieldName), func(*gqlerrors.QueryError) {}
+}
+
+type traceCtxResolver struct {
+	receivedTraceValue string
+}
+
+func (r *traceCtxResolver) Hello(ctx context.Context) string {
+	r.receivedTraceValue, _ = ctx.Value(traceFieldKey).(string)
+	return "world"
+}
+
+// TestTracerFieldContextPassedToResolver verifies that the context returned by
+// Tracer.TraceField is the context passed to the resolver. This is important
+// for tracing integrations (e.g. Datadog) that embed spans in the context. If
+// the resolver receives the original context instead of the enriched one,
+// child spans created inside the resolver won't be nested under the field
+// span.
+func TestTracerFieldContextPassedToResolver(t *testing.T) {
+	t.Parallel()
+
+	resolver := &traceCtxResolver{}
+	schema := graphql.MustParseSchema(`
+		schema { query: Query }
+		type Query { hello: String! }
+	`, resolver, graphql.Tracer(contextTracer{}))
+
+	resp := schema.Exec(context.Background(), `{ hello }`, "", nil)
+	if len(resp.Errors) > 0 {
+		t.Fatalf("unexpected errors: %v", resp.Errors)
+	}
+
+	if resolver.receivedTraceValue != "hello" {
+		t.Errorf(`resolver got traceFieldKey=%q, want "hello"`, resolver.receivedTraceValue)
+	}
+}
+
 func TestTracer(t *testing.T) {
 	t.Parallel()
 
