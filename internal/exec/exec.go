@@ -248,9 +248,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 	var err *errors.QueryError
 
 	traceCtx, finish := r.Tracer.TraceField(ctx, f.field.TraceLabel, f.field.TypeName, f.field.Name, !f.field.Async, f.field.Args)
-	defer func() {
-		finish(err)
-	}()
+	defer finish(err)
 
 	err = func() (err *errors.QueryError) {
 		defer func() {
@@ -271,7 +269,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 		}
 
 		if len(f.sels) > 0 && !r.DisableFieldSelections {
-			ctx = selections.With(ctx, f.sels)
+			ctx = selections.With(traceCtx, f.sels)
 		}
 		res, resolverErr := f.resolve(ctx)
 		if resolverErr != nil {

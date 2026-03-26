@@ -4300,9 +4300,10 @@ func TestNullable(t *testing.T) {
 }
 
 type testTracer struct {
-	mu      *sync.Mutex
-	fields  []fieldTrace
-	queries []queryTrace
+	mu               *sync.Mutex
+	fields           []fieldTrace
+	queries          []queryTrace
+	fieldContextHook func(context.Context, string) context.Context
 }
 
 type fieldTrace struct {
@@ -4323,6 +4324,10 @@ type queryTrace struct {
 }
 
 func (t *testTracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]any) (context.Context, func(*gqlerrors.QueryError)) {
+	if t.fieldContextHook != nil {
+		ctx = t.fieldContextHook(ctx, fieldName)
+	}
+
 	return ctx, func(qe *gqlerrors.QueryError) {
 		t.mu.Lock()
 		defer t.mu.Unlock()

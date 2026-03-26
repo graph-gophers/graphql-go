@@ -2,6 +2,7 @@ package graphql_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/graph-gophers/graphql-go"
@@ -124,6 +125,34 @@ func TestFieldSelectionHelpers(t *testing.T) {
 				t.Fatalf("execution errors: %v", resp.Errors)
 			}
 		})
+	}
+}
+
+type selectionTraceCtxKey struct{}
+
+type selectionTraceCtxRoot struct{ t *testing.T }
+
+func (r *selectionTraceCtxRoot) Customer(ctx context.Context) *selectionCustomer {
+	if got, _ := ctx.Value(selectionTraceCtxKey{}).(string); got != "trace-field-context" {
+		r.t.Errorf("missing trace field context value: %q", got)
+	}
+	return &selectionCustomer{t: r.t, id: "c1", name: "Alice"}
+}
+
+func TestTraceFieldContextPassedToResolver(t *testing.T) {
+	t.Parallel()
+
+	tr := &testTracer{mu: &sync.Mutex{}, fieldContextHook: func(ctx context.Context, fieldName string) context.Context {
+		if fieldName == "customer" {
+			return context.WithValue(ctx, selectionTraceCtxKey{}, "trace-field-context")
+		}
+		return ctx
+	}}
+
+	s := graphql.MustParseSchema(selectionTestSchema, &selectionTraceCtxRoot{t: t}, graphql.Tracer(tr))
+	resp := s.Exec(context.Background(), `query { customer { id } }`, "", nil)
+	if len(resp.Errors) > 0 {
+		t.Fatalf("execution errors: %v", resp.Errors)
 	}
 }
 
