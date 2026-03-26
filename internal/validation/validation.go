@@ -339,10 +339,7 @@ func validateSelectionSet(c *opContext, sels []ast.Selection, t ast.NamedType) {
 		validateSelection(c, sel, t)
 		switch s := sel.(type) {
 		case *ast.Field:
-			name := s.Alias.Name
-			if name == "" {
-				name = s.Name.Name
-			}
+			name := fieldResponseName(s)
 			fieldGroups[name] = append(fieldGroups[name], sel)
 		default:
 			fragments = append(fragments, sel)
@@ -381,13 +378,10 @@ func validateSelectionSet(c *opContext, sels []ast.Selection, t ast.NamedType) {
 			if c.overlapLimitHit {
 				break
 			}
-			// Compare fragment with all fields
-			for _, fld := range allFields {
-				if c.overlapLimitHit {
-					break
-				}
-				c.validateOverlap(fld, fa, nil, nil, false)
-			}
+			// Compare fragment with fields. If fragment has only direct field selections,
+			// compare by matching response name groups; otherwise conservatively compare
+			// against all fields.
+			compareSelectionAgainstFields(c, fa, fieldGroups, allFields)
 			// Compare fragment with following fragments
 			for _, fb := range fragments[i+1:] {
 				if c.overlapLimitHit {
@@ -395,6 +389,63 @@ func validateSelectionSet(c *opContext, sels []ast.Selection, t ast.NamedType) {
 				}
 				c.validateOverlap(fa, fb, nil, nil, false)
 			}
+		}
+	}
+}
+
+func fieldResponseName(f *ast.Field) string {
+	if f.Alias.Name != "" {
+		return f.Alias.Name
+	}
+	return f.Name.Name
+}
+
+func selectionTopLevelFieldNames(c *context, sel ast.Selection) (map[string]struct{}, bool) {
+	names := make(map[string]struct{})
+
+	getNames := func(selections []ast.Selection) (map[string]struct{}, bool) {
+		for _, child := range selections {
+			field, ok := child.(*ast.Field)
+			if !ok {
+				return nil, true
+			}
+			names[fieldResponseName(field)] = struct{}{}
+		}
+		return names, false
+	}
+
+	switch s := sel.(type) {
+	case *ast.InlineFragment:
+		return getNames(s.Selections)
+	case *ast.FragmentSpread:
+		frag := c.doc.Fragments.Get(s.Name.Name)
+		if frag == nil {
+			return names, false
+		}
+		return getNames(frag.Selections)
+	default:
+		return nil, true
+	}
+}
+
+func compareSelectionAgainstFields(c *opContext, sel ast.Selection, fieldGroups map[string][]ast.Selection, allFields []ast.Selection) {
+	fieldNames, exhaustive := selectionTopLevelFieldNames(c.context, sel)
+	if exhaustive {
+		for _, fld := range allFields {
+			if c.overlapLimitHit {
+				return
+			}
+			c.validateOverlap(fld, sel, nil, nil, false)
+		}
+		return
+	}
+
+	for name := range fieldNames {
+		for _, fld := range fieldGroups[name] {
+			if c.overlapLimitHit {
+				return
+			}
+			c.validateOverlap(fld, sel, nil, nil, false)
 		}
 	}
 }
@@ -769,10 +820,7 @@ func (c *context) validateFieldOverlap(a, b *ast.Field, parentMutuallyExclusive 
 	var bNonField []ast.Selection
 	for _, bs := range b.SelectionSet {
 		if f, ok := bs.(*ast.Field); ok {
-			name := f.Alias.Name
-			if name == "" { // alias may be empty, fall back to field name
-				name = f.Name.Name
-			}
+			name := fieldResponseName(f)
 			bFieldIndex[name] = append(bFieldIndex[name], bs)
 			continue
 		}
@@ -781,10 +829,7 @@ func (c *context) validateFieldOverlap(a, b *ast.Field, parentMutuallyExclusive 
 
 	for _, a2 := range a.SelectionSet {
 		if af, ok := a2.(*ast.Field); ok {
-			name := af.Alias.Name
-			if name == "" {
-				name = af.Name.Name
-			}
+			name := fieldResponseName(af)
 			// Compare only against same-name fields + all non-field selections.
 			if matches := bFieldIndex[name]; len(matches) != 0 {
 				for _, bMatch := range matches {
@@ -1065,23 +1110,29 @@ func validateValueType(c *opContext, v ast.Value, t ast.Type) (bool, errors.Loca
 
 	switch t := t.(type) {
 	case *ast.ScalarTypeDefinition, *ast.EnumTypeDefinition:
-		if lit, ok := v.(*ast.PrimitiveValue); ok {
-			if ok, reason := validateBasicLit(lit, t); ok {
-				if enumType, isEnum := t.(*ast.EnumTypeDefinition); isEnum && lit.Type == scanner.Ident {
-					for _, option := range enumType.EnumValuesDefinition {
-						if option.EnumValue != lit.Text {
-							continue
-						}
-						if depReason, deprecated := deprecatedReason(option.Directives); deprecated {
-							c.addErr(lit.Location(), "NoDeprecatedCustomRule", "The enum value %q is deprecated. %s", enumType.Name+"."+option.EnumValue, depReason)
-						}
-						break
-					}
-				}
-				return true, errors.Location{}, ""
-			} else {
-				return false, lit.Location(), reason
+		lit, ok := v.(*ast.PrimitiveValue)
+		if !ok {
+			return true, errors.Location{}, ""
+		}
+
+		isValid, reason := validateBasicLit(lit, t)
+		if !isValid {
+			return false, lit.Location(), reason
+		}
+
+		enumType, isEnum := t.(*ast.EnumTypeDefinition)
+		if !isEnum || lit.Type != scanner.Ident {
+			return true, errors.Location{}, ""
+		}
+
+		for _, option := range enumType.EnumValuesDefinition {
+			if option.EnumValue != lit.Text {
+				continue
 			}
+			if depReason, deprecated := deprecatedReason(option.Directives); deprecated {
+				c.addErr(lit.Location(), "NoDeprecatedCustomRule", "The enum value %q is deprecated. %s", enumType.Name+"."+option.EnumValue, depReason)
+			}
+			break
 		}
 		return true, errors.Location{}, ""
 
@@ -1103,8 +1154,11 @@ func validateValueType(c *opContext, v ast.Value, t ast.Type) (bool, errors.Loca
 		if !ok {
 			return false, orig.Location(), fmt.Sprintf("Expected value of type %q, found %s.", t, orig)
 		}
+
+		providedFields := make(map[string]struct{}, len(v.Fields))
 		for _, f := range v.Fields {
 			name := f.Name.Name
+			providedFields[name] = struct{}{}
 			iv := t.Values.Get(name)
 			if iv == nil {
 				suggestion := makeSuggestion("Did you mean", t.Values.Names(), name)
@@ -1118,17 +1172,11 @@ func validateValueType(c *opContext, v ast.Value, t ast.Type) (bool, errors.Loca
 			}
 		}
 		for _, iv := range t.Values {
-			found := false
-			for _, f := range v.Fields {
-				if f.Name.Name == iv.Name.Name {
-					found = true
-					break
-				}
+			if _, found := providedFields[iv.Name.Name]; found {
+				continue
 			}
-			if !found {
-				if _, ok := iv.Type.(*ast.NonNull); ok && iv.Default == nil {
-					return false, v.Location(), fmt.Sprintf("Field %q of required type %q was not provided.", t.Name+"."+iv.Name.Name, iv.Type)
-				}
+			if _, ok := iv.Type.(*ast.NonNull); ok && iv.Default == nil {
+				return false, v.Location(), fmt.Sprintf("Field %q of required type %q was not provided.", t.Name+"."+iv.Name.Name, iv.Type)
 			}
 		}
 
