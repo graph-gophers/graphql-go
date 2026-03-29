@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	graphql "github.com/graph-gophers/graphql-go"
@@ -543,6 +545,56 @@ func TestSchemaSubscribe_CustomResolverTimeout(t *testing.T) {
 		`,
 		ExpectedResults: []gqltesting.TestResponse{
 			{Errors: []*qerrors.QueryError{{Message: "context deadline exceeded"}}},
+		},
+	})
+}
+
+func TestSchemaSubscribe_CustomResolverTimeout_Synctest(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		gqltesting.RunSubscribe(t, &gqltesting.TestSubscription{
+			Schema: graphql.MustParseSchema(`
+				type Query {
+					# at least one Query field is required
+					name: String!
+				}
+				type Subscription {
+					onTimeout : Message!
+				}
+
+				type Message {
+					msg: String!
+				}
+			`, &subscriptionsCustomTimeout{Name: "test"},
+				graphql.SubscribeResolverTimeout(1*time.Nanosecond),
+				graphql.UseFieldResolvers()),
+			Query: `
+				subscription {
+					onTimeout { msg }
+				}
+			`,
+			ExpectedResults: []gqltesting.TestResponse{
+				{Errors: []*qerrors.QueryError{{Message: "context deadline exceeded"}}},
+			},
+		})
+	})
+}
+
+func TestSchemaSubscribe_MaxQueryLength(t *testing.T) {
+	s := graphql.MustParseSchema(schema, &rootResolver{}, graphql.MaxQueryLength(25))
+	query := `
+		subscription onHelloSaid {
+			helloSaid {
+				msg
+			}
+		}
+	`
+	expected := fmt.Sprintf("query length %d exceeds the maximum allowed query length of 25 bytes", len(query))
+
+	gqltesting.RunSubscribe(t, &gqltesting.TestSubscription{
+		Schema: s,
+		Query:  query,
+		ExpectedResults: []gqltesting.TestResponse{
+			{Errors: []*qerrors.QueryError{{Message: expected}}},
 		},
 	})
 }
