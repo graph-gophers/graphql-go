@@ -158,6 +158,10 @@ func (s *NullFloat) UnmarshalGraphQL(input any) error {
 		coerced := float64(v)
 		s.Value = &coerced
 		return nil
+	case int64:
+		coerced := float64(v)
+		s.Value = &coerced
+		return nil
 	default:
 		return fmt.Errorf("wrong type for Float: %T", v)
 	}

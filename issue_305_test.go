@@ -17,12 +17,16 @@ type int64Scalar struct {
 func (u *int64Scalar) ImplementsGraphQLType(name string) bool { return name == "Int64" }
 
 func (u *int64Scalar) UnmarshalGraphQL(input any) error {
-	value, ok := input.(int64)
-	if !ok {
-		return fmt.Errorf("Int64 expects int64 got %T", input)
+	switch value := input.(type) {
+	case int64:
+		u.Value = value
+		return nil
+	case int32:
+		u.Value = int64(value)
+		return nil
+	default:
+		return fmt.Errorf("Int64 expects int32 or int64 got %T", input)
 	}
-	u.Value = value
-	return nil
 }
 
 type issue305Resolver struct{}
@@ -35,22 +39,79 @@ func (r *issue305Resolver) Regular(args struct{ X int32 }) int32 {
 	return args.X
 }
 
+func (r *issue305Resolver) Floaty(args struct{ X float64 }) float64 {
+	return args.X
+}
+
 func TestIssue305IntegerLiteralBehavior(t *testing.T) {
 	schema := graphql.MustParseSchema(`
 		scalar Int64
 		type Query {
 			custom(hash: Int64!): String!
 			regular(x: Int!): Int!
+			floaty(x: Float!): Float!
 		}
 	`, &issue305Resolver{})
 
 	const large = "3626262620"
+	const largeInt int64 = 3626262620
+	const negLargeInt int64 = -largeInt
 
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema:         schema,
+			Query:          `{ custom(hash: 123) }`,
+			ExpectedResult: `{"custom":"123"}`,
+		},
+		{
+			Schema:         schema,
+			Query:          fmt.Sprintf(`{ custom(hash: -%s) }`, large),
+			ExpectedResult: fmt.Sprintf(`{"custom":%q}`, fmt.Sprintf("-%s", large)),
+		},
+		{
+			Schema:         schema,
 			Query:          fmt.Sprintf(`{ custom(hash: %s) }`, large),
 			ExpectedResult: fmt.Sprintf(`{"custom":%q}`, large),
+		},
+		{
+			Schema:        schema,
+			Query:         `query($hash: Int64!) { custom(hash: $hash) }`,
+			Variables:     map[string]any{"hash": int32(123)},
+			ExpectedResult: `{"custom":"123"}`,
+		},
+		{
+			Schema:         schema,
+			Query:          `query($hash: Int64!) { custom(hash: $hash) }`,
+			Variables:      map[string]any{"hash": largeInt},
+			ExpectedResult: fmt.Sprintf(`{"custom":%q}`, large),
+		},
+		{
+			Schema:         schema,
+			Query:          `query($hash: Int64!) { custom(hash: $hash) }`,
+			Variables:      map[string]any{"hash": negLargeInt},
+			ExpectedResult: fmt.Sprintf(`{"custom":%q}`, fmt.Sprintf("-%s", large)),
+		},
+		{
+			Schema:         schema,
+			Query:          fmt.Sprintf(`{ floaty(x: %s) }`, large),
+			ExpectedResult: fmt.Sprintf(`{"floaty":%s}`, large),
+		},
+		{
+			Schema:         schema,
+			Query:          fmt.Sprintf(`{ floaty(x: -%s) }`, large),
+			ExpectedResult: fmt.Sprintf(`{"floaty":%s}`, fmt.Sprintf("-%s", large)),
+		},
+		{
+			Schema:         schema,
+			Query:          `query($x: Float!) { floaty(x: $x) }`,
+			Variables:      map[string]any{"x": largeInt},
+			ExpectedResult: fmt.Sprintf(`{"floaty":%s}`, large),
+		},
+		{
+			Schema:         schema,
+			Query:          `query($x: Float!) { floaty(x: $x) }`,
+			Variables:      map[string]any{"x": negLargeInt},
+			ExpectedResult: fmt.Sprintf(`{"floaty":%s}`, fmt.Sprintf("-%s", large)),
 		},
 		{
 			Schema:         schema,
