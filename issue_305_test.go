@@ -74,9 +74,9 @@ func TestIssue305IntegerLiteralBehavior(t *testing.T) {
 			ExpectedResult: fmt.Sprintf(`{"custom":%q}`, large),
 		},
 		{
-			Schema:        schema,
-			Query:         `query($hash: Int64!) { custom(hash: $hash) }`,
-			Variables:     map[string]any{"hash": int32(123)},
+			Schema:         schema,
+			Query:          `query($hash: Int64!) { custom(hash: $hash) }`,
+			Variables:      map[string]any{"hash": int32(123)},
 			ExpectedResult: `{"custom":"123"}`,
 		},
 		{
