@@ -275,6 +275,13 @@ func TestNullFloat_UnmarshalGraphQL(t *testing.T) {
 			wantEq: ref,
 		},
 		{
+			name: "int64",
+			args: args{
+				input: int64(good),
+			},
+			wantEq: ref,
+		},
+		{
 			name: "float64",
 			args: args{
 				input: good,

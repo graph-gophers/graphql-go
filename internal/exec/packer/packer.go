@@ -369,6 +369,8 @@ func UnmarshalInput(typ reflect.Type, input any) (any, error) {
 			return float64(input), nil
 		case int:
 			return float64(input), nil
+		case int64:
+			return float64(input), nil
 		}
 
 	case reflect.String:
