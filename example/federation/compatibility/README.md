@@ -107,7 +107,7 @@ The application also has the graphiql interface available at `/graphiql` and you
     }
     }
     ```
-6. In case you want to run the compatiblity tests yourself:
+6. In case you want to run the compatibility tests yourself:
    ```
    npx @apollo/federation-subgraph-compatibility@1.2.1 pm2 --endpoint http://localhost:4001
    ```
