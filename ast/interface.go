@@ -2,7 +2,7 @@ package ast
 
 import "github.com/graph-gophers/graphql-go/errors"
 
-// InterfaceTypeDefinition recusrively defines list of named fields with their arguments via the
+// InterfaceTypeDefinition recursively defines list of named fields with their arguments via the
 // implementation chain of interfaces.
 //
 // GraphQL objects can then implement these interfaces which requires that the object type will

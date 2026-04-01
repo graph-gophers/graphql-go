@@ -25,7 +25,7 @@ func TestTracerOption(t *testing.T) {
 	}
 }
 
-// MockVlidationTracer is a struct that implements the tracer.LegacyValidationTracer inteface.
+// MockVlidationTracer is a struct that implements the tracer.LegacyValidationTracer interface.
 type MockValidationTracer struct{}
 
 func (MockValidationTracer) TraceValidation() func([]*errors.QueryError) {

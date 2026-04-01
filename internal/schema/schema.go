@@ -111,18 +111,18 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 				if !ok {
 					return errors.Errorf("interface %q not found", implements)
 				}
-				inteface, ok := typ.(*ast.InterfaceTypeDefinition)
+				interface, ok := typ.(*ast.InterfaceTypeDefinition)
 				if !ok {
-					return errors.Errorf("type %q is not an interface", inteface)
+					return errors.Errorf("type %q is not an interface", interface)
 				}
 
-				for _, f := range inteface.Fields.Names() {
+				for _, f := range interface.Fields.Names() {
 					if t.Fields.Get(f) == nil {
-						return errors.Errorf("interface %q expects field %q but %q does not provide it", inteface.Name, f, t.Name)
+						return errors.Errorf("interface %q expects field %q but %q does not provide it", interface.Name, f, t.Name)
 					}
 				}
 
-				t.Interfaces[i] = inteface
+				t.Interfaces[i] = interface
 			}
 		default:
 			continue

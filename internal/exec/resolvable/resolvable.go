@@ -381,7 +381,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinitio
 				expectedIn = 1
 			}
 			if m.Type.NumIn() != expectedIn {
-				return nil, fmt.Errorf("%s does not resolve %q: method %q should't have any arguments", resolverType, typeName, "To"+impl.Name)
+				return nil, fmt.Errorf("%s does not resolve %q: method %q shouldn't have any arguments", resolverType, typeName, "To"+impl.Name)
 			}
 			if m.Type.NumOut() != 2 {
 				return nil, fmt.Errorf("%s does not resolve %q: method %q should return a value and a bool indicating success", resolverType, typeName, "To"+impl.Name)

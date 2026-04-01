@@ -3901,7 +3901,7 @@ func TestTypeAssertions(t *testing.T) {
 }
 
 func TestPanicTypeAssertionArguments(t *testing.T) {
-	panicMessage := `*graphql_test.badAssertionResolver does not resolve "Character": method "ToHuman" should't have any arguments
+	panicMessage := `*graphql_test.badAssertionResolver does not resolve "Character": method "ToHuman" shouldn't have any arguments
 	used by (*graphql_test.badAssertionQueryResolver).Character`
 
 	defer func() {
