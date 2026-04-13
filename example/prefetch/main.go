@@ -20,6 +20,7 @@ import (
 	"net/http"
 
 	"github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/example/internal/graphiql"
 	"github.com/graph-gophers/graphql-go/relay"
 )
 
@@ -158,7 +159,8 @@ func (rr *reviewResolver) Rating() int32   { return rr.r.Rating }
 
 func main() {
 	schema := graphql.MustParseSchema(sdl, &root{})
-	http.Handle("/query", &relay.Handler{Schema: schema})
+	http.Handle("GET /", graphiql.Handler())
+	http.Handle("POST /query", &relay.Handler{Schema: schema})
 	log.Println("Prefetch example listening on :8080 -> POST /query")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

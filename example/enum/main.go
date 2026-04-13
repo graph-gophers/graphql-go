@@ -8,11 +8,9 @@ import (
 	"net/http"
 
 	"github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/example/internal/graphiql"
 	"github.com/graph-gophers/graphql-go/relay"
 )
-
-//go:embed index.html
-var page []byte
 
 //go:embed schema.graphql
 var sdl string
@@ -50,8 +48,8 @@ func main() {
 	opts := []graphql.SchemaOpt{graphql.UseStringDescriptions()}
 	schema := graphql.MustParseSchema(sdl, &resolver{}, opts...)
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { w.Write(page) })
-	http.Handle("/query", &relay.Handler{Schema: schema})
+	http.Handle("GET /", graphiql.Handler())
+	http.Handle("POST /query", &relay.Handler{Schema: schema})
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

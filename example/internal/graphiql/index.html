@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>GraphiQL</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      #graphiql {
+        height: 100vh;
+      }
+      .loading {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+      }
+    </style>
+    <link rel="stylesheet" href="https://unpkg.com/graphiql@5.2.2/dist/style.css" integrity="sha256-VJJlSPT99+ooC+9T89qxILPcv0UHNKuE31LhrdQXHKg=" crossorigin="anonymous" />
+  </head>
+  <body>
+    <div id="graphiql"><div class="loading">Loading...</div></div>
+    <script type="importmap">
+      {
+        "imports": {
+          "react":             "https://esm.sh/stable/react@19.2.5/esnext/react.mjs",
+          "react-dom/client":  "https://esm.sh/v1/react-dom@19.2.5/esnext/client.js",
+          "graphiql":          "https://esm.sh/v1/graphiql@5.2.2/esnext/graphiql.bundle.mjs",
+          "@graphiql/toolkit": "https://esm.sh/v1/@graphiql/toolkit@0.11.3/esnext/toolkit.bundle.mjs"
+        },
+        "integrity": {
+          "https://esm.sh/stable/react@19.2.5/esnext/react.mjs":                  "sha384-ICxl5p37EghGSeJgwcxxHLX5PG1XW5heC5Ilv1kOL+T7k0tFqG/ntLecPHco9x+o",
+          "https://esm.sh/v1/react-dom@19.2.5/esnext/client.js":                  "sha384-ihw3poHawapRYf68dcmx6Fz4MSOLYsFIjLsnKChdL1bELCTG9yqLNM/opcKlb4iN",
+          "https://esm.sh/v1/graphiql@5.2.2/esnext/graphiql.bundle.mjs":          "sha384-5DPC8bLw40v5OYL1AWTCxr1fcDR8Une9NsZo4SnYq0pI6uNAWKoSijaivuWoIUWk",
+          "https://esm.sh/v1/@graphiql/toolkit@0.11.3/esnext/toolkit.bundle.mjs": "sha384-QjXPUcfiQg1LmHrMD1WtTxFnyvyhiSW+R/wY+yk42MqMqYgDOVUs2rLqwi+BHWBC"
+        }
+      }
+    </script>
+    <script type="module">
+      import React from 'react';
+      import {createRoot} from 'react-dom/client';
+      import {GraphiQL} from 'graphiql';
+      import {createGraphiQLFetcher} from '@graphiql/toolkit';
+
+      const root = createRoot(document.getElementById('graphiql'));
+      root.render(
+        React.createElement(GraphiQL, {
+          fetcher: createGraphiQLFetcher({url: '/query'}),
+          defaultEditorToolsVisibility: true,
+        }),
+      );
+    </script>
+  </body>
+</html>
