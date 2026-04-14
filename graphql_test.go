@@ -6029,3 +6029,132 @@ func TestOneOfInputValidation(t *testing.T) {
 		},
 	})
 }
+
+type executableDescriptionsResolver struct{}
+
+func (r *executableDescriptionsResolver) Hello(args struct{ ID graphql.ID }) string {
+	return "hello:" + string(args.ID)
+}
+
+func (r *executableDescriptionsResolver) Greet(args struct{ Name string }) string {
+	return "hello " + args.Name
+}
+
+func TestExecutableDescriptions_ParityScaffold(t *testing.T) {
+	t.Parallel()
+
+	schema := graphql.MustParseSchema(`
+		type Query {
+			hello(id: ID!): String!
+			greet(name: String!): String!
+		}
+	`, &executableDescriptionsResolver{})
+
+	t.Run("exec", func(t *testing.T) {
+		t.Parallel()
+
+		gqltesting.RunTests(t, []*gqltesting.Test{
+			{
+				Schema:        schema,
+				OperationName: "Q",
+				Variables:     map[string]any{"id": "42"},
+				Query: `
+"operation description"
+query Q(
+	"identifier"
+	$id: ID!
+) {
+	hello(id: $id)
+}`,
+				ExpectedResult: `{"hello":"hello:42"}`,
+			},
+			{
+				Schema:        schema,
+				OperationName: "Q",
+				Variables:     map[string]any{"id": "42"},
+				Query: `
+query Q($id: ID!) {
+	hello(id: $id)
+}`,
+				ExpectedResult: `{"hello":"hello:42"}`,
+			},
+			{
+				Schema:        schema,
+				OperationName: "Q",
+				Query: `
+"operation description"
+query Q(
+	"name"
+	$name: String = "world"
+) {
+	greet(name: $name)
+}`,
+				ExpectedResult: `{"greet":"hello world"}`,
+			},
+			{
+				Schema:        schema,
+				OperationName: "Q",
+				Query: `
+query Q($name: String = "world") {
+	greet(name: $name)
+}`,
+				ExpectedResult: `{"greet":"hello world"}`,
+			},
+		})
+	})
+
+	t.Run("validate", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name       string
+			documented string
+			plain      string
+			variables  map[string]any
+			wantErrs   int
+		}{
+			{
+				name: "valid query with variable",
+				documented: `
+"operation description"
+query Q(
+	"identifier"
+	$id: ID!
+) {
+	hello(id: $id)
+}`,
+				plain:     `query Q($id: ID!) { hello(id: $id) }`,
+				variables: map[string]any{"id": "42"},
+				wantErrs:  0,
+			},
+			{
+				name: "invalid query with unknown field",
+				documented: `
+"bad"
+query Q {
+	unknownField
+}`,
+				plain:    `query Q { unknownField }`,
+				wantErrs: 1,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				docErrs := schema.ValidateWithVariables(tt.documented, tt.variables)
+				plainErrs := schema.ValidateWithVariables(tt.plain, tt.variables)
+				if len(docErrs) != len(plainErrs) {
+					t.Fatalf("parity mismatch: documented=%d errors, plain=%d errors", len(docErrs), len(plainErrs))
+				}
+				if tt.wantErrs > 0 {
+					if len(docErrs) == 0 {
+						t.Fatal("expected validation errors, got none")
+					}
+					if docErrs[0].Message != plainErrs[0].Message {
+						t.Fatalf("error message mismatch: documented=%q plain=%q", docErrs[0].Message, plainErrs[0].Message)
+					}
+				}
+			})
+		}
+	})
+}

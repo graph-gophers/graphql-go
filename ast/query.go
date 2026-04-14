@@ -17,6 +17,7 @@ type ExecutableDefinition struct {
 type OperationDefinition struct {
 	Type       OperationType
 	Name       Ident
+	Desc       string
 	Vars       ArgumentsDefinition
 	Selections SelectionSet
 	Directives DirectiveList

@@ -22,6 +22,7 @@ type InlineFragment struct {
 type FragmentDefinition struct {
 	Fragment
 	Name       Ident
+	Desc       string
 	Directives DirectiveList
 	Loc        errors.Location
 }

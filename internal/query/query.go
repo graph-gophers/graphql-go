@@ -16,7 +16,7 @@ const (
 )
 
 func Parse(queryString string) (*ast.ExecutableDefinition, *errors.QueryError) {
-	l := common.NewLexer(queryString, false)
+	l := common.NewLexer(queryString, true)
 
 	var execDef *ast.ExecutableDefinition
 	err := l.CatchSyntaxError(func() { execDef = parseExecutableDefinition(l) })
@@ -31,7 +31,12 @@ func parseExecutableDefinition(l *common.Lexer) *ast.ExecutableDefinition {
 	ed := &ast.ExecutableDefinition{}
 	l.ConsumeWhitespace()
 	for l.Peek() != scanner.EOF {
+		desc := l.DescString()
+
 		if l.Peek() == '{' {
+			if desc != "" {
+				l.SyntaxError("descriptions are only supported on full-form operation, fragment, and variable definitions")
+			}
 			op := &ast.OperationDefinition{Type: Query, Loc: l.Location()}
 			op.Selections = parseSelectionSet(l)
 			ed.Operations = append(ed.Operations, op)
@@ -43,17 +48,25 @@ func parseExecutableDefinition(l *common.Lexer) *ast.ExecutableDefinition {
 		case "query":
 			op := parseOperation(l, Query)
 			op.Loc = loc
+			op.Desc = desc
 			ed.Operations = append(ed.Operations, op)
 
 		case "mutation":
-			ed.Operations = append(ed.Operations, parseOperation(l, Mutation))
+			op := parseOperation(l, Mutation)
+			op.Loc = loc
+			op.Desc = desc
+			ed.Operations = append(ed.Operations, op)
 
 		case "subscription":
-			ed.Operations = append(ed.Operations, parseOperation(l, Subscription))
+			op := parseOperation(l, Subscription)
+			op.Loc = loc
+			op.Desc = desc
+			ed.Operations = append(ed.Operations, op)
 
 		case "fragment":
 			frag := parseFragment(l)
 			frag.Loc = loc
+			frag.Desc = desc
 			ed.Fragments = append(ed.Fragments, frag)
 
 		default:
@@ -72,10 +85,12 @@ func parseOperation(l *common.Lexer, opType ast.OperationType) *ast.OperationDef
 	if l.Peek() == '(' {
 		l.ConsumeToken('(')
 		for l.Peek() != ')' {
+			desc := l.DescString()
 			loc := l.Location()
 			l.ConsumeToken('$')
 			iv := common.ParseInputValue(l)
 			iv.Loc = loc
+			iv.Desc = desc
 			op.Vars = append(op.Vars, iv)
 		}
 		l.ConsumeToken(')')

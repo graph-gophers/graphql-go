@@ -155,6 +155,10 @@ func (l *Lexer) DescComment() string {
 	return comment
 }
 
+func (l *Lexer) DescString() string {
+	return l.consumeDescription()
+}
+
 func (l *Lexer) SyntaxError(message string) {
 	panic(syntaxError(message))
 }
