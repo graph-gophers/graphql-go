@@ -2,7 +2,7 @@
 
 <p align="center"><img src="docs/img/logo.png" width="300"></p>
 
-The goal of this project is to provide full support of the [October 2021 GraphQL specification](https://spec.graphql.org/October2021/) with a set of idiomatic, easy to use Go packages.
+The goal of this project is to provide full support of the [September 2025 GraphQL specification](https://spec.graphql.org/September2025/) with a set of idiomatic, easy to use Go packages.
 
 While still under development (`internal` APIs are almost certainly subject to change), this library is safe for production use.
 
@@ -24,15 +24,16 @@ While still under development (`internal` APIs are almost certainly subject to c
 ### Getting started
 
 In order to run a simple GraphQL server locally create a `main.go` file with the following content:
+
 ```go
 package main
 
 import (
-	"log"
-	"net/http"
+    "log"
+    "net/http"
 
-	graphql "github.com/graph-gophers/graphql-go"
-	"github.com/graph-gophers/graphql-go/relay"
+    graphql "github.com/graph-gophers/graphql-go"
+    "github.com/graph-gophers/graphql-go/relay"
 )
 
 type query struct{}
@@ -40,34 +41,38 @@ type query struct{}
 func (query) Hello() string { return "Hello, world!" }
 
 func main() {
-	s := `
+    s := `
         type Query {
                 hello: String!
         }
     `
-	schema := graphql.MustParseSchema(s, &query{})
-	http.Handle("/query", &relay.Handler{Schema: schema})
-	log.Fatal(http.ListenAndServe(":8080", nil))
+    schema := graphql.MustParseSchema(s, &query{})
+    http.Handle("/query", &relay.Handler{Schema: schema})
+    log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
 ```
+
 Then run the file with `go run main.go`. To test:
-	    
+
 ```sh
 curl -XPOST -d '{"query": "{ hello }"}' localhost:8080/query
 ```
+
 For more realistic usecases check our [examples section](https://github.com/graph-gophers/graphql-go/wiki/Examples).
 
 ### Resolvers
 
 A resolver must have one method or field for each field of the GraphQL type it resolves. The method or field name has to be [exported](https://golang.org/ref/spec#Exported_identifiers) and match the schema's field's name in a non-case-sensitive way.
 You can use struct fields as resolvers by using `SchemaOpt: UseFieldResolvers()`. For example,
-```
+
+```go
 opts := []graphql.SchemaOpt{graphql.UseFieldResolvers()}
 schema := graphql.MustParseSchema(s, &query{}, opts...)
-```   
+```
 
 When using `UseFieldResolvers` schema option, a struct field will be used *only* when:
+
 - there is no method for a struct field
 - a struct field does not implement an interface method
 - a struct field does not have arguments
@@ -86,7 +91,7 @@ Example for a simple resolver method:
 
 ```go
 func (r *helloWorldResolver) Hello() string {
-	return "Hello world!"
+    return "Hello world!"
 }
 ```
 
@@ -94,14 +99,16 @@ The following signature is also allowed:
 
 ```go
 func (r *helloWorldResolver) Hello(ctx context.Context) (string, error) {
-	return "Hello world!", nil
+    return "Hello world!", nil
 }
 ```
 
 ### Separate resolvers for different operations
+
 This feature was released in `v1.6.0`.
 
 The GraphQL specification allows for fields with the same name defined in different query types. For example, the schema below is a valid schema definition:
+
 ```graphql
 schema {
   query: Query
@@ -116,6 +123,7 @@ type Mutation {
   hello: String!
 }
 ```
+
 The above schema would result in name collision if we use a single resolver struct because fields from both operations correspond to methods in the root resolver (the same Go struct). In order to resolve this issue, the library allows resolvers for query, mutation and subscription operations to be separated using the `Query`, `Mutation` and `Subscription` methods of the root resolver. These special methods are optional and if defined return the resolver for each opeartion. For example, the following is a resolver corresponding to the schema definition above. Note that there is a field named `hello` in both the query and the mutation definitions:
 
 ```go
@@ -124,19 +132,19 @@ type QueryResolver struct{}
 type MutationResolver struct{}
 
 func(r *RootResolver) Query() *QueryResolver {
-  return &QueryResolver{}
+    return &QueryResolver{}
 }
 
 func(r *RootResolver) Mutation() *MutationResolver {
-  return &MutationResolver{}
+    return &MutationResolver{}
 }
 
 func (*QueryResolver) Hello() string {
-	return "Hello query!"
+    return "Hello query!"
 }
 
 func (*MutationResolver) Hello() string {
-	return "Hello mutation!"
+    return "Hello mutation!"
 }
 
 schema := graphql.MustParseSchema(sdl, &RootResolver{}, nil)
@@ -145,7 +153,7 @@ schema := graphql.MustParseSchema(sdl, &RootResolver{}, nil)
 
 ### Schema Options
 
-- `UseStringDescriptions()` enables the usage of double quoted and triple quoted. When this is not enabled, comments are parsed as descriptions instead.
+- `UseStringDescriptions()` enables schema/type-system description strings (double and triple quoted). When this is not enabled, schema comments are parsed as descriptions instead.
 - `UseFieldResolvers()` specifies whether to use struct field resolvers.
 - `MaxDepth(n int)` specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
 - `MaxParallelism(n int)` specifies the maximum number of resolvers per request allowed to run in parallel. The default is 10.
@@ -180,8 +188,8 @@ Errors returned by resolvers can include custom extensions by implementing the `
 
 ```go
 type ResolverError interface {
-	error
-	Extensions() map[string]interface{}
+    error
+    Extensions() map[string]any
 }
 ```
 
@@ -189,25 +197,25 @@ Example of a simple custom error:
 
 ```go
 type droidNotFoundError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+    Code    string `json:"code"`
+    Message string `json:"message"`
 }
 
 func (e droidNotFoundError) Error() string {
-	return fmt.Sprintf("error [%s]: %s", e.Code, e.Message)
+    return fmt.Sprintf("error [%s]: %s", e.Code, e.Message)
 }
 
-func (e droidNotFoundError) Extensions() map[string]interface{} {
-	return map[string]interface{}{
-		"code":    e.Code,
-		"message": e.Message,
-	}
+func (e droidNotFoundError) Extensions() map[string]any {
+    return map[string]any{
+        "code":    e.Code,
+        "message": e.Message,
+    }
 }
 ```
 
 Which could produce a GraphQL error such as:
 
-```go
+```json
 {
   "errors": [
     {
@@ -234,31 +242,32 @@ By default the library uses `noop.Tracer`. If you want to change that you can us
 package main
 
 import (
-	"github.com/graph-gophers/graphql-go"
-	"github.com/graph-gophers/graphql-go/example/starwars"
-	otelgraphql "github.com/graph-gophers/graphql-go/trace/otel"
-	"github.com/graph-gophers/graphql-go/trace/tracer"
+    "github.com/graph-gophers/graphql-go"
+    "github.com/graph-gophers/graphql-go/example/starwars"
+    otelgraphql "github.com/graph-gophers/graphql-go/trace/otel"
+    "github.com/graph-gophers/graphql-go/trace/tracer"
 )
 // ...
 _, err := graphql.ParseSchema(starwars.Schema, nil, graphql.Tracer(otelgraphql.DefaultTracer()))
 // ...
 ```
+
 Alternatively you can pass an existing trace.Tracer instance:
+
 ```go
 tr := otel.Tracer("example")
 _, err = graphql.ParseSchema(starwars.Schema, nil, graphql.Tracer(&otelgraphql.Tracer{Tracer: tr}))
 ```
-
 
 ```go
 // OpenTracing tracer
 package main
 
 import (
-	"github.com/graph-gophers/graphql-go"
-	"github.com/graph-gophers/graphql-go/example/starwars"
-	"github.com/graph-gophers/graphql-go/trace/opentracing"
-	"github.com/graph-gophers/graphql-go/trace/tracer"
+    "github.com/graph-gophers/graphql-go"
+    "github.com/graph-gophers/graphql-go/example/starwars"
+    "github.com/graph-gophers/graphql-go/trace/opentracing"
+    "github.com/graph-gophers/graphql-go/trace/tracer"
 )
 // ...
 _, err := graphql.ParseSchema(starwars.Schema, nil, graphql.Tracer(opentracing.Tracer{}))
@@ -267,14 +276,13 @@ _, err := graphql.ParseSchema(starwars.Schema, nil, graphql.Tracer(opentracing.T
 ```
 
 If you need to implement a custom tracer the library would accept any tracer which implements the interface below:
+
 ```go
 type Tracer interface {
-    TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]interface{}, varTypes map[string]*introspection.Type) (context.Context, func([]*errors.QueryError))
-    TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]interface{}) (context.Context, func(*errors.QueryError))
+    TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]any, varTypes map[string]*introspection.Type) (context.Context, func([]*errors.QueryError))
+    TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]any) (context.Context, func(*errors.QueryError))
     TraceValidation(context.Context) func([]*errors.QueryError)
 }
 ```
 
-
 ### [Examples](https://github.com/graph-gophers/graphql-go/wiki/Examples)
-
