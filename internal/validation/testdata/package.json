@@ -8,7 +8,7 @@
     "chai": "^6.2.2",
     "graphql": "github:graphql/graphql-js",
     "mocha": "^11.7.5",
-    "typescript": "^5.9.2"
+    "typescript": "^6.0.3"
   },
   "scripts": {
     "export": "node export.cjs",
