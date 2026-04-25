@@ -12,6 +12,7 @@ import (
 	graphql "github.com/graph-gophers/graphql-go"
 	qerrors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/gqltesting"
+	"github.com/graph-gophers/graphql-go/log"
 )
 
 type rootResolver struct {
@@ -606,6 +607,7 @@ func (r *subscriptionsPanicInResolver) OnPanic() <-chan string {
 }
 
 func TestSchemaSubscribe_PanicInResolver(t *testing.T) {
+	noop := log.LoggerFunc(func(_ context.Context, _ any) {})
 	r := &struct {
 		*subscriptionsPanicInResolver
 		Name string
@@ -620,7 +622,7 @@ func TestSchemaSubscribe_PanicInResolver(t *testing.T) {
 			type Subscription {
 				onPanic : String!
 			}
-		`, r, graphql.UseFieldResolvers()),
+		`, r, graphql.UseFieldResolvers(), graphql.Logger(noop)),
 		Query: `
 			subscription {
 				onPanic
