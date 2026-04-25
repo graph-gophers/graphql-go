@@ -1245,6 +1245,70 @@ func TestInterfaceImplementsInterface(t *testing.T) {
 				return fmt.Errorf("unexpected error: want error about @oneOf only on INPUT_OBJECT, have %q", err.Error())
 			},
 		},
+		{
+			name: "Accepts object implementing interface where both field and interface field are deprecated",
+			sdl: `
+			interface Node {
+				id: ID! @deprecated(reason: "use newId")
+			}
+			type User implements Node {
+				id: ID! @deprecated(reason: "use newId")
+			}
+			`,
+			validateSchema: func(s *ast.Schema) error {
+				return nil
+			},
+		},
+		{
+			name: "Accepts object implementing interface where interface field is deprecated and implementing field is not",
+			sdl: `
+			interface Node {
+				id: ID! @deprecated(reason: "old")
+			}
+			type User implements Node {
+				id: ID!
+			}
+			`,
+			validateSchema: func(s *ast.Schema) error {
+				return nil
+			},
+		},
+		{
+			name: "Rejects object implementing interface where interface field is not deprecated but implementing field is",
+			sdl: `
+			interface Node {
+				id: ID!
+			}
+			type User implements Node {
+				id: ID! @deprecated(reason: "use newId")
+			}
+			`,
+			validateError: func(err error) error {
+				msg := `graphql: interface "Node" field "id" is not deprecated but implementing type "User" marks it as deprecated`
+				if err == nil || err.Error() != msg {
+					return fmt.Errorf("expected error %q, but got %q", msg, err)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Rejects interface implementing interface where interface field is not deprecated but implementing interface field is",
+			sdl: `
+			interface Node {
+				id: ID!
+			}
+			interface Entity implements Node {
+				id: ID! @deprecated(reason: "use newId")
+			}
+			`,
+			validateError: func(err error) error {
+				msg := `graphql: interface "Node" field "id" is not deprecated but implementing interface "Entity" marks it as deprecated`
+				if err == nil || err.Error() != msg {
+					return fmt.Errorf("expected error %q, but got %q", msg, err)
+				}
+				return nil
+			},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s, err := schema.ParseSchema(tt.sdl, tt.useStringDescriptions)

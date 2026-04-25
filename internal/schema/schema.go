@@ -117,8 +117,13 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 				}
 
 				for _, f := range intf.Fields.Names() {
-					if t.Fields.Get(f) == nil {
+					implField := t.Fields.Get(f)
+					if implField == nil {
 						return errors.Errorf("interface %q expects field %q but %q does not provide it", intf.Name, f, t.Name)
+					}
+					intfField := intf.Fields.Get(f)
+					if intfField.Directives.Get("deprecated") == nil && implField.Directives.Get("deprecated") != nil {
+						return errors.Errorf("interface %q field %q is not deprecated but implementing interface %q marks it as deprecated", intf.Name, f, t.Name)
 					}
 				}
 
@@ -149,8 +154,13 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 				return errors.Errorf("type %q is not an interface", intfName)
 			}
 			for _, f := range intf.Fields.Names() {
-				if obj.Fields.Get(f) == nil {
+				implField := obj.Fields.Get(f)
+				if implField == nil {
 					return errors.Errorf("interface %q expects field %q but %q does not provide it", intfName, f, obj.Name)
+				}
+				intfField := intf.Fields.Get(f)
+				if intfField.Directives.Get("deprecated") == nil && implField.Directives.Get("deprecated") != nil {
+					return errors.Errorf("interface %q field %q is not deprecated but implementing type %q marks it as deprecated", intfName, f, obj.Name)
 				}
 			}
 			obj.Interfaces[i] = intf
