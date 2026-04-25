@@ -131,8 +131,6 @@ harness.expectValidationErrors = function expectValidationErrors(rule, queryStr)
 
 const validationTestsDir = path.join(graphqlRootDir, 'src/validation/__tests__');
 const incompatibleSuites = new Set([
-  // graphql-go does not target single-field subscription parity in this fixture set yet.
-  'SingleFieldSubscriptionsRule-test.ts',
   // graphql-go does not expose graphql-js custom validation rule MaxIntrospectionDepthRule.
   'MaxIntrospectionDepthRule-test.ts',
   // graphql-go does not expose graphql-js custom validation rule NoSchemaIntrospectionCustomRule.

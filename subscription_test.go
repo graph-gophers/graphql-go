@@ -470,9 +470,73 @@ func TestError_multiple_subscription_fields(t *testing.T) {
 			Query: `subscription { helloSaid { msg } otherField }`,
 			ExpectedResults: []gqltesting.TestResponse{
 				{
-					Errors: []*qerrors.QueryError{qerrors.Errorf("can subscribe to at most one subscription at a time")},
+					Errors: []*qerrors.QueryError{{Message: "Anonymous Subscription must select only one top level field.", Locations: []qerrors.Location{{Line: 1, Column: 34}}}},
 				},
 			},
+		},
+	})
+}
+
+func TestError_subscription_skip_include_top_level_directives(t *testing.T) {
+	schema := graphql.MustParseSchema(`
+		schema {
+			query: Query
+			subscription: Subscription
+		}
+		type Query {
+			hello: String!
+		}
+		type Subscription {
+			helloSaid: HelloSaidEvent!
+			otherField: Int!
+		}
+		type HelloSaidEvent {
+			msg: String!
+		}
+	`, &rootResolver{helloSaidResolver: &helloSaidResolver{upstream: closedUpstream(&helloSaidEventResolver{msg: "Hello world!"})}})
+
+	gqltesting.RunSubscribes(t, []*gqltesting.TestSubscription{
+		{
+			Name:   "Named subscription",
+			Schema: schema,
+			Query: `
+				subscription RequiredRuntimeValidation($bool: Boolean!) {
+					helloSaid @include(if: $bool) {
+						msg
+					}
+					otherField @skip(if: $bool)
+				}
+			`,
+			Variables:   map[string]any{"bool": true},
+			ExpectedErr: qerrors.Errorf("Subscription \"RequiredRuntimeValidation\" must not use `@skip` or `@include` directives in the top level selection."),
+		},
+		{
+			Name:   "Anonymous subscription",
+			Schema: schema,
+			Query: `
+				subscription ($bool: Boolean!) {
+					helloSaid @include(if: $bool) {
+						msg
+					}
+					otherField @skip(if: $bool)
+				}
+			`,
+			Variables:   map[string]any{"bool": true},
+			ExpectedErr: qerrors.Errorf("Anonymous Subscription must not use `@skip` or `@include` directives in the top level selection."),
+		},
+		{
+			Name:        "Single field with skip directive",
+			Schema:      schema,
+			Query:       `subscription RequiredRuntimeValidation($bool: Boolean!) { otherField @skip(if: $bool) }`,
+			Variables:   map[string]any{"bool": true},
+			ExpectedErr: qerrors.Errorf("Subscription \"RequiredRuntimeValidation\" must not use `@skip` or `@include` directives in the top level selection."),
+		},
+		{
+			Name:        "Single field with include directive",
+			Schema:      schema,
+			Query:       `subscription RequiredRuntimeValidation($bool: Boolean!) { helloSaid @include(if: $bool) { msg } }`,
+			Variables:   map[string]any{"bool": true},
+			ExpectedErr: qerrors.Errorf("Subscription \"RequiredRuntimeValidation\" must not use `@skip` or `@include` directives in the top level selection."),
 		},
 	})
 }
