@@ -1,5 +1,6 @@
 import { ApolloServer } from '@apollo/server';
 import { startStandaloneServer } from '@apollo/server/standalone';
+import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import { ApolloGateway, IntrospectAndCompose } from '@apollo/gateway';
 
 const gateway = new ApolloGateway({
@@ -14,7 +15,14 @@ const gateway = new ApolloGateway({
 const server = new ApolloServer({
     gateway,
     plugins: [
-        ApolloServerPluginSubscription(),
+        ApolloServerPluginLandingPageLocalDefault({
+            embed: true,
+            defaultDocument: `query ExampleQuery {
+  hi
+  hello
+}
+`,
+        }),
     ],
 });
 
