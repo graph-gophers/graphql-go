@@ -8,8 +8,11 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@apollo/gateway": "^2.13.2",
+    "@apollo/gateway": "^2.13.3",
     "@apollo/server": "^5.5.0",
-    "graphql": "^16.10.0"
+    "graphql": "^16.13.2"
+  },
+  "overrides": {
+    "uuid": "^14.0.0"
   }
 }
