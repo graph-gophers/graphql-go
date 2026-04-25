@@ -408,8 +408,14 @@ func validateSingleFieldSubscription(c *opContext, op *ast.OperationDefinition, 
 	fields := make(map[string][]*ast.Field)
 	responseOrder := make([]string, 0)
 	visitedFragments := make(map[string]struct{})
+	forbiddenDirectiveLocs := make([]errors.Location, 0)
 
-	collectSubscriptionRootFields(c.context, subscriptionType, op.Selections, fields, &responseOrder, visitedFragments)
+	collectSubscriptionRootFields(c.context, subscriptionType, op.Selections, fields, &responseOrder, visitedFragments, &forbiddenDirectiveLocs)
+
+	if len(forbiddenDirectiveLocs) > 0 {
+		c.addErrMultiLoc(forbiddenDirectiveLocs, "SingleFieldSubscriptionsRule", "%s", subscriptionDirectivesNotAllowedMessage(op.Name.Name))
+		return
+	}
 
 	if len(responseOrder) > 1 {
 		locs := make([]errors.Location, 0)
@@ -448,13 +454,12 @@ func collectSubscriptionRootFields(
 	fields map[string][]*ast.Field,
 	responseOrder *[]string,
 	visitedFragments map[string]struct{},
+	forbiddenDirectiveLocs *[]errors.Location,
 ) {
 	for _, selection := range selections {
 		switch s := selection.(type) {
 		case *ast.Field:
-			if !shouldIncludeByDirective(s.Directives) {
-				continue
-			}
+			appendSkipIncludeDirectiveLocs(s.Directives, forbiddenDirectiveLocs)
 			key := fieldResponseName(s)
 			if _, ok := fields[key]; !ok {
 				*responseOrder = append(*responseOrder, key)
@@ -462,15 +467,14 @@ func collectSubscriptionRootFields(
 			fields[key] = append(fields[key], s)
 
 		case *ast.InlineFragment:
-			if !shouldIncludeByDirective(s.Directives) || !fragmentConditionMatches(c, runtimeType, s.On) {
+			appendSkipIncludeDirectiveLocs(s.Directives, forbiddenDirectiveLocs)
+			if !fragmentConditionMatches(c, runtimeType, s.On) {
 				continue
 			}
-			collectSubscriptionRootFields(c, runtimeType, s.Selections, fields, responseOrder, visitedFragments)
+			collectSubscriptionRootFields(c, runtimeType, s.Selections, fields, responseOrder, visitedFragments, forbiddenDirectiveLocs)
 
 		case *ast.FragmentSpread:
-			if !shouldIncludeByDirective(s.Directives) {
-				continue
-			}
+			appendSkipIncludeDirectiveLocs(s.Directives, forbiddenDirectiveLocs)
 
 			fragName := s.Name.Name
 			if _, ok := visitedFragments[fragName]; ok {
@@ -483,7 +487,7 @@ func collectSubscriptionRootFields(
 				continue
 			}
 
-			collectSubscriptionRootFields(c, runtimeType, frag.Selections, fields, responseOrder, visitedFragments)
+			collectSubscriptionRootFields(c, runtimeType, frag.Selections, fields, responseOrder, visitedFragments, forbiddenDirectiveLocs)
 		}
 	}
 }
@@ -501,40 +505,12 @@ func fragmentConditionMatches(c *context, runtimeType ast.NamedType, on ast.Type
 	return compatible(runtimeType, fragType)
 }
 
-func shouldIncludeByDirective(directives ast.DirectiveList) bool {
-	if skip, ok := directiveIfBool(directives.Get("skip")); ok && skip {
-		return false
-	}
-
-	if include, ok := directiveIfBool(directives.Get("include")); ok && !include {
-		return false
-	}
-
-	return true
-}
-
-func directiveIfBool(d *ast.Directive) (bool, bool) {
-	if d == nil {
-		return false, false
-	}
-
-	arg, ok := d.Arguments.Get("if")
-	if !ok {
-		return false, false
-	}
-
-	v, ok := arg.(*ast.PrimitiveValue)
-	if !ok || v.Type != scanner.Ident {
-		return false, false
-	}
-
-	switch v.Text {
-	case "true":
-		return true, true
-	case "false":
-		return false, true
-	default:
-		return false, false
+func appendSkipIncludeDirectiveLocs(directives ast.DirectiveList, locs *[]errors.Location) {
+	for _, d := range directives {
+		switch d.Name.Name {
+		case "skip", "include":
+			*locs = append(*locs, d.Name.Loc)
+		}
 	}
 }
 
@@ -552,6 +528,14 @@ func introspectionSubscriptionMessage(operationName string) string {
 	}
 
 	return "Anonymous Subscription must not select an introspection top level field."
+}
+
+func subscriptionDirectivesNotAllowedMessage(operationName string) string {
+	if operationName != "" {
+		return fmt.Sprintf("Subscription %q must not use `@skip` or `@include` directives in the top level selection.", operationName)
+	}
+
+	return "Anonymous Subscription must not use `@skip` or `@include` directives in the top level selection."
 }
 
 func selectionTopLevelFieldNames(c *context, sel ast.Selection) (map[string]struct{}, bool) {
