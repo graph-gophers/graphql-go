@@ -29,12 +29,6 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 		sels := selected.ApplyOperation(&r.Request, s, op)
 		var fields []*fieldToExec
 		collectFieldsToResolve(sels, s, s.SubscriptionResolver, &fields, make(map[string]*fieldToExec))
-
-		// TODO: move this check into validation.Validate
-		if len(fields) != 1 {
-			err = errors.Errorf("%s", "can subscribe to at most one subscription at a time")
-			return
-		}
 		f = fields[0]
 
 		var in []reflect.Value

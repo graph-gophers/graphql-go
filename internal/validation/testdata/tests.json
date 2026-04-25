@@ -33,6 +33,10 @@
       "sdl": "interface SomeBox {\n  deepBox: SomeBox\n  unrelatedField: String\n}\n\ntype StringBox implements SomeBox {\n  scalar: String\n  deepBox: StringBox\n  unrelatedField: String\n  listStringBox: [StringBox]\n  stringBox: StringBox\n  intBox: IntBox\n}\n\ntype IntBox implements SomeBox {\n  scalar: Int\n  deepBox: IntBox\n  unrelatedField: String\n  listStringBox: [StringBox]\n  stringBox: StringBox\n  intBox: IntBox\n}\n\ninterface NonNullStringBox1 {\n  scalar: String!\n}\n\ntype NonNullStringBox1Impl implements SomeBox & NonNullStringBox1 {\n  scalar: String!\n  unrelatedField: String\n  deepBox: SomeBox\n}\n\ninterface NonNullStringBox2 {\n  scalar: String!\n}\n\ntype NonNullStringBox2Impl implements SomeBox & NonNullStringBox2 {\n  scalar: String!\n  unrelatedField: String\n  deepBox: SomeBox\n}\n\ntype Connection {\n  edges: [Edge]\n}\n\ntype Edge {\n  node: Node\n}\n\ntype Node {\n  id: ID\n  name: String\n}\n\ntype Query {\n  someBox: SomeBox\n  connection: Connection\n}"
     },
     {
+      "id": "7vWLhgiswrYZqrL5QFJ+J/En5qld4eE+PJy261hywOs=",
+      "sdl": "schema {\n  query: QueryRoot\n  subscription: SubscriptionRoot\n}\n\ntype Message {\n  body: String\n  sender: String\n}\n\ntype SubscriptionRoot {\n  importantEmails: [String]\n  notImportantEmails: [String]\n  moreImportantEmails: [String]\n  spamEmails: [String]\n  deletedEmails: [String]\n  newMessage: Message\n}\n\ntype QueryRoot {\n  dummy: String\n}"
+    },
+    {
       "id": "/1ZT17cHiYgigdJhFgBuef8CBYIDivmE0tiCwJxLBAM=",
       "sdl": "schema {\n  query: QueryRoot\n}\n\ndirective @onField on FIELD\n\ndirective @directive on FIELD | FRAGMENT_DEFINITION\n\ndirective @directiveA on FIELD | FRAGMENT_DEFINITION\n\ndirective @directiveB on FIELD | FRAGMENT_DEFINITION\n\ndirective @repeatable repeatable on FIELD | FRAGMENT_DEFINITION\n\ninterface Mammal {\n  mother: Mammal\n  father: Mammal\n}\n\ninterface Pet {\n  name(surname: Boolean): String\n}\n\ninterface Canine implements Mammal {\n  name(surname: Boolean): String\n  mother: Canine\n  father: Canine\n}\n\nenum DogCommand {\n  SIT\n  HEEL\n  DOWN\n}\n\ntype Dog implements Pet & Mammal & Canine {\n  name(surname: Boolean): String\n  nickname: String\n  barkVolume: Int\n  barks: Boolean\n  doesKnowCommand(dogCommand: DogCommand): Boolean\n  isHouseTrained(atOtherHomes: Boolean = true): Boolean\n  isAtLocation(x: Int, y: Int): Boolean\n  mother: Dog\n  father: Dog\n}\n\ntype Cat implements Pet {\n  name(surname: Boolean): String\n  nickname: String\n  meows: Boolean\n  meowsVolume: Int\n  furColor: FurColor\n}\n\nunion CatOrDog = Cat | Dog\n\ntype Human {\n  name(surname: Boolean): String\n  pets: [Pet]\n  relatives: [Human]\n}\n\nenum FurColor {\n  BROWN\n  BLACK\n  TAN\n  SPOTTED\n  NO_FUR\n  UNKNOWN\n}\n\ninput ComplexInput {\n  requiredField: Boolean!\n  nonNullField: Boolean! = false\n  intField: Int\n  stringField: String\n  booleanField: Boolean\n  stringListField: [String]\n}\n\ninput OneOfInput @oneOf {\n  stringField: String\n  intField: Int\n}\n\ntype ComplicatedArgs {\n  intArgField(intArg: Int): String\n  nonNullIntArgField(nonNullIntArg: Int!): String\n  stringArgField(stringArg: String): String\n  booleanArgField(booleanArg: Boolean): String\n  enumArgField(enumArg: FurColor): String\n  floatArgField(floatArg: Float): String\n  idArgField(idArg: ID): String\n  stringListArgField(stringListArg: [String]): String\n  stringListNonNullArgField(stringListNonNullArg: [String!]): String\n  complexArgField(complexArg: ComplexInput): String\n  oneOfArgField(oneOfArg: OneOfInput): String\n  multipleReqs(req1: Int!, req2: Int!): String\n  nonNullFieldWithDefault(arg: Int! = 0): String\n  multipleOpts(opt1: Int = 0, opt2: Int = 0): String\n  multipleOptAndReq(req1: Int!, req2: Int!, opt1: Int = 0, opt2: Int = 0): String\n}\n\ntype QueryRoot {\n  human(id: ID): Human\n  dog: Dog\n  cat: Cat\n  pet: Pet\n  catOrDog: CatOrDog\n  complicatedArgs: ComplicatedArgs\n}"
     },
@@ -47,6 +51,10 @@
     {
       "id": "aOfXLHXbe5uZ84mk/fKqbm+FXG2G1gGvi9JwNfSmqwY=",
       "sdl": "type Query {\n  anyArg(arg: Any): String\n}\n\nscalar Any"
+    },
+    {
+      "id": "aGRZ7PoIZFstEjVOfKqy/kXMrjtbzxrDr01aoCm08gg=",
+      "sdl": "type Query {\n  dummy: String\n}"
     },
     {
       "id": "oECbw4BIP7gX1R+fCGRDCcqbO2FV/Uf0MhhE0EDAWIw=",
@@ -3674,6 +3682,244 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Validate: Subscriptions with single field/valid subscription",
+      "rule": "SingleFieldSubscriptionsRule",
+      "schema": "7vWLhgiswrYZqrL5QFJ+J/En5qld4eE+PJy261hywOs=",
+      "query": "\n      subscription ImportantEmails {\n        importantEmails\n      }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Subscriptions with single field/valid subscription with fragment",
+      "rule": "SingleFieldSubscriptionsRule",
+      "schema": "7vWLhgiswrYZqrL5QFJ+J/En5qld4eE+PJy261hywOs=",
+      "query": "\n      subscription sub {\n        ...newMessageFields\n      }\n\n      fragment newMessageFields on SubscriptionRoot {\n        newMessage {\n          body\n          sender\n        }\n      }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Subscriptions with single field/valid subscription with fragment and field",
+      "rule": "SingleFieldSubscriptionsRule",
+      "schema": "7vWLhgiswrYZqrL5QFJ+J/En5qld4eE+PJy261hywOs=",
+      "query": "\n      subscription sub {\n        newMessage {\n          body\n        }\n        ...newMessageFields\n      }\n\n      fragment newMessageFields on SubscriptionRoot {\n        newMessage {\n          body\n          sender\n        }\n      }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Subscriptions with single field/fails with more than one root field",
+      "rule": "SingleFieldSubscriptionsRule",
+      "schema": "7vWLhgiswrYZqrL5QFJ+J/En5qld4eE+PJy261hywOs=",
+      "query": "\n      subscription ImportantEmails {\n        importantEmails\n        notImportantEmails\n      }\n    ",
+      "errors": [
+        {
+          "message": "Subscription \"ImportantEmails\" must select only one top level field.",
+          "locations": [
+            {
+              "line": 4,
+              "column": 9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Subscriptions with single field/fails with more than one root field including introspection",
+      "rule": "SingleFieldSubscriptionsRule",
+      "schema": "7vWLhgiswrYZqrL5QFJ+J/En5qld4eE+PJy261hywOs=",
+      "query": "\n      subscription ImportantEmails {\n        importantEmails\n        __typename\n      }\n    ",
+      "errors": [
+        {
+          "message": "Subscription \"ImportantEmails\" must select only one top level field.",
+          "locations": [
+            {
+              "line": 4,
+              "column": 9
+            }
+          ]
+        },
+        {
+          "message": "Subscription \"ImportantEmails\" must not select an introspection top level field.",
+          "locations": [
+            {
+              "line": 4,
+              "column": 9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Subscriptions with single field/fails with more than one root field including aliased introspection via fragment",
+      "rule": "SingleFieldSubscriptionsRule",
+      "schema": "7vWLhgiswrYZqrL5QFJ+J/En5qld4eE+PJy261hywOs=",
+      "query": "\n      subscription ImportantEmails {\n        importantEmails\n        ...Introspection\n      }\n      fragment Introspection on SubscriptionRoot {\n        typename: __typename\n      }\n    ",
+      "errors": [
+        {
+          "message": "Subscription \"ImportantEmails\" must select only one top level field.",
+          "locations": [
+            {
+              "line": 7,
+              "column": 9
+            }
+          ]
+        },
+        {
+          "message": "Subscription \"ImportantEmails\" must not select an introspection top level field.",
+          "locations": [
+            {
+              "line": 7,
+              "column": 9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Subscriptions with single field/fails with many more than one root field",
+      "rule": "SingleFieldSubscriptionsRule",
+      "schema": "7vWLhgiswrYZqrL5QFJ+J/En5qld4eE+PJy261hywOs=",
+      "query": "\n      subscription ImportantEmails {\n        importantEmails\n        notImportantEmails\n        spamEmails\n      }\n    ",
+      "errors": [
+        {
+          "message": "Subscription \"ImportantEmails\" must select only one top level field.",
+          "locations": [
+            {
+              "line": 4,
+              "column": 9
+            },
+            {
+              "line": 5,
+              "column": 9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Subscriptions with single field/fails with many more than one root field via fragments",
+      "rule": "SingleFieldSubscriptionsRule",
+      "schema": "7vWLhgiswrYZqrL5QFJ+J/En5qld4eE+PJy261hywOs=",
+      "query": "\n      subscription ImportantEmails {\n        importantEmails\n        ... {\n          more: moreImportantEmails\n        }\n        ...NotImportantEmails\n      }\n      fragment NotImportantEmails on SubscriptionRoot {\n        notImportantEmails\n        deleted: deletedEmails\n        ...SpamEmails\n      }\n      fragment SpamEmails on SubscriptionRoot {\n        spamEmails\n      }\n    ",
+      "errors": [
+        {
+          "message": "Subscription \"ImportantEmails\" must select only one top level field.",
+          "locations": [
+            {
+              "line": 5,
+              "column": 11
+            },
+            {
+              "line": 10,
+              "column": 9
+            },
+            {
+              "line": 11,
+              "column": 9
+            },
+            {
+              "line": 15,
+              "column": 9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Subscriptions with single field/does not infinite loop on recursive fragments",
+      "rule": "SingleFieldSubscriptionsRule",
+      "schema": "7vWLhgiswrYZqrL5QFJ+J/En5qld4eE+PJy261hywOs=",
+      "query": "\n      subscription NoInfiniteLoop {\n        ...A\n      }\n      fragment A on SubscriptionRoot {\n        ...A\n      }\n    ",
+      "errors": []
+    },
+    {
+      "name": "Validate: Subscriptions with single field/fails with many more than one root field via fragments (anonymous)",
+      "rule": "SingleFieldSubscriptionsRule",
+      "schema": "7vWLhgiswrYZqrL5QFJ+J/En5qld4eE+PJy261hywOs=",
+      "query": "\n      subscription {\n        importantEmails\n        ... {\n          more: moreImportantEmails\n          ...NotImportantEmails\n        }\n        ...NotImportantEmails\n      }\n      fragment NotImportantEmails on SubscriptionRoot {\n        notImportantEmails\n        deleted: deletedEmails\n        ... {\n          ... {\n            archivedEmails\n          }\n        }\n        ...SpamEmails\n      }\n      fragment SpamEmails on SubscriptionRoot {\n        spamEmails\n        ...NonExistentFragment\n      }\n    ",
+      "errors": [
+        {
+          "message": "Anonymous Subscription must select only one top level field.",
+          "locations": [
+            {
+              "line": 5,
+              "column": 11
+            },
+            {
+              "line": 11,
+              "column": 9
+            },
+            {
+              "line": 12,
+              "column": 9
+            },
+            {
+              "line": 15,
+              "column": 13
+            },
+            {
+              "line": 21,
+              "column": 9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Subscriptions with single field/fails with more than one root field in anonymous subscriptions",
+      "rule": "SingleFieldSubscriptionsRule",
+      "schema": "7vWLhgiswrYZqrL5QFJ+J/En5qld4eE+PJy261hywOs=",
+      "query": "\n      subscription {\n        importantEmails\n        notImportantEmails\n      }\n    ",
+      "errors": [
+        {
+          "message": "Anonymous Subscription must select only one top level field.",
+          "locations": [
+            {
+              "line": 4,
+              "column": 9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Subscriptions with single field/fails with introspection field",
+      "rule": "SingleFieldSubscriptionsRule",
+      "schema": "7vWLhgiswrYZqrL5QFJ+J/En5qld4eE+PJy261hywOs=",
+      "query": "\n      subscription ImportantEmails {\n        __typename\n      }\n    ",
+      "errors": [
+        {
+          "message": "Subscription \"ImportantEmails\" must not select an introspection top level field.",
+          "locations": [
+            {
+              "line": 3,
+              "column": 9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Subscriptions with single field/fails with introspection field in anonymous subscription",
+      "rule": "SingleFieldSubscriptionsRule",
+      "schema": "7vWLhgiswrYZqrL5QFJ+J/En5qld4eE+PJy261hywOs=",
+      "query": "\n      subscription {\n        __typename\n      }\n    ",
+      "errors": [
+        {
+          "message": "Anonymous Subscription must not select an introspection top level field.",
+          "locations": [
+            {
+              "line": 3,
+              "column": 9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validate: Subscriptions with single field/skips if not subscription type",
+      "rule": "SingleFieldSubscriptionsRule",
+      "schema": "aGRZ7PoIZFstEjVOfKqy/kXMrjtbzxrDr01aoCm08gg=",
+      "query": "\n        subscription {\n          __typename\n        }\n      ",
+      "errors": []
     },
     {
       "name": "Validate: Unique argument names/no arguments on field",

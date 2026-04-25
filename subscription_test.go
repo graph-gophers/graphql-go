@@ -467,12 +467,8 @@ func TestError_multiple_subscription_fields(t *testing.T) {
 						msg: String!
 					}
 			`, &rootResolver{helloSaidResolver: &helloSaidResolver{upstream: closedUpstream(&helloSaidEventResolver{msg: "Hello world!"})}}),
-			Query: `subscription { helloSaid { msg } otherField }`,
-			ExpectedResults: []gqltesting.TestResponse{
-				{
-					Errors: []*qerrors.QueryError{qerrors.Errorf("can subscribe to at most one subscription at a time")},
-				},
-			},
+			Query:       `subscription { helloSaid { msg } otherField }`,
+			ExpectedErr: qerrors.Errorf("Anonymous Subscription must select only one top level field."),
 		},
 	})
 }

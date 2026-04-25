@@ -155,6 +155,10 @@ func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string
 			panic("unreachable")
 		}
 
+		if op.Type == query.Subscription && entryPoint != nil {
+			validateSingleFieldSubscription(opc, op, entryPoint)
+		}
+
 		validateSelectionSet(opc, op.Selections, entryPoint)
 
 		fragUsed := make(map[*ast.FragmentDefinition]struct{})
@@ -398,6 +402,156 @@ func fieldResponseName(f *ast.Field) string {
 		return f.Alias.Name
 	}
 	return f.Name.Name
+}
+
+func validateSingleFieldSubscription(c *opContext, op *ast.OperationDefinition, subscriptionType ast.NamedType) {
+	fields := make(map[string][]*ast.Field)
+	responseOrder := make([]string, 0)
+	visitedFragments := make(map[string]struct{})
+
+	collectSubscriptionRootFields(c.context, subscriptionType, op.Selections, fields, &responseOrder, visitedFragments)
+
+	if len(responseOrder) > 1 {
+		locs := make([]errors.Location, 0)
+		for _, key := range responseOrder[1:] {
+			for _, field := range fields[key] {
+				locs = append(locs, field.Alias.Loc)
+			}
+		}
+
+		if len(locs) > 0 {
+			c.addErrMultiLoc(locs, "SingleFieldSubscriptionsRule", "%s", singleFieldSubscriptionMessage(op.Name.Name))
+		}
+	}
+
+	for _, key := range responseOrder {
+		fieldNodes := fields[key]
+		if len(fieldNodes) == 0 {
+			continue
+		}
+
+		field := fieldNodes[0]
+		if strings.HasPrefix(field.Name.Name, "__") {
+			locs := make([]errors.Location, 0, len(fieldNodes))
+			for _, node := range fieldNodes {
+				locs = append(locs, node.Alias.Loc)
+			}
+			c.addErrMultiLoc(locs, "SingleFieldSubscriptionsRule", "%s", introspectionSubscriptionMessage(op.Name.Name))
+		}
+	}
+}
+
+func collectSubscriptionRootFields(
+	c *context,
+	runtimeType ast.NamedType,
+	selections []ast.Selection,
+	fields map[string][]*ast.Field,
+	responseOrder *[]string,
+	visitedFragments map[string]struct{},
+) {
+	for _, selection := range selections {
+		switch s := selection.(type) {
+		case *ast.Field:
+			if !shouldIncludeByDirective(s.Directives) {
+				continue
+			}
+			key := fieldResponseName(s)
+			if _, ok := fields[key]; !ok {
+				*responseOrder = append(*responseOrder, key)
+			}
+			fields[key] = append(fields[key], s)
+
+		case *ast.InlineFragment:
+			if !shouldIncludeByDirective(s.Directives) || !fragmentConditionMatches(c, runtimeType, s.On) {
+				continue
+			}
+			collectSubscriptionRootFields(c, runtimeType, s.Selections, fields, responseOrder, visitedFragments)
+
+		case *ast.FragmentSpread:
+			if !shouldIncludeByDirective(s.Directives) {
+				continue
+			}
+
+			fragName := s.Name.Name
+			if _, ok := visitedFragments[fragName]; ok {
+				continue
+			}
+			visitedFragments[fragName] = struct{}{}
+
+			frag := c.doc.Fragments.Get(fragName)
+			if frag == nil || !fragmentConditionMatches(c, runtimeType, frag.On) {
+				continue
+			}
+
+			collectSubscriptionRootFields(c, runtimeType, frag.Selections, fields, responseOrder, visitedFragments)
+		}
+	}
+}
+
+func fragmentConditionMatches(c *context, runtimeType ast.NamedType, on ast.TypeName) bool {
+	if on.Name == "" {
+		return true
+	}
+
+	fragType := unwrapType(resolveType(c, &on))
+	if runtimeType == nil || fragType == nil {
+		return false
+	}
+
+	return compatible(runtimeType, fragType)
+}
+
+func shouldIncludeByDirective(directives ast.DirectiveList) bool {
+	if skip, ok := directiveIfBool(directives.Get("skip")); ok && skip {
+		return false
+	}
+
+	if include, ok := directiveIfBool(directives.Get("include")); ok && !include {
+		return false
+	}
+
+	return true
+}
+
+func directiveIfBool(d *ast.Directive) (bool, bool) {
+	if d == nil {
+		return false, false
+	}
+
+	arg, ok := d.Arguments.Get("if")
+	if !ok {
+		return false, false
+	}
+
+	v, ok := arg.(*ast.PrimitiveValue)
+	if !ok || v.Type != scanner.Ident {
+		return false, false
+	}
+
+	switch v.Text {
+	case "true":
+		return true, true
+	case "false":
+		return false, true
+	default:
+		return false, false
+	}
+}
+
+func singleFieldSubscriptionMessage(operationName string) string {
+	if operationName != "" {
+		return fmt.Sprintf("Subscription %q must select only one top level field.", operationName)
+	}
+
+	return "Anonymous Subscription must select only one top level field."
+}
+
+func introspectionSubscriptionMessage(operationName string) string {
+	if operationName != "" {
+		return fmt.Sprintf("Subscription %q must not select an introspection top level field.", operationName)
+	}
+
+	return "Anonymous Subscription must not select an introspection top level field."
 }
 
 func selectionTopLevelFieldNames(c *context, sel ast.Selection) (map[string]struct{}, bool) {
