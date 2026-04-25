@@ -2567,8 +2567,11 @@ func TestIntrospection(t *testing.T) {
 											"name": "reason",
 											"description": "Explains why this element was deprecated, usually also including a suggestion\nfor how to access supported similar data. Formatted in\n[Markdown](https://daringfireball.net/projects/markdown/).",
 											"type": {
-												"kind": "SCALAR",
-												"ofType": null
+												"kind": "NON_NULL",
+												"ofType": {
+													"kind": "SCALAR",
+													"name": "String"
+												}
 											}
 										}
 									]
