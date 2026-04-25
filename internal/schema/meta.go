@@ -55,7 +55,7 @@ var metaSrc = `
 		# Explains why this element was deprecated, usually also including a suggestion
 		# for how to access supported similar data. Formatted in
 		# [Markdown](https://daringfireball.net/projects/markdown/).
-		reason: String = "No longer supported"
+		reason: String! = "No longer supported"
 	) on FIELD_DEFINITION | ENUM_VALUE | ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION
 
 	# Provides a scalar specification URL for specifying the behavior of custom scalar types.
