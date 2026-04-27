@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"strconv"
-	"strings"
 	"text/scanner"
 
 	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/errors"
+	"github.com/graph-gophers/graphql-go/internal/common/norm"
 )
 
 type syntaxError string
@@ -29,7 +29,7 @@ func NewLexer(s string, useStringDescriptions bool) *Lexer {
 	sc := &scanner.Scanner{
 		Mode: scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats | scanner.ScanStrings,
 	}
-	sc.Init(strings.NewReader(s))
+	sc.Init(norm.NewReader(s)) // strings.NewReader doesn't support unicode normalization
 
 	l := Lexer{sc: sc, useStringDescriptions: useStringDescriptions}
 	l.sc.Error = l.CatchScannerError
@@ -42,6 +42,7 @@ func (l *Lexer) CatchSyntaxError(f func()) (errRes *errors.QueryError) {
 		if err := recover(); err != nil {
 			if err, ok := err.(syntaxError); ok {
 				errRes = errors.Errorf("syntax error: %s", err)
+				errRes.Err = fmt.Errorf("%w: %s", errors.ErrSyntax, err)
 				errRes.Locations = []errors.Location{l.Location()}
 				return
 			}
@@ -135,6 +136,11 @@ func (l *Lexer) ConsumeKeyword(keyword string) {
 
 func (l *Lexer) ConsumeLiteral() *ast.PrimitiveValue {
 	lit := &ast.PrimitiveValue{Type: l.next, Text: l.sc.TokenText()}
+	if l.next == scanner.String && l.sc.Peek() == '"' {
+		// Triple-quoted block strings are tokenized as an empty string followed by
+		// another quote by text/scanner. Normalize to a regular quoted string.
+		lit.Text = strconv.Quote(l.consumeTripleQuoteComment())
+	}
 	l.ConsumeWhitespace()
 	return lit
 }

@@ -5,6 +5,15 @@ import (
 	"strings"
 )
 
+type constErr string
+
+func (e constErr) Error() string {
+	return string(e)
+}
+
+// ErrSyntax marks GraphQL syntax parsing failures.
+const ErrSyntax constErr = "graphql syntax error"
+
 type QueryError struct {
 	Err           error          `json:"-"` // Err holds underlying if available
 	Message       string         `json:"message"`

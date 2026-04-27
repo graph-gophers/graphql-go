@@ -35,3 +35,39 @@ func TestParseRejectsEmptyNestedSelectionSet(t *testing.T) {
 		t.Fatalf("expected syntax error for empty nested selection set, got nil")
 	}
 }
+
+func TestParseAcceptsFullUnicodeEscapeSyntax(t *testing.T) {
+	t.Parallel()
+
+	_, err := Parse(`query { user(id: "\u{1F37A}") { id } }`)
+	if err != nil {
+		t.Fatalf("expected query to parse, got error: %v", err)
+	}
+}
+
+func TestParseAcceptsSupplementaryPlaneCodePoint(t *testing.T) {
+	t.Parallel()
+
+	_, err := Parse(`query { user(id: "🍺") { id } }`)
+	if err != nil {
+		t.Fatalf("expected query to parse, got error: %v", err)
+	}
+}
+
+func TestParseAcceptsValidSurrogatePairEscape(t *testing.T) {
+	t.Parallel()
+
+	_, err := Parse(`query { user(id: "\uD83C\uDF7A") { id } }`)
+	if err != nil {
+		t.Fatalf("expected query to parse, got error: %v", err)
+	}
+}
+
+func TestParseRejectsInvalidSurrogatePairEscape(t *testing.T) {
+	t.Parallel()
+
+	_, err := Parse(`query { user(id: "\uD83C\u0041") { id } }`)
+	if err == nil {
+		t.Fatal("expected syntax error for invalid surrogate pair, got nil")
+	}
+}
