@@ -53,7 +53,7 @@ func NewReader(src string) io.Reader {
 	return &reader{src: src}
 }
 
-// Reader reads from the source stream, normalizing Unicode escape sequences within GraphQL string literals.
+// Read reads from the source stream, normalizing Unicode escape sequences within GraphQL string literals.
 func (r *reader) Read(p []byte) (int, error) {
 	if len(p) == 0 {
 		if r.pendingOffset >= len(r.pending) && r.i >= len(r.src) {
