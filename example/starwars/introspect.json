@@ -5,6 +5,7 @@
         "args": [
           {
             "defaultValue": "\"No longer supported\"",
+            "deprecationReason": null,
             "description": "Explains why this element was deprecated, usually also including a suggestion\nfor how to access supported similar data. Formatted in\n[Markdown](https://daringfireball.net/projects/markdown/).",
             "name": "reason",
             "type": {
@@ -31,6 +32,7 @@
         "args": [
           {
             "defaultValue": null,
+            "deprecationReason": null,
             "description": "Included when true.",
             "name": "if",
             "type": {
@@ -64,6 +66,7 @@
         "args": [
           {
             "defaultValue": null,
+            "deprecationReason": null,
             "description": "Skipped when true.",
             "name": "if",
             "type": {
@@ -89,6 +92,7 @@
         "args": [
           {
             "defaultValue": null,
+            "deprecationReason": null,
             "description": "The URL should point to a human-readable specification of the data format, serialization, and coercion rules.",
             "name": "url",
             "type": {
@@ -183,6 +187,7 @@
             "args": [
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "first",
                 "type": {
@@ -193,6 +198,7 @@
               },
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "after",
                 "type": {
@@ -314,6 +320,7 @@
             "args": [
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "first",
                 "type": {
@@ -324,6 +331,7 @@
               },
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "after",
                 "type": {
@@ -589,6 +597,7 @@
             "args": [
               {
                 "defaultValue": "METER",
+                "deprecationReason": null,
                 "description": null,
                 "name": "unit",
                 "type": {
@@ -644,6 +653,7 @@
             "args": [
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "first",
                 "type": {
@@ -654,6 +664,7 @@
               },
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "after",
                 "type": {
@@ -781,6 +792,7 @@
             "args": [
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "episode",
                 "type": {
@@ -795,6 +807,7 @@
               },
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "review",
                 "type": {
@@ -884,6 +897,7 @@
             "args": [
               {
                 "defaultValue": "NEWHOPE",
+                "deprecationReason": null,
                 "description": null,
                 "name": "episode",
                 "type": {
@@ -907,6 +921,7 @@
             "args": [
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "episode",
                 "type": {
@@ -942,6 +957,7 @@
             "args": [
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "text",
                 "type": {
@@ -977,6 +993,7 @@
             "args": [
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "id",
                 "type": {
@@ -1004,6 +1021,7 @@
             "args": [
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "id",
                 "type": {
@@ -1031,6 +1049,7 @@
             "args": [
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "id",
                 "type": {
@@ -1058,6 +1077,7 @@
             "args": [
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "id",
                 "type": {
@@ -1134,6 +1154,7 @@
         "inputFields": [
           {
             "defaultValue": null,
+            "deprecationReason": null,
             "description": "0-5 stars",
             "name": "stars",
             "type": {
@@ -1148,6 +1169,7 @@
           },
           {
             "defaultValue": null,
+            "deprecationReason": null,
             "description": "Comment about the movie, optional",
             "name": "commentary",
             "type": {
@@ -1228,6 +1250,7 @@
             "args": [
               {
                 "defaultValue": "METER",
+                "deprecationReason": null,
                 "description": null,
                 "name": "unit",
                 "type": {
@@ -1328,6 +1351,7 @@
             "args": [
               {
                 "defaultValue": "false",
+                "deprecationReason": null,
                 "description": null,
                 "name": "includeDeprecated",
                 "type": {
@@ -1592,6 +1616,7 @@
             "args": [
               {
                 "defaultValue": "false",
+                "deprecationReason": null,
                 "description": null,
                 "name": "includeDeprecated",
                 "type": {
@@ -1920,6 +1945,7 @@
             "args": [
               {
                 "defaultValue": "false",
+                "deprecationReason": null,
                 "description": null,
                 "name": "includeDeprecated",
                 "type": {
@@ -1995,6 +2021,7 @@
             "args": [
               {
                 "defaultValue": "false",
+                "deprecationReason": null,
                 "description": null,
                 "name": "includeDeprecated",
                 "type": {
@@ -2029,8 +2056,10 @@
           {
             "args": [
               {
-                "name": "includeDeprecated",
+                "defaultValue": "false",
+                "deprecationReason": null,
                 "description": null,
+                "name": "includeDeprecated",
                 "type": {
                   "kind": "NON_NULL",
                   "name": null,
@@ -2039,8 +2068,7 @@
                     "name": "Boolean",
                     "ofType": null
                   }
-                },
-                "defaultValue": "false"
+                }
               }
             ],
             "deprecationReason": null,
