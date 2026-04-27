@@ -165,15 +165,17 @@ func (r *Type) EnumValues(args *struct{ IncludeDeprecated bool }) *[]*EnumValue 
 	return &l
 }
 
-func (r *Type) InputFields() *[]*InputValue {
+func (r *Type) InputFields(args *struct{ IncludeDeprecated bool }) *[]*InputValue {
 	t, ok := r.typ.(*ast.InputObject)
 	if !ok {
 		return nil
 	}
 
-	l := make([]*InputValue, len(t.Values))
-	for i, v := range t.Values {
-		l[i] = &InputValue{v}
+	var l []*InputValue
+	for _, v := range t.Values {
+		if d := v.Directives.Get("deprecated"); d == nil || args.IncludeDeprecated {
+			l = append(l, &InputValue{v})
+		}
 	}
 	return &l
 }
@@ -218,10 +220,12 @@ func (r *Field) Description() *string {
 	return &r.field.Desc
 }
 
-func (r *Field) Args() []*InputValue {
-	l := make([]*InputValue, len(r.field.Arguments))
-	for i, v := range r.field.Arguments {
-		l[i] = &InputValue{v}
+func (r *Field) Args(args *struct{ IncludeDeprecated bool }) []*InputValue {
+	l := make([]*InputValue, 0, len(r.field.Arguments))
+	for _, v := range r.field.Arguments {
+		if d := v.Directives.Get("deprecated"); d == nil || args.IncludeDeprecated {
+			l = append(l, &InputValue{v})
+		}
 	}
 	return l
 }
@@ -330,10 +334,12 @@ func (r *Directive) Locations() []string {
 	return r.directive.Locations
 }
 
-func (r *Directive) Args() []*InputValue {
-	l := make([]*InputValue, len(r.directive.Arguments))
-	for i, v := range r.directive.Arguments {
-		l[i] = &InputValue{v}
+func (r *Directive) Args(args *struct{ IncludeDeprecated bool }) []*InputValue {
+	l := make([]*InputValue, 0, len(r.directive.Arguments))
+	for _, v := range r.directive.Arguments {
+		if d := v.Directives.Get("deprecated"); d == nil || args.IncludeDeprecated {
+			l = append(l, &InputValue{v})
+		}
 	}
 	return l
 }
