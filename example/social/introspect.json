@@ -5,6 +5,7 @@
         "args": [
           {
             "defaultValue": "\"No longer supported\"",
+            "deprecationReason": null,
             "description": "Explains why this element was deprecated, usually also including a suggestion\nfor how to access supported similar data. Formatted in\n[Markdown](https://daringfireball.net/projects/markdown/).",
             "name": "reason",
             "type": {
@@ -31,6 +32,7 @@
         "args": [
           {
             "defaultValue": null,
+            "deprecationReason": null,
             "description": "Included when true.",
             "name": "if",
             "type": {
@@ -64,6 +66,7 @@
         "args": [
           {
             "defaultValue": null,
+            "deprecationReason": null,
             "description": "Skipped when true.",
             "name": "if",
             "type": {
@@ -89,6 +92,7 @@
         "args": [
           {
             "defaultValue": null,
+            "deprecationReason": null,
             "description": "The URL should point to a human-readable specification of the data format, serialization, and coercion rules.",
             "name": "url",
             "type": {
@@ -227,6 +231,7 @@
         "inputFields": [
           {
             "defaultValue": null,
+            "deprecationReason": null,
             "description": null,
             "name": "first",
             "type": {
@@ -237,6 +242,7 @@
           },
           {
             "defaultValue": null,
+            "deprecationReason": null,
             "description": null,
             "name": "last",
             "type": {
@@ -292,6 +298,7 @@
             "args": [
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "id",
                 "type": {
@@ -306,6 +313,7 @@
               },
               {
                 "defaultValue": "ADMIN",
+                "deprecationReason": null,
                 "description": null,
                 "name": "role",
                 "type": {
@@ -333,6 +341,7 @@
             "args": [
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "id",
                 "type": {
@@ -364,6 +373,7 @@
             "args": [
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "text",
                 "type": {
@@ -569,6 +579,7 @@
             "args": [
               {
                 "defaultValue": null,
+                "deprecationReason": null,
                 "description": null,
                 "name": "page",
                 "type": {
@@ -686,6 +697,7 @@
             "args": [
               {
                 "defaultValue": "false",
+                "deprecationReason": null,
                 "description": null,
                 "name": "includeDeprecated",
                 "type": {
@@ -950,6 +962,7 @@
             "args": [
               {
                 "defaultValue": "false",
+                "deprecationReason": null,
                 "description": null,
                 "name": "includeDeprecated",
                 "type": {
@@ -1278,6 +1291,7 @@
             "args": [
               {
                 "defaultValue": "false",
+                "deprecationReason": null,
                 "description": null,
                 "name": "includeDeprecated",
                 "type": {
@@ -1353,6 +1367,7 @@
             "args": [
               {
                 "defaultValue": "false",
+                "deprecationReason": null,
                 "description": null,
                 "name": "includeDeprecated",
                 "type": {
@@ -1387,8 +1402,10 @@
           {
             "args": [
               {
-                "name": "includeDeprecated",
+                "defaultValue": "false",
+                "deprecationReason": null,
                 "description": null,
+                "name": "includeDeprecated",
                 "type": {
                   "kind": "NON_NULL",
                   "name": null,
@@ -1397,8 +1414,7 @@
                     "name": "Boolean",
                     "ofType": null
                   }
-                },
-                "defaultValue": "false"
+                }
               }
             ],
             "deprecationReason": null,
