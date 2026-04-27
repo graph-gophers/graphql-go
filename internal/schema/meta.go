@@ -77,7 +77,7 @@ var metaSrc = `
 		name: String!
 		description: String
 		locations: [__DirectiveLocation!]!
-		args: [__InputValue!]!
+		args(includeDeprecated: Boolean! = false): [__InputValue!]!
 	}
 
 	# A Directive can be adjacent to many parts of the GraphQL language, a
@@ -136,7 +136,7 @@ var metaSrc = `
 	type __Field {
 		name: String!
 		description: String
-		args: [__InputValue!]!
+		args(includeDeprecated: Boolean! = false): [__InputValue!]!
 		type: __Type!
 		isDeprecated: Boolean!
 		deprecationReason: String
@@ -183,11 +183,11 @@ var metaSrc = `
 		kind: __TypeKind!
 		name: String
 		description: String
-		fields(includeDeprecated: Boolean = false): [__Field!]
+		fields(includeDeprecated: Boolean! = false): [__Field!]
 		interfaces: [__Type!]
 		possibleTypes: [__Type!]
-		enumValues(includeDeprecated: Boolean = false): [__EnumValue!]
-		inputFields: [__InputValue!]
+		enumValues(includeDeprecated: Boolean! = false): [__EnumValue!]
+		inputFields(includeDeprecated: Boolean! = false): [__InputValue!]
 		ofType: __Type
 		specifiedByURL: String
 	}
