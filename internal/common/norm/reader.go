@@ -1,4 +1,25 @@
-// Package norm provides a Reader that normalizes Unicode escape sequences in GraphQL string literals to satisfy the GraphQL spec.
+// Package norm provides a reader that normalizes Unicode escape sequences in GraphQL string literals.
+//
+// Summary of behavior and motivation:
+//   - Newly supported executable GraphQL documents include string literals using GraphQL-specific
+//     Unicode escapes, especially braced escapes (for example, \u{1F600}, \u{10FFFF}, \u{0})
+//     and valid UTF-16 surrogate pairs (for example, \uD83D\uDE00).
+//   - Raw UTF-8 characters (for example, 😀) were already supported by text/scanner because it can
+//     decode UTF-8 source text.
+//   - The gap was escape grammar compatibility, not UTF-8 decoding: GraphQL escape forms are not a
+//     strict match for Go string escape handling in text/scanner.
+//   - This reader rewrites GraphQL escapes inside normal string literals into scanner-compatible
+//     forms while leaving block strings, comments, and non-string source text unchanged.
+//
+// Example query form enabled by normalization:
+//
+//	mutation {
+//	  createReview(episode: JEDI, review: { stars: 5, commentary: "Loved it \u{1F600}" }) {
+//	    commentary
+//	  }
+//	}
+//
+// Required as of Sep 2025 GraphQL spec: https://github.com/graphql/graphql-spec/pull/849.
 package norm
 
 import (
@@ -11,7 +32,6 @@ import (
 
 // reader normalizes Unicode escape sequences in GraphQL string literals.
 // It implements [io.Reader] and rewrites escape sequences like \u{1F37A} and \uD83C\uDF7A to Go's \U format for parser compatibility.
-// This supports the GraphQL spec requirement: https://github.com/graphql/graphql-js/pull/3117.
 type reader struct {
 	src           string
 	i             int
@@ -33,8 +53,7 @@ func NewReader(src string) io.Reader {
 	return &reader{src: src}
 }
 
-// Read implements [io.Reader].
-// It reads from the source stream, normalizing Unicode escape sequences within GraphQL string literals.
+// Reader reads from the source stream, normalizing Unicode escape sequences within GraphQL string literals.
 func (r *reader) Read(p []byte) (int, error) {
 	if len(p) == 0 {
 		if r.pendingOffset >= len(r.pending) && r.i >= len(r.src) {
