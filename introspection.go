@@ -82,6 +82,7 @@ var introspectionQuery = `
     description
     type { ...TypeRef }
     defaultValue
+    isDeprecated
     deprecationReason
   }
   fragment TypeRef on __Type {
