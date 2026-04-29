@@ -237,9 +237,8 @@ type structPackerField struct {
 
 func (p *StructPacker) Pack(value any) (reflect.Value, error) {
 	if value == nil {
-		return reflect.Value{}, errors.Errorf("got null for non-null")
+		return reflect.Value{}, fmt.Errorf("got null for input object")
 	}
-
 	values := value.(map[string]any)
 	v := reflect.New(p.structType)
 	v.Elem().Set(p.defaultStruct)

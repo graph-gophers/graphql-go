@@ -122,6 +122,9 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 						return errors.Errorf("interface %q expects field %q but %q does not provide it", intf.Name, f, t.Name)
 					}
 					intfField := intf.Fields.Get(f)
+					if err := validateImplementingFieldArguments(intf.Name, t.Name, "interface", intfField, implField); err != nil {
+						return err
+					}
 					if intfField.Directives.Get("deprecated") == nil && implField.Directives.Get("deprecated") != nil {
 						return errors.Errorf("interface %q field %q is not deprecated but implementing interface %q marks it as deprecated", intf.Name, f, t.Name)
 					}
@@ -159,6 +162,9 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 					return errors.Errorf("interface %q expects field %q but %q does not provide it", intfName, f, obj.Name)
 				}
 				intfField := intf.Fields.Get(f)
+				if err := validateImplementingFieldArguments(intfName, obj.Name, "type", intfField, implField); err != nil {
+					return err
+				}
 				if intfField.Directives.Get("deprecated") == nil && implField.Directives.Get("deprecated") != nil {
 					return errors.Errorf("interface %q field %q is not deprecated but implementing type %q marks it as deprecated", intfName, f, obj.Name)
 				}
@@ -247,6 +253,47 @@ func ParseSchema(schemaString string, useStringDescriptions bool) (*ast.Schema, 
 	s := New()
 	err := Parse(s, schemaString, useStringDescriptions)
 	return s, err
+}
+
+func validateImplementingFieldArguments(interfaceName, implementerName, implementerKind string, intfField, implField *ast.FieldDefinition) error {
+	for _, intfArg := range intfField.Arguments {
+		implArg := implField.Arguments.Get(intfArg.Name.Name)
+		if implArg == nil {
+			return errors.Errorf("interface %q field %q expects argument %q but implementing %s %q does not provide it", interfaceName, intfField.Name, intfArg.Name.Name, implementerKind, implementerName)
+		}
+		if !typesEqual(intfArg.Type, implArg.Type) {
+			return errors.Errorf("interface %q field %q argument %q has type %q but implementing %s %q defines type %q", interfaceName, intfField.Name, intfArg.Name.Name, intfArg.Type, implementerKind, implementerName, implArg.Type)
+		}
+	}
+
+	for _, implArg := range implField.Arguments {
+		if intfField.Arguments.Get(implArg.Name.Name) != nil {
+			continue
+		}
+		if isRequiredArgument(implArg) {
+			return errors.Errorf("interface %q field %q defines additional argument %q on implementing %s %q, but additional arguments must not be required", interfaceName, intfField.Name, implArg.Name.Name, implementerKind, implementerName)
+		}
+	}
+
+	return nil
+}
+
+func isRequiredArgument(arg *ast.InputValueDefinition) bool {
+	_, isNonNull := arg.Type.(*ast.NonNull)
+	return isNonNull && arg.Default == nil
+}
+
+func typesEqual(a, b ast.Type) bool {
+	switch at := a.(type) {
+	case *ast.List:
+		bt, ok := b.(*ast.List)
+		return ok && typesEqual(at.OfType, bt.OfType)
+	case *ast.NonNull:
+		bt, ok := b.(*ast.NonNull)
+		return ok && typesEqual(at.OfType, bt.OfType)
+	default:
+		return a == b
+	}
 }
 
 func mergeExtensions(s *ast.Schema) error {

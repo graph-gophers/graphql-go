@@ -41,23 +41,47 @@ type Object struct {
 
 type Field struct {
 	ast.FieldDefinition
-	TypeName    string
+	TypeName        string
+	MethodIndex     int
+	FieldIndex      []int
+	HasContext      bool
+	HasError        bool
+	IsFieldFunc     bool
+	ArgsPacker      *packer.StructPacker
+	ValueExec       Resolvable
+	OutputType      reflect.Type
+	Implementations []*FieldImplementation
+	TraceLabel      string
+}
+
+type FieldImplementation struct {
 	MethodIndex int
-	FieldIndex  []int
-	HasContext  bool
-	HasError    bool
-	IsFieldFunc bool
-	ArgsPacker  *packer.StructPacker
-	ValueExec   Resolvable
-	TraceLabel  string
+	Field       *Field
 }
 
 func (f *Field) UseMethodResolver() bool {
 	return f.MethodIndex != -1 || f.IsFieldFunc
 }
 
-func (f *Field) Resolve(ctx context.Context, resolver reflect.Value, args any) (output any, err error) {
+func (f *Field) Resolve(ctx context.Context, resolver reflect.Value, args map[string]any, packedArgs reflect.Value) (output any, err error) {
+	if len(f.Implementations) > 0 {
+		for _, impl := range f.Implementations {
+			out := resolver.Method(impl.MethodIndex).Call(nil)
+			if !out[1].Bool() {
+				continue
+			}
+			return impl.Field.resolve(ctx, out[0], args, reflect.Value{})
+		}
+	}
+
+	return f.resolve(ctx, resolver, args, packedArgs)
+}
+
+func (f *Field) resolve(ctx context.Context, resolver reflect.Value, args map[string]any, packedArgs reflect.Value) (output any, err error) {
 	if !f.UseMethodResolver() {
+		if len(f.FieldIndex) == 0 {
+			return nil, fmt.Errorf("missing resolver for field %q", f.Name)
+		}
 		res := resolver
 
 		// TODO extract out unwrapping ptr logic to a common place
@@ -76,7 +100,14 @@ func (f *Field) Resolve(ctx context.Context, resolver reflect.Value, args any) (
 	}
 
 	if f.ArgsPacker != nil {
-		in = append(in, reflect.ValueOf(args))
+		if !packedArgs.IsValid() {
+			packed, packErr := f.ArgsPacker.Pack(args)
+			if packErr != nil {
+				return nil, packErr
+			}
+			packedArgs = packed
+		}
+		in = append(in, packedArgs)
 	}
 
 	if f.IsFieldFunc { // resolver is a struct field of type func
@@ -232,6 +263,19 @@ func (b *execBuilder) finish() error {
 }
 
 func (b *execBuilder) assignExec(target *Resolvable, t ast.Type, resolverType reflect.Type) error {
+	exec, err := b.lookupOrBuildExec(t, resolverType)
+	if err != nil {
+		return err
+	}
+	// assign exec to all targets waiting for this type
+	k := typePair{t, resolverType}
+	ref := b.resMap[k]
+	ref.exec = exec
+	ref.targets = append(ref.targets, target)
+	return nil
+}
+
+func (b *execBuilder) lookupOrBuildExec(t ast.Type, resolverType reflect.Type) (Resolvable, error) {
 	k := typePair{t, resolverType}
 	ref, ok := b.resMap[k]
 	if !ok {
@@ -240,11 +284,10 @@ func (b *execBuilder) assignExec(target *Resolvable, t ast.Type, resolverType re
 		var err error
 		ref.exec, err = b.makeExec(t, resolverType)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	ref.targets = append(ref.targets, target)
-	return nil
+	return ref.exec, nil
 }
 
 func (b *execBuilder) makeExec(t ast.Type, resolverType reflect.Type) (Resolvable, error) {
@@ -322,6 +365,7 @@ func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinitio
 	methodHasReceiver := resolverType.Kind() != reflect.Interface
 
 	Fields := make(map[string]*Field)
+	fieldBuildErrs := make(map[string]error)
 	rt := unwrapPtr(resolverType)
 	fieldsCount, fieldTagsCount := fieldCount(rt, map[string]int{}, map[string]int{})
 	for _, f := range fields {
@@ -342,6 +386,16 @@ func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinitio
 			if findMethod(reflect.PointerTo(resolverType), f.Name) != -1 {
 				hint = " (hint: the method exists on the pointer type)"
 			}
+			if len(possibleTypes) != 0 {
+				Fields[f.Name] = &Field{
+					FieldDefinition: *f,
+					TypeName:        typeName,
+					MethodIndex:     -1,
+					TraceLabel:      fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name),
+				}
+				fieldBuildErrs[f.Name] = fmt.Errorf("%s does not resolve %q: missing method for field %q%s", resolverType, typeName, f.Name, hint)
+				continue
+			}
 			return nil, fmt.Errorf("%s does not resolve %q: missing method for field %q%s", resolverType, typeName, f.Name, hint)
 		}
 
@@ -354,6 +408,17 @@ func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinitio
 		}
 		fe, err := b.makeFieldExec(typeName, f, m, sf, methodIndex, fieldIndex, methodHasReceiver)
 		if err != nil {
+			if len(possibleTypes) != 0 {
+				Fields[f.Name] = &Field{
+					FieldDefinition: *f,
+					TypeName:        typeName,
+					MethodIndex:     -1,
+					OutputType:      nil,
+					TraceLabel:      fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name),
+				}
+				fieldBuildErrs[f.Name] = err
+				continue
+			}
 			var resolverName string
 			if methodIndex != -1 {
 				resolverName = m.Name
@@ -389,10 +454,44 @@ func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinitio
 			a := &TypeAssertion{
 				MethodIndex: methodIndex,
 			}
+			implOutType := resolverType.Method(methodIndex).Type.Out(0)
+			implExec, err := b.lookupOrBuildExec(impl, implOutType)
+			if err != nil {
+				return nil, err
+			}
 			if err := b.assignExec(&a.TypeExec, impl, resolverType.Method(methodIndex).Type.Out(0)); err != nil {
 				return nil, err
 			}
+			objExec, ok := implExec.(*Object)
+			if !ok {
+				return nil, fmt.Errorf("%s does not resolve %q: type assertion %q did not resolve to an object", resolverType, typeName, impl.Name)
+			}
+			for fieldName, field := range Fields {
+				implField := objExec.Fields[fieldName]
+				if implField == nil {
+					continue
+				}
+				_, needsFallback := fieldBuildErrs[fieldName]
+				if needsFallback || fieldHasImplementationSpecificArgs(field.FieldDefinition, implField.FieldDefinition) {
+					field.Implementations = append(field.Implementations, &FieldImplementation{
+						MethodIndex: methodIndex,
+						Field:       implField,
+					})
+				}
+				if needsFallback && field.OutputType == nil {
+					field.OutputType = implField.OutputType
+					if err := b.assignExec(&field.ValueExec, field.Type, implField.OutputType); err != nil {
+						return nil, err
+					}
+				}
+			}
 			typeAssertions[impl.Name] = a
+		}
+	}
+
+	for fieldName, err := range fieldBuildErrs {
+		if len(Fields[fieldName].Implementations) == 0 {
+			return nil, fmt.Errorf("%s\n\tused by (%s).%s", err, resolverType, fieldName)
 		}
 	}
 
@@ -486,7 +585,6 @@ func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m r
 		HasError:        hasError,
 		TraceLabel:      fmt.Sprintf("GraphQL field: %s.%s", typeName, f.Name),
 	}
-
 	var out reflect.Type
 	if methodIndex != -1 || isFieldFunc {
 		out = m.Type.Out(0)
@@ -497,6 +595,8 @@ func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m r
 	} else {
 		out = sf.Type
 	}
+
+	fe.OutputType = out
 	if err := b.assignExec(&fe.ValueExec, f.Type, out); err != nil {
 		return nil, err
 	}
@@ -511,6 +611,15 @@ func findMethod(t reflect.Type, name string) int {
 		}
 	}
 	return -1
+}
+
+func fieldHasImplementationSpecificArgs(ifaceField ast.FieldDefinition, implField ast.FieldDefinition) bool {
+	for _, implArg := range implField.Arguments {
+		if ifaceField.Arguments.Get(implArg.Name.Name) == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func findField(t reflect.Type, name string, index []int, matchingTagsCount map[string]int) []int {

@@ -57,13 +57,7 @@ type SchemaField struct {
 }
 
 func (f *SchemaField) Resolve(ctx context.Context, resolver reflect.Value) (output any, err error) {
-	var args any
-
-	if f.ArgsPacker != nil {
-		args = f.PackedArgs.Interface()
-	}
-
-	return f.Field.Resolve(ctx, resolver, args)
+	return f.Field.Resolve(ctx, resolver, f.Args, f.PackedArgs)
 }
 
 type TypeAssertion struct {
@@ -139,9 +133,11 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 				var args map[string]any
 				var packedArgs reflect.Value
 				if fe.ArgsPacker != nil {
-					args = make(map[string]any)
-					for _, arg := range field.Arguments {
-						args[arg.Name.Name] = arg.Value.Deserialize(r.Vars)
+					if len(field.Arguments) > 0 {
+						args = make(map[string]any, len(field.Arguments))
+						for _, arg := range field.Arguments {
+							args[arg.Name.Name] = arg.Value.Deserialize(r.Vars)
+						}
 					}
 					var err error
 					packedArgs, err = fe.ArgsPacker.Pack(args)
