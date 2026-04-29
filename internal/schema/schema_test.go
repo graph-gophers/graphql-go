@@ -1162,6 +1162,109 @@ func TestInterfaceImplementsInterface(t *testing.T) {
 			},
 		},
 		{
+			name: "Accepts object implementing interface with additional optional argument",
+			sdl: `
+			interface Node {
+				name(format: String!): String!
+			}
+			type User implements Node {
+				name(format: String!, locale: String): String!
+			}
+			`,
+			validateSchema: func(s *ast.Schema) error {
+				return nil
+			},
+		},
+		{
+			name: "Rejects object implementing interface missing required interface argument",
+			sdl: `
+			interface Node {
+				name(format: String!): String!
+			}
+			type User implements Node {
+				name: String!
+			}
+			`,
+			validateError: func(err error) error {
+				if err == nil {
+					return fmt.Errorf("want error, have <nil>")
+				}
+				if want, have := `expects argument "format"`, err.Error(); !strings.Contains(have, want) {
+					return fmt.Errorf("unexpected error: want %q to contain %q", have, want)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Rejects object implementing interface with incompatible argument type",
+			sdl: `
+			interface Node {
+				name(format: String!): String!
+			}
+			type User implements Node {
+				name(format: Int!): String!
+			}
+			`,
+			validateError: func(err error) error {
+				if err == nil {
+					return fmt.Errorf("want error, have <nil>")
+				}
+				if want, have := `argument "format" has type "String!"`, err.Error(); !strings.Contains(have, want) {
+					return fmt.Errorf("unexpected error: want %q to contain %q", have, want)
+				}
+				if want, have := `defines type "Int!"`, err.Error(); !strings.Contains(have, want) {
+					return fmt.Errorf("unexpected error: want %q to contain %q", have, want)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Rejects object implementing interface with additional required argument",
+			sdl: `
+			interface Node {
+				name(format: String!): String!
+			}
+			type User implements Node {
+				name(format: String!, locale: String!): String!
+			}
+			`,
+			validateError: func(err error) error {
+				if err == nil {
+					return fmt.Errorf("want error, have <nil>")
+				}
+				if want, have := `additional argument "locale"`, err.Error(); !strings.Contains(have, want) {
+					return fmt.Errorf("unexpected error: want %q to contain %q", have, want)
+				}
+				if want, have := `must not be required`, err.Error(); !strings.Contains(have, want) {
+					return fmt.Errorf("unexpected error: want %q to contain %q", have, want)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Rejects interface implementing interface with additional required argument",
+			sdl: `
+			interface Node {
+				name(format: String!): String!
+			}
+			interface Entity implements Node {
+				name(format: String!, locale: String!): String!
+			}
+			`,
+			validateError: func(err error) error {
+				if err == nil {
+					return fmt.Errorf("want error, have <nil>")
+				}
+				if want, have := `implementing interface "Entity"`, err.Error(); !strings.Contains(have, want) {
+					return fmt.Errorf("unexpected error: want %q to contain %q", have, want)
+				}
+				if want, have := `must not be required`, err.Error(); !strings.Contains(have, want) {
+					return fmt.Errorf("unexpected error: want %q to contain %q", have, want)
+				}
+				return nil
+			},
+		},
+		{
 			name: "Parses valid OneOf input type with nullable fields",
 			sdl: `
 			input FindUserInput @oneOf {
