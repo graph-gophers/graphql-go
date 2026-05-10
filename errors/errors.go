@@ -33,7 +33,7 @@ func (a Location) Before(b Location) bool {
 	return a.Line < b.Line || (a.Line == b.Line && a.Column < b.Column)
 }
 
-func Errorf(format string, a ...interface{}) *QueryError {
+func Errorf(format string, a ...any) *QueryError {
 	// similar to fmt.Errorf, Errorf will wrap the last argument if it is an instance of error
 	var err error
 	if n := len(a); n > 0 {
