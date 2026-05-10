@@ -37,6 +37,7 @@ jobs:
           # When this repo moves to a Go version that supports `go fix -diff`,
           # this can be simplified back to checking the diff output directly.
           go fix ./...
+          gofmt -w -r 'interface{} -> any' .
           if ! git diff --exit-code -- .; then
             echo "::error::go fix found modernization opportunities"
             echo "Run 'go fix ./...' locally and commit the changes."
