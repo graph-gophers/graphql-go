@@ -4005,6 +4005,49 @@ func TestUnionTypeAssertionResolverCycles(t *testing.T) {
 	})
 }
 
+type issue749QueryResolver struct{}
+
+func (*issue749QueryResolver) Item() *issue749ItemResolver {
+	return &issue749ItemResolver{}
+}
+
+type issue749ItemResolver struct{}
+
+func (*issue749ItemResolver) ToFoo() (*issue749FooResolver, bool) {
+	return &issue749FooResolver{}, true
+}
+
+func (*issue749ItemResolver) Next() *issue749ItemResolver {
+	return &issue749ItemResolver{}
+}
+
+type issue749FooResolver struct{}
+
+func (*issue749FooResolver) Next() *issue749ItemResolver {
+	return &issue749ItemResolver{}
+}
+
+// TestIssue749RecursiveInterfaceCyclePanic verifies that ParseSchema does not panic
+// with a nil pointer dereference when the schema contains a recursive non-null interface
+// type.
+func TestIssue749RecursiveInterfaceCyclePanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("ParseSchema panicked with: %v", r)
+		}
+	}()
+
+	sdl := `
+		type Query { item: Item }
+		interface Item { next: Item! }
+		type Foo implements Item { next: Item! }
+	`
+	_, err := graphql.ParseSchema(sdl, &issue749QueryResolver{})
+	if err != nil {
+		t.Fatalf("ParseSchema: unexpected error: %v", err)
+	}
+}
+
 func TestPanicTypeAssertionArguments(t *testing.T) {
 	panicMessage := `*graphql_test.badAssertionResolver does not resolve "Character": method "ToHuman" shouldn't have any arguments
 	used by (*graphql_test.badAssertionQueryResolver).Character`
@@ -5061,7 +5104,7 @@ func TestSchemaExtension(t *testing.T) {
 	type Query {
 		hello: String!
 	}
-	
+
 	extend schema @awesome
 	`
 	schema := graphql.MustParseSchema(sdl, &helloResolver{})

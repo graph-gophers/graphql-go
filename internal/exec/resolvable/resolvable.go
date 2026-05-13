@@ -281,28 +281,35 @@ func (b *execBuilder) lookupOrBuildExec(t ast.Type, resolverType reflect.Type) (
 	if !ok {
 		ref = &resMapEntry{}
 		b.resMap[k] = ref
+		var shell *Object
+		if isObjectLikeType(t) {
+			shell = &Object{}
+			ref.exec = shell
+		}
 		var err error
-		ref.exec, err = b.makeExec(t, resolverType)
+		ref.exec, err = b.makeExec(t, resolverType, shell)
 		if err != nil {
+			ref.exec = nil
+			delete(b.resMap, k)
 			return nil, err
 		}
 	}
 	return ref.exec, nil
 }
 
-func (b *execBuilder) makeExec(t ast.Type, resolverType reflect.Type) (Resolvable, error) {
+func (b *execBuilder) makeExec(t ast.Type, resolverType reflect.Type, shell *Object) (Resolvable, error) {
 	var nonNull bool
 	t, nonNull = unwrapNonNull(t)
 
 	switch t := t.(type) {
 	case *ast.ObjectTypeDefinition:
-		return b.makeObjectExec(t.Name, t.Fields, nil, t.Interfaces, nonNull, resolverType)
+		return b.makeObjectExec(t.Name, t.Fields, nil, t.Interfaces, nonNull, resolverType, shell)
 
 	case *ast.InterfaceTypeDefinition:
-		return b.makeObjectExec(t.Name, t.Fields, t.PossibleTypes, nil, nonNull, resolverType)
+		return b.makeObjectExec(t.Name, t.Fields, t.PossibleTypes, nil, nonNull, resolverType, shell)
 
 	case *ast.Union:
-		return b.makeObjectExec(t.Name, nil, t.UnionMemberTypes, nil, nonNull, resolverType)
+		return b.makeObjectExec(t.Name, nil, t.UnionMemberTypes, nil, nonNull, resolverType, shell)
 	}
 
 	if !nonNull {
@@ -355,7 +362,11 @@ func makeScalarExec(t *ast.ScalarTypeDefinition, resolverType reflect.Type) (Res
 	return &Scalar{}, nil
 }
 
-func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinition, possibleTypes []*ast.ObjectTypeDefinition, interfaces []*ast.InterfaceTypeDefinition, nonNull bool, resolverType reflect.Type) (*Object, error) {
+func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinition, possibleTypes []*ast.ObjectTypeDefinition, interfaces []*ast.InterfaceTypeDefinition, nonNull bool, resolverType reflect.Type, obj *Object) (*Object, error) {
+	if obj == nil {
+		obj = &Object{}
+	}
+
 	if !nonNull {
 		if resolverType.Kind() != reflect.Pointer && resolverType.Kind() != reflect.Interface {
 			return nil, fmt.Errorf("%s is not a pointer or interface", resolverType)
@@ -504,12 +515,11 @@ func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinitio
 		ifaces[iface.Name] = struct{}{}
 	}
 
-	return &Object{
-		Name:           typeName,
-		Fields:         Fields,
-		TypeAssertions: typeAssertions,
-		Interfaces:     ifaces,
-	}, nil
+	obj.Name = typeName
+	obj.Fields = Fields
+	obj.TypeAssertions = typeAssertions
+	obj.Interfaces = ifaces
+	return obj, nil
 }
 
 var (
@@ -710,4 +720,14 @@ func unwrapPtr(t reflect.Type) reflect.Type {
 		return t.Elem()
 	}
 	return t
+}
+
+func isObjectLikeType(t ast.Type) bool {
+	unwrapType, _ := unwrapNonNull(t)
+	switch unwrapType.(type) {
+	case *ast.ObjectTypeDefinition, *ast.InterfaceTypeDefinition, *ast.Union:
+		return true
+	default:
+		return false
+	}
 }
