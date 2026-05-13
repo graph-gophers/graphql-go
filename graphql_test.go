@@ -3903,6 +3903,108 @@ func TestTypeAssertions(t *testing.T) {
 	})
 }
 
+type unionCycleQueryResolver struct{}
+
+func (*unionCycleQueryResolver) Wrapper() *unionCycleWrapperResolver {
+	return &unionCycleWrapperResolver{}
+}
+
+type unionCycleWrapperResolver struct{}
+
+func (*unionCycleWrapperResolver) Item() *unionCycleItemResolver {
+	return &unionCycleItemResolver{}
+}
+
+type unionCycleItemResolver struct{}
+
+func (*unionCycleItemResolver) ToHuman() (*unionCycleHumanResolver, bool) {
+	return &unionCycleHumanResolver{}, true
+}
+
+type unionCycleHumanResolver struct{}
+
+func (*unionCycleHumanResolver) Name() string {
+	return "Luke Skywalker"
+}
+
+func (*unionCycleHumanResolver) Friend() *unionCycleFriendResolver {
+	return &unionCycleFriendResolver{}
+}
+
+type unionCycleFriendResolver struct{}
+
+func (*unionCycleFriendResolver) Item() *unionCycleItemResolver {
+	return &unionCycleItemResolver{}
+}
+
+func TestUnionTypeAssertionResolverCycles(t *testing.T) {
+	schema, err := graphql.ParseSchema(`
+		schema {
+			query: Query
+		}
+
+		type Query {
+			wrapper: Wrapper!
+		}
+
+		type Wrapper {
+			item: Item!
+		}
+
+		union Item = Human
+
+		type Human {
+			name: String!
+			friend: Friend!
+		}
+
+		type Friend {
+			item: Item!
+		}
+	`, &unionCycleQueryResolver{})
+	if err != nil {
+		t.Fatalf("ParseSchema: unexpected error: %v", err)
+	}
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: schema,
+			Query: `
+				query {
+					wrapper {
+						item {
+							... on Human {
+								name
+								friend {
+									item {
+										... on Human {
+											name
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"wrapper": {
+						"item": {
+							"name": "Luke Skywalker",
+							"friend": {
+								"item": {
+									"name": "Luke Skywalker"
+								}
+							}
+						}
+					}
+				}
+			`,
+		},
+	})
+}
+
 func TestPanicTypeAssertionArguments(t *testing.T) {
 	panicMessage := `*graphql_test.badAssertionResolver does not resolve "Character": method "ToHuman" shouldn't have any arguments
 	used by (*graphql_test.badAssertionQueryResolver).Character`
