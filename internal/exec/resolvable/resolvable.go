@@ -454,12 +454,16 @@ func (b *execBuilder) makeObjectExec(typeName string, fields ast.FieldsDefinitio
 			a := &TypeAssertion{
 				MethodIndex: methodIndex,
 			}
+			if err := b.assignExec(&a.TypeExec, impl, resolverType.Method(methodIndex).Type.Out(0)); err != nil {
+				return nil, err
+			}
+			if len(Fields) == 0 {
+				typeAssertions[impl.Name] = a
+				continue
+			}
 			implOutType := resolverType.Method(methodIndex).Type.Out(0)
 			implExec, err := b.lookupOrBuildExec(impl, implOutType)
 			if err != nil {
-				return nil, err
-			}
-			if err := b.assignExec(&a.TypeExec, impl, resolverType.Method(methodIndex).Type.Out(0)); err != nil {
 				return nil, err
 			}
 			objExec, ok := implExec.(*Object)
