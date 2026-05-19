@@ -110,6 +110,7 @@ func (s *Schema) Clone(resolver any, opts ...SchemaOpt) (*Schema, error) {
 		disableFieldSelections:   s.disableFieldSelections,
 		disableMemoryPooling:     s.disableMemoryPooling,
 		overlapPairLimit:         s.overlapPairLimit,
+		validateDeprecated:       s.validateDeprecated,
 	}
 
 	for _, opt := range opts {
