@@ -194,6 +194,7 @@ type Schema struct {
 	disableMemoryPooling     bool
 	maxPooledBufferCapacity  int
 	overlapPairLimit         int
+	validateDeprecated       bool
 }
 
 // AST returns the abstract syntax tree of the GraphQL schema definition.
@@ -282,6 +283,14 @@ func MaxQueryLength(n int) SchemaOpt {
 // to protect against maliciously constructed queries designed to exhaust memory/CPU.
 func OverlapValidationLimit(n int) SchemaOpt {
 	return func(s *Schema) { s.overlapPairLimit = n }
+}
+
+// ValidateDeprecated enables validation errors when a query uses deprecated fields, arguments,
+// enum values, or input fields (rule: NoDeprecatedCustomRule). By default, querying deprecated
+// schema elements is allowed and produces no errors, matching the behaviour of the graphql-js
+// reference implementation where NoDeprecatedCustomRule is an opt-in custom rule.
+func ValidateDeprecated() SchemaOpt {
+	return func(s *Schema) { s.validateDeprecated = true }
 }
 
 // Tracer is used to trace queries and fields. It defaults to [noop.Tracer].
@@ -379,7 +388,7 @@ func (s *Schema) ValidateWithVariables(queryString string, variables map[string]
 		return []*errors.QueryError{errors.Errorf("executable document must contain at least one operation")}
 	}
 
-	return validation.Validate(s.schema, doc, variables, s.maxDepth, s.overlapPairLimit)
+	return validation.Validate(s.schema, doc, variables, s.maxDepth, s.overlapPairLimit, s.validateDeprecated)
 }
 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
@@ -402,7 +411,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	}
 
 	validationFinish := s.validationTracer.TraceValidation(ctx)
-	errs := validation.Validate(s.schema, doc, variables, s.maxDepth, s.overlapPairLimit)
+	errs := validation.Validate(s.schema, doc, variables, s.maxDepth, s.overlapPairLimit, s.validateDeprecated)
 	validationFinish(errs)
 	if len(errs) != 0 {
 		return &Response{Errors: errs}

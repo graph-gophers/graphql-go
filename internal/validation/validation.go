@@ -43,6 +43,7 @@ type context struct {
 	overlapPairLimit     int
 	overlapPairsObserved int
 	overlapLimitHit      bool
+	validateDeprecated   bool
 }
 
 func (c *context) addErr(loc errors.Location, rule string, format string, a ...any) {
@@ -62,21 +63,22 @@ type opContext struct {
 	ops []*ast.OperationDefinition
 }
 
-func newContext(s *ast.Schema, doc *ast.ExecutableDefinition, maxDepth int, overlapPairLimit int) *context {
+func newContext(s *ast.Schema, doc *ast.ExecutableDefinition, maxDepth int, overlapPairLimit int, validateDeprecated bool) *context {
 	return &context{
-		schema:           s,
-		doc:              doc,
-		opErrs:           make(map[*ast.OperationDefinition][]*errors.QueryError),
-		usedVars:         make(map[*ast.OperationDefinition]varSet),
-		fieldMap:         make(map[*ast.Field]fieldInfo),
-		overlapValidated: make(map[selectionPair]bool),
-		maxDepth:         maxDepth,
-		overlapPairLimit: overlapPairLimit,
+		schema:             s,
+		doc:                doc,
+		opErrs:             make(map[*ast.OperationDefinition][]*errors.QueryError),
+		usedVars:           make(map[*ast.OperationDefinition]varSet),
+		fieldMap:           make(map[*ast.Field]fieldInfo),
+		overlapValidated:   make(map[selectionPair]bool),
+		maxDepth:           maxDepth,
+		overlapPairLimit:   overlapPairLimit,
+		validateDeprecated: validateDeprecated,
 	}
 }
 
-func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string]any, maxDepth int, overlapPairLimit int) []*errors.QueryError {
-	c := newContext(s, doc, maxDepth, overlapPairLimit)
+func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string]any, maxDepth int, overlapPairLimit int, validateDeprecated bool) []*errors.QueryError {
+	c := newContext(s, doc, maxDepth, overlapPairLimit, validateDeprecated)
 
 	opNames := make(nameSet, len(doc.Operations))
 	fragUsedBy := make(map[*ast.FragmentDefinition][]*ast.OperationDefinition)
@@ -628,8 +630,10 @@ func validateSelection(c *opContext, sel ast.Selection, t ast.NamedType) {
 
 		validateArgumentLiterals(c, sel.Arguments)
 		if f != nil {
-			if reason, ok := deprecatedReason(f.Directives); ok && t != nil {
-				c.addErr(sel.Name.Loc, "NoDeprecatedCustomRule", "The field %s.%s is deprecated. %s", t.TypeName(), fieldName, reason)
+			if c.validateDeprecated {
+				if reason, ok := deprecatedReason(f.Directives); ok && t != nil {
+					c.addErr(sel.Name.Loc, "NoDeprecatedCustomRule", "The field %s.%s is deprecated. %s", t.TypeName(), fieldName, reason)
+				}
 			}
 
 			validateArgumentTypes(c, sel.Arguments, f.Arguments, sel.Alias.Loc,
@@ -643,8 +647,10 @@ func validateSelection(c *opContext, sel ast.Selection, t ast.NamedType) {
 					if argDecl == nil {
 						continue
 					}
-					if reason, ok := deprecatedReason(argDecl.Directives); ok {
-						c.addErr(selArg.Name.Loc, "NoDeprecatedCustomRule", "Field %q argument %q is deprecated. %s", t.TypeName()+"."+fieldName, selArg.Name.Name, reason)
+					if c.validateDeprecated {
+						if reason, ok := deprecatedReason(argDecl.Directives); ok {
+							c.addErr(selArg.Name.Loc, "NoDeprecatedCustomRule", "Field %q argument %q is deprecated. %s", t.TypeName()+"."+fieldName, selArg.Name.Name, reason)
+						}
 					}
 				}
 
@@ -658,8 +664,10 @@ func validateSelection(c *opContext, sel ast.Selection, t ast.NamedType) {
 						if argDecl == nil {
 							continue
 						}
-						if reason, ok := deprecatedReason(argDecl.Directives); ok {
-							c.addErr(selArg.Name.Loc, "NoDeprecatedCustomRule", "Directive %q argument %q is deprecated. %s", "@"+directive.Name.Name, selArg.Name.Name, reason)
+						if c.validateDeprecated {
+							if reason, ok := deprecatedReason(argDecl.Directives); ok {
+								c.addErr(selArg.Name.Loc, "NoDeprecatedCustomRule", "Directive %q argument %q is deprecated. %s", "@"+directive.Name.Name, selArg.Name.Name, reason)
+							}
 						}
 					}
 				}
@@ -1078,8 +1086,10 @@ func validateDirectives(c *opContext, loc string, directives ast.DirectiveList) 
 				if argDecl == nil {
 					continue
 				}
-				if reason, ok := deprecatedReason(argDecl.Directives); ok {
-					c.addErr(selArg.Name.Loc, "NoDeprecatedCustomRule", "Directive %q argument %q is deprecated. %s", "@"+dirName, selArg.Name.Name, reason)
+				if c.validateDeprecated {
+					if reason, ok := deprecatedReason(argDecl.Directives); ok {
+						c.addErr(selArg.Name.Loc, "NoDeprecatedCustomRule", "Directive %q argument %q is deprecated. %s", "@"+dirName, selArg.Name.Name, reason)
+					}
 				}
 			}
 		}
@@ -1267,8 +1277,10 @@ func validateValueType(c *opContext, v ast.Value, t ast.Type) (bool, errors.Loca
 			if option.EnumValue != lit.Text {
 				continue
 			}
-			if depReason, deprecated := deprecatedReason(option.Directives); deprecated {
-				c.addErr(lit.Location(), "NoDeprecatedCustomRule", "The enum value %q is deprecated. %s", enumType.Name+"."+option.EnumValue, depReason)
+			if c.validateDeprecated {
+				if depReason, deprecated := deprecatedReason(option.Directives); deprecated {
+					c.addErr(lit.Location(), "NoDeprecatedCustomRule", "The enum value %q is deprecated. %s", enumType.Name+"."+option.EnumValue, depReason)
+				}
 			}
 			break
 		}
@@ -1302,7 +1314,7 @@ func validateValueType(c *opContext, v ast.Value, t ast.Type) (bool, errors.Loca
 				suggestion := makeSuggestion("Did you mean", t.Values.Names(), name)
 				return false, f.Name.Loc, fmt.Sprintf("Field %q is not defined by type %q.%s", name, t.Name, suggestion)
 			}
-			if depReason, deprecated := deprecatedReason(iv.Directives); deprecated {
+			if depReason, deprecated := deprecatedReason(iv.Directives); deprecated && c.validateDeprecated {
 				c.addErr(f.Name.Loc, "NoDeprecatedCustomRule", "The input field %s.%s is deprecated. %s", t.Name, iv.Name.Name, depReason)
 			}
 			if ok, errLoc, reason := validateValueType(c, f.Value, iv.Type); !ok {

@@ -71,7 +71,7 @@ func FuzzValidateOverlapMixed(f *testing.F) {
 			return
 		}
 		// Use overlap limit to bound cost.
-		errs := v.Validate(s, doc, nil, 0, 10_000)
+		errs := v.Validate(s, doc, nil, 0, 10_000, false)
 		// Ensure no panic (implicit). Optionally sanity check: errors slice must not be ridiculously huge.
 		if len(errs) > 1000 {
 			t.Fatalf("too many errors: %d", len(errs))

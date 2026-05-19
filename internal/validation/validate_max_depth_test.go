@@ -83,7 +83,7 @@ func (tc maxDepthTestCase) Run(t *testing.T, s *ast.Schema) {
 			t.Fatal(qErr)
 		}
 
-		errs := Validate(s, doc, nil, tc.depth, 0)
+		errs := Validate(s, doc, nil, tc.depth, 0, false)
 		if len(tc.expectedErrors) > 0 {
 			if len(errs) > 0 {
 				for _, expected := range tc.expectedErrors {
@@ -489,7 +489,7 @@ func TestMaxDepthValidation(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			context := newContext(s, doc, tc.maxDepth, 0)
+			context := newContext(s, doc, tc.maxDepth, 0, false)
 			op := doc.Operations[0]
 
 			opc := &opContext{context: context, ops: doc.Operations}

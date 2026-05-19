@@ -1,5 +1,8 @@
 # CHANGELOG
 
+
+* [FEATURE] Add `graphql.ValidateDeprecated` schema option to enable validation of deprecated fields and enum values in queries. When enabled, usage of deprecated schema elements results in validation errors. This opt-in approach allows applications to enforce deprecation policies without breaking existing clients.
+
 * [FEATURE] Support executable-document description strings on full-form operations, fragments, and variable definitions. Descriptions remain non-semantic and do not change validation or execution behavior. Executable `#` comments remain ignored.
 
 [v1.9.0](https://github.com/graph-gophers/graphql-go/releases/tag/v1.9.0) Release v1.9.0

@@ -82,7 +82,7 @@ func TestValidate(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to parse query: %s", err)
 			}
-			errs := validation.Validate(schemas[test.Schema], d, test.Vars, 0, 0)
+			errs := validation.Validate(schemas[test.Schema], d, test.Vars, 0, 0, test.Rule == "NoDeprecatedCustomRule")
 			got := []*errors.QueryError{}
 			for _, err := range errs {
 				if err.Rule == test.Rule {
