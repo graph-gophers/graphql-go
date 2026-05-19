@@ -65,7 +65,7 @@ func BenchmarkValidate(b *testing.B) {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				benchErrs = validation.Validate(s, doc, nil, 0, 0)
+				benchErrs = validation.Validate(s, doc, nil, 0, 0, false)
 			}
 		})
 	}
@@ -91,7 +91,7 @@ func BenchmarkValidateWorstCaseAliasCollision(b *testing.B) {
 		b.Run("alias-collision-"+strconv.Itoa(n), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				benchErrs = validation.Validate(s, doc, nil, 0, 0)
+				benchErrs = validation.Validate(s, doc, nil, 0, 0, false)
 			}
 
 			if b.N > 0 && expectedPairs > 0 {

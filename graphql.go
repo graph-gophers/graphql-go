@@ -105,6 +105,7 @@ func (s *Schema) Clone(resolver any, opts ...SchemaOpt) (*Schema, error) {
 		maxPooledBufferCapacity:  s.maxPooledBufferCapacity,
 		maxDepth:                 s.maxDepth,
 		useStringDescriptions:    s.useStringDescriptions,
+		allowDeprecatedUsage:     s.allowDeprecatedUsage,
 		subscribeResolverTimeout: s.subscribeResolverTimeout,
 		useFieldResolvers:        s.useFieldResolvers,
 		disableFieldSelections:   s.disableFieldSelections,
@@ -188,6 +189,7 @@ type Schema struct {
 	logger                   log.Logger
 	panicHandler             errors.PanicHandler
 	useStringDescriptions    bool
+	allowDeprecatedUsage     bool
 	subscribeResolverTimeout time.Duration
 	useFieldResolvers        bool
 	disableFieldSelections   bool
@@ -227,6 +229,15 @@ func UseStringDescriptions() SchemaOpt {
 func UseFieldResolvers() SchemaOpt {
 	return func(s *Schema) {
 		s.useFieldResolvers = true
+	}
+}
+
+// AllowDeprecatedUsage restores pre-v1.10.0 validation behavior by allowing
+// deprecated fields, arguments, enum values, input fields, and directive
+// arguments to be used without returning NoDeprecatedCustomRule errors.
+func AllowDeprecatedUsage() SchemaOpt {
+	return func(s *Schema) {
+		s.allowDeprecatedUsage = true
 	}
 }
 
@@ -379,7 +390,7 @@ func (s *Schema) ValidateWithVariables(queryString string, variables map[string]
 		return []*errors.QueryError{errors.Errorf("executable document must contain at least one operation")}
 	}
 
-	return validation.Validate(s.schema, doc, variables, s.maxDepth, s.overlapPairLimit)
+	return validation.Validate(s.schema, doc, variables, s.maxDepth, s.overlapPairLimit, s.allowDeprecatedUsage)
 }
 
 // Exec executes the given query with the schema's resolver. It panics if the schema was created
@@ -402,7 +413,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 	}
 
 	validationFinish := s.validationTracer.TraceValidation(ctx)
-	errs := validation.Validate(s.schema, doc, variables, s.maxDepth, s.overlapPairLimit)
+	errs := validation.Validate(s.schema, doc, variables, s.maxDepth, s.overlapPairLimit, s.allowDeprecatedUsage)
 	validationFinish(errs)
 	if len(errs) != 0 {
 		return &Response{Errors: errs}

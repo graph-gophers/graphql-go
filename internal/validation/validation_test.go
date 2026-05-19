@@ -82,7 +82,7 @@ func TestValidate(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to parse query: %s", err)
 			}
-			errs := validation.Validate(schemas[test.Schema], d, test.Vars, 0, 0)
+			errs := validation.Validate(schemas[test.Schema], d, test.Vars, 0, 0, false)
 			got := []*errors.QueryError{}
 			for _, err := range errs {
 				if err.Rule == test.Rule {
@@ -96,6 +96,34 @@ func TestValidate(t *testing.T) {
 				t.Errorf("wrong errors for rule %q\nexpected: %v\ngot:      %v", test.Rule, test.Errors, got)
 			}
 		})
+	}
+}
+
+func TestValidateAllowDeprecatedUsage(t *testing.T) {
+	t.Parallel()
+
+	s, err := schema.ParseSchema(`
+		type Query {
+			deprecatedField: String! @deprecated(reason: "Use replacementField")
+		}
+	`, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	doc, qErr := query.Parse(`query { deprecatedField }`)
+	if qErr != nil {
+		t.Fatal(qErr)
+	}
+
+	errs := validation.Validate(s, doc, nil, 0, 0, false)
+	if len(errs) != 1 || errs[0].Rule != "NoDeprecatedCustomRule" {
+		t.Fatalf("expected NoDeprecatedCustomRule error, got %#v", errs)
+	}
+
+	errs = validation.Validate(s, doc, nil, 0, 0, true)
+	if len(errs) != 0 {
+		t.Fatalf("expected no validation errors when deprecated usage is allowed, got %#v", errs)
 	}
 }
 

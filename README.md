@@ -155,6 +155,7 @@ schema := graphql.MustParseSchema(sdl, &RootResolver{}, nil)
 
 - `UseStringDescriptions()` enables schema/type-system description strings (double and triple quoted). When this is not enabled, schema comments are parsed as descriptions instead.
 - `UseFieldResolvers()` specifies whether to use struct field resolvers.
+- `AllowDeprecatedUsage()` restores pre-v1.10.0 validation behavior by allowing deprecated fields, arguments, enum values, input fields, and directive arguments to be used without validation errors.
 - `MaxDepth(n int)` specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
 - `MaxParallelism(n int)` specifies the maximum number of resolvers per request allowed to run in parallel. The default is 10.
 - `MaxPooledBufferCap(n int)` specifies the maximum buffer capacity of buffers stored in the internal memory pool. Defaults to 16KB. Buffers larger than this limit are discarded instead of pooled.

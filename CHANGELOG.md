@@ -1,5 +1,6 @@
 # CHANGELOG
 
+* [FEATURE] Add `AllowDeprecatedUsage()` schema option to restore pre-v1.10.0 validation behavior for deprecated fields, arguments, enum values, input fields, and directive arguments.
 * [FEATURE] Support executable-document description strings on full-form operations, fragments, and variable definitions. Descriptions remain non-semantic and do not change validation or execution behavior. Executable `#` comments remain ignored.
 
 [v1.9.0](https://github.com/graph-gophers/graphql-go/releases/tag/v1.9.0) Release v1.9.0

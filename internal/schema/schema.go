@@ -125,8 +125,8 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 					if err := validateImplementingFieldArguments(intf.Name, t.Name, "interface", intfField, implField); err != nil {
 						return err
 					}
-					if intfField.Directives.Get("deprecated") == nil && implField.Directives.Get("deprecated") != nil {
-						return errors.Errorf("interface %q field %q is not deprecated but implementing interface %q marks it as deprecated", intf.Name, f, t.Name)
+					if err := validateImplementingFieldDeprecation(intf.Name, t.Name, "interface", intfField, implField); err != nil {
+						return err
 					}
 				}
 
@@ -165,8 +165,8 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 				if err := validateImplementingFieldArguments(intfName, obj.Name, "type", intfField, implField); err != nil {
 					return err
 				}
-				if intfField.Directives.Get("deprecated") == nil && implField.Directives.Get("deprecated") != nil {
-					return errors.Errorf("interface %q field %q is not deprecated but implementing type %q marks it as deprecated", intfName, f, obj.Name)
+				if err := validateImplementingFieldDeprecation(intfName, obj.Name, "type", intfField, implField); err != nil {
+					return err
 				}
 			}
 			obj.Interfaces[i] = intf
@@ -275,6 +275,13 @@ func validateImplementingFieldArguments(interfaceName, implementerName, implemen
 		}
 	}
 
+	return nil
+}
+
+func validateImplementingFieldDeprecation(interfaceName, implementerName, implementerKind string, intfField, implField *ast.FieldDefinition) error {
+	if intfField.Directives.Get("deprecated") == nil && implField.Directives.Get("deprecated") != nil {
+		return errors.Errorf("interface %q field %q is not deprecated but implementing %s %q marks it as deprecated", interfaceName, intfField.Name, implementerKind, implementerName)
+	}
 	return nil
 }
 

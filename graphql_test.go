@@ -1784,6 +1784,48 @@ func TestDeprecatedArgs(t *testing.T) {
 	`, &testDeprecatedArgsResolver{})
 }
 
+type testAllowDeprecatedUsageResolver struct{}
+
+func (r *testAllowDeprecatedUsageResolver) DeprecatedField() string {
+	return "ok"
+}
+
+func TestAllowDeprecatedUsage(t *testing.T) {
+	t.Parallel()
+
+	const sdl = `
+		schema {
+			query: Query
+		}
+		type Query {
+			deprecatedField: String! @deprecated(reason: "Use replacementField")
+		}
+	`
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(sdl, &testAllowDeprecatedUsageResolver{}),
+			Query:  `{ deprecatedField }`,
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message:   "The field Query.deprecatedField is deprecated. Use replacementField",
+					Locations: []gqlerrors.Location{{Line: 1, Column: 3}},
+					Rule:      "NoDeprecatedCustomRule",
+				},
+			},
+		},
+		{
+			Schema: graphql.MustParseSchema(sdl, &testAllowDeprecatedUsageResolver{}, graphql.AllowDeprecatedUsage()),
+			Query:  `{ deprecatedField }`,
+			ExpectedResult: `
+				{
+					"deprecatedField": "ok"
+				}
+			`,
+		},
+	})
+}
+
 func TestInlineFragments(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
