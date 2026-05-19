@@ -5473,6 +5473,29 @@ func TestSchemaCloneWithOptions(t *testing.T) {
 	}
 }
 
+func TestSchemaCloneInheritsValidateDeprecated(t *testing.T) {
+	const sdl = `
+		schema { query: Query }
+		type Query {
+			deprecatedField: String! @deprecated(reason: "Use replacementField")
+		}
+	`
+	baseSchema := graphql.MustParseSchema(sdl, &testValidateDeprecatedResolver{}, graphql.ValidateDeprecated())
+	clone := baseSchema.MustClone(&testValidateDeprecatedResolver{})
+
+	gqltesting.RunTest(t, &gqltesting.Test{
+		Schema: clone,
+		Query:  `{ deprecatedField }`,
+		ExpectedErrors: []*gqlerrors.QueryError{
+			{
+				Message:   "The field Query.deprecatedField is deprecated. Use replacementField",
+				Locations: []gqlerrors.Location{{Line: 1, Column: 3}},
+				Rule:      "NoDeprecatedCustomRule",
+			},
+		},
+	})
+}
+
 func TestSchemaCloneMultiTenant(t *testing.T) {
 	privateSchema := graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.MaxDepth(8))
 	publicSchema, err := privateSchema.Clone(&starwars.Resolver{}, graphql.MaxDepth(3))
