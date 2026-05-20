@@ -4,8 +4,6 @@
 
 The goal of this project is to provide full support of the [September 2025 GraphQL specification](https://spec.graphql.org/September2025/) with a set of idiomatic, easy to use Go packages.
 
-While still under development (`internal` APIs are almost certainly subject to change), this library is safe for production use.
-
 ## Features
 
 - minimal API
