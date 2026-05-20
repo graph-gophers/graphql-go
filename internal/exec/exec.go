@@ -29,6 +29,7 @@ var nullLiteral = []byte("null") //nolint:gochecknoglobals
 
 type Request struct {
 	selected.Request
+	Selections               []selected.Selection
 	Limiter                  chan struct{}
 	Tracer                   tracer.Tracer
 	Logger                   log.Logger
@@ -54,7 +55,10 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *ast.Ope
 	var out bytes.Buffer
 	func() {
 		defer r.handlePanic(ctx)
-		sels := selected.ApplyOperation(&r.Request, s, op)
+		sels := r.Selections
+		if sels == nil {
+			sels = selected.ApplyOperation(&r.Request, s, op)
+		}
 		var resolver reflect.Value
 		switch op.Type {
 		case query.Query:
@@ -95,10 +99,6 @@ type fieldToExec struct {
 	out      *bytes.Buffer
 }
 
-func (f *fieldToExec) resolve(ctx context.Context) (output any, err error) {
-	return f.field.Resolve(ctx, f.resolver)
-}
-
 func resolvedToNull(b *bytes.Buffer) bool {
 	return bytes.Equal(b.Bytes(), nullLiteral)
 }
@@ -130,6 +130,25 @@ func (r *Request) releaseFieldBuffers(fields []*fieldToExec) {
 		r.releaseBuffer(f.out)
 		f.out = nil
 	}
+}
+
+func (r *Request) resolveField(ctx context.Context, f *fieldToExec, path *pathSegment) (reflect.Value, *errors.QueryError) {
+	if f.field.FixedResult.IsValid() {
+		return f.field.FixedResult, nil
+	}
+
+	res, resolverErr := f.field.Resolve(ctx, f.resolver)
+	if resolverErr == nil {
+		return reflect.ValueOf(res), nil
+	}
+
+	err := errors.Errorf("%s", resolverErr)
+	err.Path = path.toSlice()
+	err.ResolverError = resolverErr
+	if ex, ok := resolverErr.(extensionser); ok {
+		err.Extensions = ex.Extensions()
+	}
+	return reflect.Value{}, err
 }
 
 func (r *Request) execSelections(ctx context.Context, sels []selected.Selection, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *bytes.Buffer, serially bool) {
@@ -244,8 +263,8 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 		r.Limiter <- struct{}{}
 	}
 
-	var result reflect.Value
 	var err *errors.QueryError
+	var result reflect.Value
 
 	traceCtx, finish := r.Tracer.TraceField(ctx, f.field.TraceLabel, f.field.TypeName, f.field.Name, !f.field.Async, f.field.Args)
 	defer finish(err)
@@ -259,11 +278,6 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			}
 		}()
 
-		if f.field.FixedResult.IsValid() {
-			result = f.field.FixedResult
-			return nil
-		}
-
 		if err := traceCtx.Err(); err != nil {
 			return errors.Errorf("%s", err) // don't execute any more resolvers if context got cancelled
 		}
@@ -271,18 +285,12 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 		if len(f.sels) > 0 && !r.DisableFieldSelections {
 			ctx = selections.With(traceCtx, f.sels)
 		}
-		res, resolverErr := f.resolve(ctx)
-		if resolverErr != nil {
-			err := errors.Errorf("%s", resolverErr)
-			err.Path = path.toSlice()
-			err.ResolverError = resolverErr
-			if ex, ok := resolverErr.(extensionser); ok {
-				err.Extensions = ex.Extensions()
-			}
-			return err
+		res, resolveErr := r.resolveField(ctx, f, path)
+		if resolveErr != nil {
+			return resolveErr
 		}
 
-		result = reflect.ValueOf(res)
+		result = res
 
 		return nil
 	}()

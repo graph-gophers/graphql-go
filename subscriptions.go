@@ -51,6 +51,15 @@ func (s *Schema) subscribe(ctx context.Context, queryString string, operationNam
 		return sendAndReturnClosed(&Response{Errors: []*qerrors.QueryError{qerrors.Errorf("%s", err)}})
 	}
 
+	if variables == nil {
+		variables = make(map[string]any, len(op.Vars))
+	}
+	for _, v := range op.Vars {
+		if _, ok := variables[v.Name.Name]; !ok && v.Default != nil {
+			variables[v.Name.Name] = v.Default.Deserialize(nil)
+		}
+	}
+
 	r := &exec.Request{
 		Request: selected.Request{
 			Doc:    doc,
@@ -65,6 +74,7 @@ func (s *Schema) subscribe(ctx context.Context, queryString string, operationNam
 		DisableMemoryPooling:     s.disableMemoryPooling,
 		MaxPooledBufferCapacity:  s.maxPooledBufferCapacity,
 	}
+	sels := selected.ApplyOperation(&r.Request, res, op)
 	varTypes := make(map[string]*introspection.Type)
 	for _, v := range op.Vars {
 		t, err := common.ResolveType(v.Type, s.schema.Resolve)
@@ -73,6 +83,18 @@ func (s *Schema) subscribe(ctx context.Context, queryString string, operationNam
 		}
 		varTypes[v.Name.Name] = introspection.WrapType(t)
 	}
+	if errs := s.runDirectiveVisitors(ctx, variables, sels); len(errs) != 0 {
+		return sendAndReturnClosed(&Response{Errors: errs})
+	}
+	if s.preExecHook != nil {
+		if err := s.preExecHook(ctx, doc, op, variables); err != nil {
+			if qErr, ok := err.(*qerrors.QueryError); ok {
+				return sendAndReturnClosed(&Response{Errors: []*qerrors.QueryError{qErr}})
+			}
+			return sendAndReturnClosed(&Response{Errors: []*qerrors.QueryError{{Message: err.Error()}}})
+		}
+	}
+	r.Selections = sels
 
 	if op.Type == query.Query || op.Type == query.Mutation {
 		data, errs := r.Execute(ctx, res, op)
