@@ -26,32 +26,15 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 	func() {
 		defer r.handlePanic(ctx)
 
-		sels := selected.ApplyOperation(&r.Request, s, op)
+		sels := r.Selections
+		if sels == nil {
+			sels = selected.ApplyOperation(&r.Request, s, op)
+		}
 		var fields []*fieldToExec
 		collectFieldsToResolve(sels, s, s.SubscriptionResolver, &fields, make(map[string]*fieldToExec))
 		f = fields[0]
 
-		var in []reflect.Value
-		if f.field.HasContext {
-			in = append(in, reflect.ValueOf(ctx))
-		}
-		if f.field.ArgsPacker != nil {
-			in = append(in, f.field.PackedArgs)
-		}
-		callOut := f.resolver.Method(f.field.MethodIndex).Call(in)
-		result = callOut[0]
-
-		if f.field.HasError && !callOut[1].IsNil() {
-			switch resolverErr := callOut[1].Interface().(type) {
-			case *errors.QueryError:
-				err = resolverErr
-			case error:
-				err = errors.Errorf("%s", resolverErr)
-				err.ResolverError = resolverErr
-			default:
-				panic(fmt.Errorf("can only deal with *QueryError and error types, got %T", resolverErr))
-			}
-		}
+		result, err = r.resolveSubscriptionField(ctx, f)
 	}()
 
 	// Handles the case where the locally executed func above panicked
@@ -167,6 +150,23 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 	}()
 
 	return c
+}
+
+func (r *Request) resolveSubscriptionField(ctx context.Context, f *fieldToExec) (reflect.Value, *errors.QueryError) {
+	res, resolverErr := f.field.Resolve(ctx, f.resolver)
+	if resolverErr == nil {
+		return reflect.ValueOf(res), nil
+	}
+	switch resolverErr := resolverErr.(type) {
+	case *errors.QueryError:
+		return reflect.Value{}, resolverErr
+	case error:
+		err := errors.Errorf("%s", resolverErr)
+		err.ResolverError = resolverErr
+		return reflect.Value{}, err
+	default:
+		panic(fmt.Errorf("can only deal with *QueryError and error types, got %T", resolverErr))
+	}
 }
 
 func sendAndReturnClosed(resp *Response) chan *Response {

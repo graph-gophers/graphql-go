@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/exec"
+	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"github.com/graph-gophers/graphql-go/internal/exec/selected"
 	"github.com/graph-gophers/graphql-go/internal/query"
@@ -39,6 +41,9 @@ func ParseSchema(schemaString string, resolver any, opts ...SchemaOpt) (*Schema,
 	for _, opt := range opts {
 		opt(s)
 	}
+	if s.optErr != nil {
+		return nil, s.optErr
+	}
 	if !s.disableMemoryPooling && s.maxPooledBufferCapacity <= 0 {
 		s.maxPooledBufferCapacity = defaultMaxPooledBufferCapacity
 	}
@@ -54,9 +59,13 @@ func ParseSchema(schemaString string, resolver any, opts ...SchemaOpt) (*Schema,
 	if err := schema.Parse(s.schema, schemaString, s.useStringDescriptions); err != nil {
 		return nil, err
 	}
+	if err := s.validateDirectiveVisitors(); err != nil {
+		return nil, err
+	}
 	if err := s.validateSchema(); err != nil {
 		return nil, err
 	}
+	s.buildDirectiveCaches()
 
 	r, err := resolvable.ApplyResolver(s.schema, resolver, s.useFieldResolvers)
 	if err != nil {
@@ -92,7 +101,6 @@ func MustParseSchema(schemaString string, resolver any, opts ...SchemaOpt) *Sche
 //	privateSchema := graphql.MustParseSchema(schema, resolver, graphql.MaxDepth(10))
 //	publicSchema, _ := privateSchema.Clone(resolver, graphql.MaxDepth(3))
 func (s *Schema) Clone(resolver any, opts ...SchemaOpt) (*Schema, error) {
-	// Create new schema with shared AST and copied configuration
 	clone := &Schema{
 		schema:                   s.schema,
 		maxParallelism:           s.maxParallelism,
@@ -111,10 +119,22 @@ func (s *Schema) Clone(resolver any, opts ...SchemaOpt) (*Schema, error) {
 		disableMemoryPooling:     s.disableMemoryPooling,
 		overlapPairLimit:         s.overlapPairLimit,
 		validateDeprecated:       s.validateDeprecated,
+		preExecHook:              s.preExecHook,
+		directiveVisitors:        append([]DirectiveVisitor(nil), s.directiveVisitors...),
+		directiveArgsPackers:     make(map[directiveArgsCacheKey]*packer.StructPacker),
 	}
+	s.directiveArgsMu.RLock()
+	maps.Copy(clone.directiveArgsPackers, s.directiveArgsPackers)
+	s.directiveArgsMu.RUnlock()
 
 	for _, opt := range opts {
 		opt(clone)
+	}
+	if clone.optErr != nil {
+		return nil, clone.optErr
+	}
+	if err := clone.validateDirectiveVisitors(); err != nil {
+		return nil, err
 	}
 
 	res, err := resolvable.ApplyResolver(clone.schema, resolver, clone.useFieldResolvers)
@@ -122,6 +142,7 @@ func (s *Schema) Clone(resolver any, opts ...SchemaOpt) (*Schema, error) {
 		return nil, err
 	}
 	clone.res = res
+	clone.buildDirectiveCaches()
 
 	return clone, nil
 }
@@ -196,7 +217,15 @@ type Schema struct {
 	maxPooledBufferCapacity  int
 	overlapPairLimit         int
 	validateDeprecated       bool
+	directiveVisitors        []DirectiveVisitor
+	directiveVisitorsByName  map[string]DirectiveVisitor
+	preExecHook              PreExecHookFunc
+	directiveArgsMu          sync.RWMutex
+	directiveArgsPackers     map[directiveArgsCacheKey]*packer.StructPacker
+	optErr                   error
 }
+
+type PreExecHookFunc func(ctx context.Context, document *ast.ExecutableDefinition, operation *ast.OperationDefinition, variables map[string]any) error
 
 // AST returns the abstract syntax tree of the GraphQL schema definition.
 // It in turn can be used by other tools such as validators or generators.
@@ -362,6 +391,14 @@ func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
 	}
 }
 
+// PreExecHook configures an optional callback that runs after validation and
+// directive pre-execution checks but before resolver execution starts.
+func PreExecHook(hook PreExecHookFunc) SchemaOpt {
+	return func(s *Schema) {
+		s.preExecHook = hook
+	}
+}
+
 // Response represents a typical response of a GraphQL server. It may be encoded to JSON directly or
 // it may be further processed to a custom response type, for example to include custom error data.
 // Errors are intentionally serialized first based on the advice in the [spec].
@@ -438,8 +475,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 			return &Response{Errors: []*errors.QueryError{{Message: "no mutations are offered by the schema"}}}
 		}
 	}
-
-	// Fill in variables with the defaults from the operation
+	// Fill in variables with the defaults from the operation.
 	if variables == nil {
 		variables = make(map[string]any, len(op.Vars))
 	}
@@ -449,12 +485,13 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		}
 	}
 
+	allowIntrospection := s.allowIntrospection == nil || s.allowIntrospection(ctx) // allow introspection by default, i.e. when allowIntrospection is nil
 	r := &exec.Request{
 		Request: selected.Request{
 			Doc:                doc,
 			Vars:               variables,
 			Schema:             s.schema,
-			AllowIntrospection: s.allowIntrospection == nil || s.allowIntrospection(ctx), // allow introspection by default, i.e. when allowIntrospection is nil
+			AllowIntrospection: allowIntrospection,
 		},
 		Limiter:                 make(chan struct{}, s.maxParallelism),
 		Tracer:                  s.tracer,
@@ -464,6 +501,20 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 		DisableMemoryPooling:    s.disableMemoryPooling,
 		MaxPooledBufferCapacity: s.maxPooledBufferCapacity,
 	}
+	sels := selected.ApplyOperation(&r.Request, res, op)
+	if errs = s.runDirectiveVisitors(ctx, variables, sels); len(errs) != 0 {
+		return &Response{Errors: errs}
+	}
+
+	if s.preExecHook != nil {
+		if err := s.preExecHook(ctx, doc, op, variables); err != nil {
+			if qErr, ok := err.(*errors.QueryError); ok {
+				return &Response{Errors: []*errors.QueryError{qErr}}
+			}
+			return &Response{Errors: []*errors.QueryError{{Message: err.Error()}}}
+		}
+	}
+	r.Selections = sels
 	varTypes := make(map[string]*introspection.Type)
 	for _, v := range op.Vars {
 		t, err := common.ResolveType(v.Type, s.schema.Resolve)

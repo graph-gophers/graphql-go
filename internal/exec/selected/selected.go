@@ -8,6 +8,7 @@ import (
 
 	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/errors"
+	execdirective "github.com/graph-gophers/graphql-go/internal/exec/directive"
 	"github.com/graph-gophers/graphql-go/internal/exec/packer"
 	"github.com/graph-gophers/graphql-go/internal/exec/resolvable"
 	"github.com/graph-gophers/graphql-go/internal/query"
@@ -79,7 +80,11 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 		switch sel := sel.(type) {
 		case *ast.Field:
 			field := sel
-			if skipByDirective(r, field.Directives) {
+			skip, err := execdirective.ShouldSkipSelection(r.Vars, field.Directives)
+			if err != nil {
+				r.AddError(errors.Errorf("%s", err))
+			}
+			if skip {
 				continue
 			}
 
@@ -160,14 +165,22 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 
 		case *ast.InlineFragment:
 			frag := sel
-			if skipByDirective(r, frag.Directives) {
+			skip, err := execdirective.ShouldSkipSelection(r.Vars, frag.Directives)
+			if err != nil {
+				r.AddError(errors.Errorf("%s", err))
+			}
+			if skip {
 				continue
 			}
 			flattenedSels = append(flattenedSels, applyFragment(r, s, e, &frag.Fragment)...)
 
 		case *ast.FragmentSpread:
 			spread := sel
-			if skipByDirective(r, spread.Directives) {
+			skip, err := execdirective.ShouldSkipSelection(r.Vars, spread.Directives)
+			if err != nil {
+				r.AddError(errors.Errorf("%s", err))
+			}
+			if skip {
 				continue
 			}
 			flattenedSels = append(flattenedSels, applyFragment(r, s, e, &r.Doc.Fragments.Get(spread.Name.Name).Fragment)...)
@@ -261,32 +274,6 @@ func applyField(r *Request, s *resolvable.Schema, e resolvable.Resolvable, sels 
 	default:
 		panic("unreachable")
 	}
-}
-
-func skipByDirective(r *Request, directives ast.DirectiveList) bool {
-	if d := directives.Get("skip"); d != nil {
-		p := packer.ValuePacker{ValueType: reflect.TypeFor[bool]()}
-		v, err := p.Pack(d.Arguments.MustGet("if").Deserialize(r.Vars))
-		if err != nil {
-			r.AddError(errors.Errorf("%s", err))
-		}
-		if err == nil && v.Bool() {
-			return true
-		}
-	}
-
-	if d := directives.Get("include"); d != nil {
-		p := packer.ValuePacker{ValueType: reflect.TypeFor[bool]()}
-		v, err := p.Pack(d.Arguments.MustGet("if").Deserialize(r.Vars))
-		if err != nil {
-			r.AddError(errors.Errorf("%s", err))
-		}
-		if err == nil && !v.Bool() {
-			return true
-		}
-	}
-
-	return false
 }
 
 func HasAsyncSel(sels []Selection) bool {

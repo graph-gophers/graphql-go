@@ -163,6 +163,8 @@ schema := graphql.MustParseSchema(sdl, &RootResolver{}, nil)
 - `DisableFieldSelections()` disables capturing child field selections used by helper APIs (see below).
 - `DisableMemoryPooling()` disables internal execution-path memory pooling. Pooling is enabled by default; this option is intended for diagnostics and benchmark comparisons.
 - `OverlapValidationLimit(n int)` sets a hard cap on examined overlap pairs during validation; exceeding it emits `OverlapValidationLimitExceeded` error.
+- `DirectiveVisitors(...)` registers directive visitors to inspect and validate directives during pre-execution analysis. Visitors can implement authorization, cost analysis, analytics, or custom logic. Users implement the `DirectiveVisitor` interface with `Name() string` and `Visit(ctx context.Context, d DirectiveContext) error`. Call `d.DecodeArgs(&args)` inside `Visit` to parse directive arguments, and `d.FieldArg(name, &value)` to read field arguments by name. Visitor names must be unique per schema.
+- `PreExecHook(...)` registers a callback that runs after validation and directive pre-execution checks, but before resolver execution. Returning an error aborts execution.
 
 ### Field Selection Inspection Helpers
 
@@ -282,5 +284,10 @@ type Tracer interface {
     TraceValidation(context.Context) func([]*errors.QueryError)
 }
 ```
+
+### Directive Visitors
+
+Directive visitors provide a generic, Go-idiomatic way to inspect and validate GraphQL directives during pre-execution analysis. Visitors can directly reject execution by returning an error.
+Each directive name can have at most one registered visitor per schema.
 
 ### [Examples](https://github.com/graph-gophers/graphql-go/wiki/Examples)
