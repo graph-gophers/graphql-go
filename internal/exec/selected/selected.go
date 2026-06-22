@@ -56,7 +56,7 @@ type SchemaField struct {
 	FixedResult reflect.Value
 }
 
-func (f *SchemaField) Resolve(ctx context.Context, resolver reflect.Value) (output any, err error) {
+func (f *SchemaField) Resolve(ctx context.Context, resolver reflect.Value) (reflect.Value, error) {
 	return f.Field.Resolve(ctx, resolver, f.Args, f.PackedArgs)
 }
 

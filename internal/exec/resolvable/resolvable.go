@@ -63,7 +63,7 @@ func (f *Field) UseMethodResolver() bool {
 	return f.MethodIndex != -1 || f.IsFieldFunc
 }
 
-func (f *Field) Resolve(ctx context.Context, resolver reflect.Value, args map[string]any, packedArgs reflect.Value) (output any, err error) {
+func (f *Field) Resolve(ctx context.Context, resolver reflect.Value, args map[string]any, packedArgs reflect.Value) (reflect.Value, error) {
 	if len(f.Implementations) > 0 {
 		for _, impl := range f.Implementations {
 			out := resolver.Method(impl.MethodIndex).Call(nil)
@@ -77,10 +77,10 @@ func (f *Field) Resolve(ctx context.Context, resolver reflect.Value, args map[st
 	return f.resolve(ctx, resolver, args, packedArgs)
 }
 
-func (f *Field) resolve(ctx context.Context, resolver reflect.Value, args map[string]any, packedArgs reflect.Value) (output any, err error) {
+func (f *Field) resolve(ctx context.Context, resolver reflect.Value, args map[string]any, packedArgs reflect.Value) (reflect.Value, error) {
 	if !f.UseMethodResolver() {
 		if len(f.FieldIndex) == 0 {
-			return nil, fmt.Errorf("missing resolver for field %q", f.Name)
+			return reflect.Value{}, fmt.Errorf("missing resolver for field %q", f.Name)
 		}
 		res := resolver
 
@@ -89,7 +89,7 @@ func (f *Field) resolve(ctx context.Context, resolver reflect.Value, args map[st
 			res = res.Elem()
 		}
 
-		return res.FieldByIndex(f.FieldIndex).Interface(), nil
+		return res.FieldByIndex(f.FieldIndex), nil
 	}
 
 	var in []reflect.Value
@@ -103,7 +103,7 @@ func (f *Field) resolve(ctx context.Context, resolver reflect.Value, args map[st
 		if !packedArgs.IsValid() {
 			packed, packErr := f.ArgsPacker.Pack(args)
 			if packErr != nil {
-				return nil, packErr
+				return reflect.Value{}, packErr
 			}
 			packedArgs = packed
 		}
@@ -123,10 +123,10 @@ func (f *Field) resolve(ctx context.Context, resolver reflect.Value, args map[st
 
 	if f.HasError && !callOut[1].IsNil() {
 		resolverErr := callOut[1].Interface().(error)
-		return result.Interface(), resolverErr
+		return result, resolverErr
 	}
 
-	return result.Interface(), nil
+	return result, nil
 }
 
 type TypeAssertion struct {
