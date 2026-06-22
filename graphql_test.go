@@ -6329,3 +6329,49 @@ query Q {
 		}
 	})
 }
+
+// https://github.com/graph-gophers/graphql-go/issues/763
+type issueThingResolver interface {
+	Alpha(ctx context.Context, args struct {
+		Query *string
+		Limit *int32
+	}) (string, error)
+	Beta(ctx context.Context, args struct{ Query *string }) (string, error)
+}
+
+type issueConcreteThingResolver struct{}
+
+func (r *issueConcreteThingResolver) AaExtra() string { return "" }
+func (r *issueConcreteThingResolver) Alpha(_ context.Context, args struct {
+	Query *string
+	Limit *int32
+}) (string, error) {
+	return "alpha", nil
+}
+func (r *issueConcreteThingResolver) Beta(_ context.Context, args struct{ Query *string }) (string, error) {
+	return "beta", nil
+}
+
+type issueRootResolver763 struct{}
+
+func (r *issueRootResolver763) Thing() (issueThingResolver, error) {
+	return &issueConcreteThingResolver{}, nil
+}
+
+func TestInterfaceResolverMethodIndex(t *testing.T) {
+	t.Parallel()
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: graphql.MustParseSchema(`
+				type Query { thing: Thing! }
+				type Thing {
+					alpha(query: String, limit: Int): String!
+					beta(query: String): String!
+				}
+			`, &issueRootResolver763{}),
+			Query:          `{ thing { beta(query: "test") } }`,
+			ExpectedResult: `{"thing":{"beta":"beta"}}`,
+		},
+	})
+}
