@@ -6331,7 +6331,7 @@ query Q {
 }
 
 // https://github.com/graph-gophers/graphql-go/issues/763
-type issueThingResolver interface {
+type issue763ThingResolver interface {
 	Alpha(ctx context.Context, args struct {
 		Query *string
 		Limit *int32
@@ -6339,39 +6339,38 @@ type issueThingResolver interface {
 	Beta(ctx context.Context, args struct{ Query *string }) (string, error)
 }
 
-type issueConcreteThingResolver struct{}
+type issue763ConcreteThingResolver struct{}
 
-func (r *issueConcreteThingResolver) AaExtra() string { return "" }
-func (r *issueConcreteThingResolver) Alpha(_ context.Context, args struct {
+// sorts before Alpha, shifting method indices on the concrete type to reproduce #763
+func (r *issue763ConcreteThingResolver) AaExtra() string { return "" }
+func (r *issue763ConcreteThingResolver) Alpha(_ context.Context, args struct {
 	Query *string
 	Limit *int32
 }) (string, error) {
 	return "alpha", nil
 }
-func (r *issueConcreteThingResolver) Beta(_ context.Context, args struct{ Query *string }) (string, error) {
+func (r *issue763ConcreteThingResolver) Beta(_ context.Context, args struct{ Query *string }) (string, error) {
 	return "beta", nil
 }
 
 type issueRootResolver763 struct{}
 
-func (r *issueRootResolver763) Thing() (issueThingResolver, error) {
-	return &issueConcreteThingResolver{}, nil
+func (r *issueRootResolver763) Thing() (issue763ThingResolver, error) {
+	return &issue763ConcreteThingResolver{}, nil
 }
 
 func TestInterfaceResolverMethodIndex(t *testing.T) {
 	t.Parallel()
 
-	gqltesting.RunTests(t, []*gqltesting.Test{
-		{
-			Schema: graphql.MustParseSchema(`
-				type Query { thing: Thing! }
-				type Thing {
-					alpha(query: String, limit: Int): String!
-					beta(query: String): String!
-				}
-			`, &issueRootResolver763{}),
-			Query:          `{ thing { beta(query: "test") } }`,
-			ExpectedResult: `{"thing":{"beta":"beta"}}`,
-		},
+	gqltesting.RunTest(t, &gqltesting.Test{
+		Schema: graphql.MustParseSchema(`
+			type Query { thing: Thing! }
+			type Thing {
+				alpha(query: String, limit: Int): String!
+				beta(query: String): String!
+			}
+		`, &issueRootResolver763{}),
+		Query:          `{ thing { beta(query: "test") } }`,
+		ExpectedResult: `{"thing":{"beta":"beta"}}`,
 	})
 }
