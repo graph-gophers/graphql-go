@@ -6329,3 +6329,96 @@ query Q {
 		}
 	})
 }
+
+// https://github.com/graph-gophers/graphql-go/issues/763
+type issue763ThingResolver interface {
+	Alpha(ctx context.Context, args struct {
+		Query *string
+		Limit *int32
+	}) (string, error)
+	Beta(ctx context.Context, args struct{ Query *string }) (string, error)
+}
+
+type issue763ConcreteThingResolver struct{}
+
+// sorts before Alpha, shifting method indices on the concrete type to reproduce #763
+func (r *issue763ConcreteThingResolver) AaExtra() string {
+	return ""
+}
+
+func (r *issue763ConcreteThingResolver) Alpha(_ context.Context, args struct {
+	Query *string
+	Limit *int32
+},
+) (string, error) {
+	return "alpha", nil
+}
+
+func (r *issue763ConcreteThingResolver) Beta(_ context.Context, args struct{ Query *string }) (string, error) {
+	return "beta", nil
+}
+
+type issueRootResolver763 struct{}
+
+func (r *issueRootResolver763) Thing() (issue763ThingResolver, error) {
+	return &issue763ConcreteThingResolver{}, nil
+}
+
+func TestInterfaceResolverMethodIndex(t *testing.T) {
+	t.Parallel()
+
+	gqltesting.RunTest(t, &gqltesting.Test{
+		Schema: graphql.MustParseSchema(`
+			type Query { thing: Thing! }
+			type Thing {
+				alpha(query: String, limit: Int): String!
+				beta(query: String): String!
+			}
+		`, &issueRootResolver763{}),
+		Query:          `{ thing { beta(query: "test") } }`,
+		ExpectedResult: `{"thing":{"beta":"beta"}}`,
+	})
+}
+
+type issue763ListUnionNodeResolver interface {
+	Label(ctx context.Context, args struct{ Query *string }) (string, error)
+}
+
+type issue763ListUnionConcreteNodeResolver struct{}
+
+// sorts before Label, shifting method indices on the concrete type to reproduce #763
+func (r *issue763ListUnionConcreteNodeResolver) AaExtra() string {
+	return ""
+}
+
+func (r *issue763ListUnionConcreteNodeResolver) Label(_ context.Context, args struct{ Query *string }) (string, error) {
+	return "label:" + *args.Query, nil
+}
+
+type issue763ListUnionSearchResultResolver struct{}
+
+func (r *issue763ListUnionSearchResultResolver) ToNodeImpl() (issue763ListUnionNodeResolver, bool) {
+	return &issue763ListUnionConcreteNodeResolver{}, true
+}
+
+type issue763ListUnionRootResolver struct{}
+
+func (r *issue763ListUnionRootResolver) Search() ([]*issue763ListUnionSearchResultResolver, error) {
+	return []*issue763ListUnionSearchResultResolver{{}}, nil
+}
+
+func TestIssue763InterfaceMethodIndexInListUnion(t *testing.T) {
+	t.Parallel()
+
+	gqltesting.RunTest(t, &gqltesting.Test{
+		Schema: graphql.MustParseSchema(`
+			type Query { search: [Search!]! }
+			union Search = NodeImpl
+			type NodeImpl {
+				label(query: String): String!
+			}
+		`, &issue763ListUnionRootResolver{}),
+		Query:          `{ search { ... on NodeImpl { label(query: "x") } } }`,
+		ExpectedResult: `{"search":[{"label":"label:x"}]}`,
+	})
+}

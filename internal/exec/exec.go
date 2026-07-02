@@ -95,7 +95,7 @@ type fieldToExec struct {
 	out      *bytes.Buffer
 }
 
-func (f *fieldToExec) resolve(ctx context.Context) (output any, err error) {
+func (f *fieldToExec) resolve(ctx context.Context) (reflect.Value, error) {
 	return f.field.Resolve(ctx, f.resolver)
 }
 
@@ -271,7 +271,8 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 		if len(f.sels) > 0 && !r.DisableFieldSelections {
 			ctx = selections.With(traceCtx, f.sels)
 		}
-		res, resolverErr := f.resolve(ctx)
+		var resolverErr error
+		result, resolverErr = f.resolve(ctx)
 		if resolverErr != nil {
 			err := errors.Errorf("%s", resolverErr)
 			err.Path = path.toSlice()
@@ -281,8 +282,6 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			}
 			return err
 		}
-
-		result = reflect.ValueOf(res)
 
 		return nil
 	}()
