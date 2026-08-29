@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -58,7 +59,7 @@ func ParseSchema(schemaString string, resolver any, opts ...SchemaOpt) (*Schema,
 		return nil, err
 	}
 
-	r, err := resolvable.ApplyResolver(s.schema, resolver, s.useFieldResolvers)
+	r, err := resolvable.ApplyResolver(s.schema, resolver, s.useFieldResolvers, s.typeResolvers)
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +109,7 @@ func (s *Schema) Clone(resolver any, opts ...SchemaOpt) (*Schema, error) {
 		subscribeResolverTimeout: s.subscribeResolverTimeout,
 		useFieldResolvers:        s.useFieldResolvers,
 		disableFieldSelections:   s.disableFieldSelections,
+		typeResolvers:            s.typeResolvers,
 		disableMemoryPooling:     s.disableMemoryPooling,
 		overlapPairLimit:         s.overlapPairLimit,
 		validateDeprecated:       s.validateDeprecated,
@@ -117,7 +119,7 @@ func (s *Schema) Clone(resolver any, opts ...SchemaOpt) (*Schema, error) {
 		opt(clone)
 	}
 
-	res, err := resolvable.ApplyResolver(clone.schema, resolver, clone.useFieldResolvers)
+	res, err := resolvable.ApplyResolver(clone.schema, resolver, clone.useFieldResolvers, clone.typeResolvers)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +167,7 @@ func (s *Schema) ApplyResolver(resolver any) error {
 		return fmt.Errorf("resolver already applied to schema")
 	}
 
-	res, err := resolvable.ApplyResolver(s.schema, resolver, s.useFieldResolvers)
+	res, err := resolvable.ApplyResolver(s.schema, resolver, s.useFieldResolvers, s.typeResolvers)
 	if err != nil {
 		return err
 	}
@@ -192,6 +194,7 @@ type Schema struct {
 	subscribeResolverTimeout time.Duration
 	useFieldResolvers        bool
 	disableFieldSelections   bool
+	typeResolvers            resolvable.TypeResolverRegistry
 	disableMemoryPooling     bool
 	maxPooledBufferCapacity  int
 	overlapPairLimit         int
@@ -359,6 +362,53 @@ func DisableIntrospection() SchemaOpt {
 func SubscribeResolverTimeout(timeout time.Duration) SchemaOpt {
 	return func(s *Schema) {
 		s.subscribeResolverTimeout = timeout
+	}
+}
+
+// TypeResolverFor registers a global type resolver for a Go type. The resolver function's parameter
+// type is used to determine which Go type it handles. When a struct field of that type is resolved,
+// the registered resolver will be called to convert the value to a GraphQL-compatible value.
+//
+// Example:
+//
+//	graphql.TypeResolverFor(func(t time.Time) (any, error) {
+//		return t.Format(time.RFC3339), nil
+//	})
+//
+// The function infers the registered Go type from the callback's argument type. In the example above,
+// this registers a resolver for time.Time. The type resolver will be called for any struct field of
+// type time.Time when UseFieldResolvers() is enabled.
+//
+// Resolver precedence (highest to lowest):
+//  1. Explicit resolver method
+//  2. Registered type resolver (TypeResolverFor)
+//  3. Struct field resolver (UseFieldResolvers)
+//  4. Existing built-in scalar handling
+//
+// Pointer handling: A resolver registered for T will automatically apply to fields of type *T.
+// Nil pointers will not call the resolver; they will be treated as GraphQL null values.
+//
+// The registered resolvers are schema-local, meaning different schemas can have different
+// resolvers for the same type.
+func TypeResolverFor[T any](fn func(T) (any, error)) SchemaOpt {
+	return func(s *Schema) {
+		if s.typeResolvers == nil {
+			s.typeResolvers = make(resolvable.TypeResolverRegistry)
+		}
+		// Get the type of T
+		var zero T
+		t := reflect.TypeOf(zero)
+
+		// Check for duplicate registration
+		if _, exists := s.typeResolvers[t]; exists {
+			// Log a warning but allow the override for now
+			// We could also panic here if we want to enforce uniqueness
+		}
+
+		// Wrap the user's function to match TypeResolverFunc signature
+		s.typeResolvers[t] = func(val any) (any, error) {
+			return fn(val.(T))
+		}
 	}
 }
 

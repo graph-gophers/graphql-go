@@ -17,6 +17,12 @@ const (
 	Subscription = "Subscription"
 )
 
+// TypeResolverRegistry holds registered type resolvers keyed by their Go type.
+type TypeResolverRegistry map[reflect.Type]TypeResolverFunc
+
+// TypeResolverFunc is the actual resolver function that converts a Go value to a GraphQL-compatible value.
+type TypeResolverFunc func(any) (any, error)
+
 type Schema struct {
 	*Meta
 	ast.Schema
@@ -52,6 +58,7 @@ type Field struct {
 	OutputType      reflect.Type
 	Implementations []*FieldImplementation
 	TraceLabel      string
+	TypeResolver    TypeResolverFunc // Registered type resolver for the field's Go type
 }
 
 type FieldImplementation struct {
@@ -89,7 +96,18 @@ func (f *Field) resolve(ctx context.Context, resolver reflect.Value, args map[st
 			res = res.Elem()
 		}
 
-		return res.FieldByIndex(f.FieldIndex), nil
+		fieldValue := res.FieldByIndex(f.FieldIndex)
+
+		// Apply type resolver if registered and field is non-nil
+		if f.TypeResolver != nil {
+			var err error
+			fieldValue, err = f.applyTypeResolver(fieldValue)
+			if err != nil {
+				return reflect.Value{}, err
+			}
+		}
+
+		return fieldValue, nil
 	}
 
 	var in []reflect.Value
@@ -126,7 +144,43 @@ func (f *Field) resolve(ctx context.Context, resolver reflect.Value, args map[st
 		return result, resolverErr
 	}
 
+	// Apply type resolver if registered
+	if f.TypeResolver != nil {
+		var err error
+		result, err = f.applyTypeResolver(result)
+		if err != nil {
+			return reflect.Value{}, err
+		}
+	}
+
 	return result, nil
+}
+
+// applyTypeResolver applies the registered type resolver to a field value.
+// It handles nil pointers appropriately, returning nil for nil pointer inputs.
+func (f *Field) applyTypeResolver(fieldValue reflect.Value) (reflect.Value, error) {
+	// Handle nil pointers - don't call the resolver for nil values
+	if fieldValue.Kind() == reflect.Pointer && fieldValue.IsNil() {
+		return fieldValue, nil
+	}
+
+	// Get the actual value to pass to the resolver
+	var valueToResolve any
+	if fieldValue.Kind() == reflect.Pointer {
+		// Dereference pointer for the resolver
+		valueToResolve = fieldValue.Elem().Interface()
+	} else {
+		valueToResolve = fieldValue.Interface()
+	}
+
+	// Call the type resolver
+	resolved, err := f.TypeResolver(valueToResolve)
+	if err != nil {
+		return reflect.Value{}, err
+	}
+
+	// Convert the resolved value back to reflect.Value
+	return reflect.ValueOf(resolved), nil
 }
 
 type TypeAssertion struct {
@@ -144,12 +198,12 @@ func (*Object) isResolvable() {}
 func (*List) isResolvable()   {}
 func (*Scalar) isResolvable() {}
 
-func ApplyResolver(s *ast.Schema, resolver any, useFieldResolvers bool) (*Schema, error) {
+func ApplyResolver(s *ast.Schema, resolver any, useFieldResolvers bool, typeResolvers TypeResolverRegistry) (*Schema, error) {
 	if resolver == nil {
 		return &Schema{Meta: newMeta(s), Schema: *s}, nil
 	}
 
-	b := newBuilder(s, useFieldResolvers)
+	b := newBuilder(s, useFieldResolvers, typeResolvers)
 
 	var query, mutation, subscription Resolvable
 
@@ -231,6 +285,7 @@ type execBuilder struct {
 	resMap            map[typePair]*resMapEntry
 	packerBuilder     *packer.Builder
 	useFieldResolvers bool
+	typeResolvers     TypeResolverRegistry
 }
 
 type typePair struct {
@@ -243,12 +298,13 @@ type resMapEntry struct {
 	targets []*Resolvable
 }
 
-func newBuilder(s *ast.Schema, useFieldResolvers bool) *execBuilder {
+func newBuilder(s *ast.Schema, useFieldResolvers bool, typeResolvers TypeResolverRegistry) *execBuilder {
 	return &execBuilder{
 		schema:            s,
 		resMap:            make(map[typePair]*resMapEntry),
 		packerBuilder:     packer.NewBuilder(),
 		useFieldResolvers: useFieldResolvers,
+		typeResolvers:     typeResolvers,
 	}
 }
 
@@ -320,7 +376,7 @@ func (b *execBuilder) makeExec(t ast.Type, resolverType reflect.Type) (Resolvabl
 
 	switch t := t.(type) {
 	case *ast.ScalarTypeDefinition:
-		return makeScalarExec(t, resolverType)
+		return b.makeScalarExec(t, resolverType)
 
 	case *ast.EnumTypeDefinition:
 		return &Scalar{}, nil
@@ -340,7 +396,7 @@ func (b *execBuilder) makeExec(t ast.Type, resolverType reflect.Type) (Resolvabl
 	}
 }
 
-func makeScalarExec(t *ast.ScalarTypeDefinition, resolverType reflect.Type) (Resolvable, error) {
+func (b *execBuilder) makeScalarExec(t *ast.ScalarTypeDefinition, resolverType reflect.Type) (Resolvable, error) {
 	implementsType := false
 	switch r := reflect.New(resolverType).Interface().(type) {
 	case *int32:
@@ -353,6 +409,13 @@ func makeScalarExec(t *ast.ScalarTypeDefinition, resolverType reflect.Type) (Res
 		implementsType = t.Name == "Boolean"
 	case decode.Unmarshaler:
 		implementsType = r.ImplementsGraphQLType(t.Name)
+	}
+
+	// Check if there's a registered type resolver for this type
+	if !implementsType && b.typeResolvers != nil {
+		if _, ok := b.typeResolvers[resolverType]; ok {
+			implementsType = true
+		}
 	}
 
 	if !implementsType {
@@ -623,6 +686,14 @@ func (b *execBuilder) makeFieldExec(typeName string, f *ast.FieldDefinition, m r
 	}
 
 	fe.OutputType = out
+
+	// Check if there's a registered type resolver for the output type
+	if b.typeResolvers != nil {
+		if resolver, ok := b.typeResolvers[out]; ok {
+			fe.TypeResolver = resolver
+		}
+	}
+
 	if err := b.assignExec(&fe.ValueExec, f.Type, out); err != nil {
 		return nil, err
 	}
