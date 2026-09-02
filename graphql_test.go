@@ -6422,3 +6422,55 @@ func TestIssue763InterfaceMethodIndexInListUnion(t *testing.T) {
 		ExpectedResult: `{"search":[{"label":"label:x"}]}`,
 	})
 }
+
+type issue772ErrorRecordingTracer struct {
+	mu       sync.Mutex
+	fieldErr map[string]*gqlerrors.QueryError
+}
+
+func (t *issue772ErrorRecordingTracer) TraceQuery(ctx context.Context, queryString string, operationName string, variables map[string]any, varTypes map[string]*introspection.Type) (context.Context, func([]*gqlerrors.QueryError)) {
+	return ctx, func([]*gqlerrors.QueryError) {}
+}
+
+func (t *issue772ErrorRecordingTracer) TraceField(ctx context.Context, label, typeName, fieldName string, trivial bool, args map[string]any) (context.Context, func(*gqlerrors.QueryError)) {
+	return ctx, func(err *gqlerrors.QueryError) {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		if t.fieldErr == nil {
+			t.fieldErr = make(map[string]*gqlerrors.QueryError)
+		}
+		t.fieldErr[typeName+"."+fieldName] = err
+	}
+}
+
+// https://github.com/graph-gophers/graphql-go/issues/772
+func TestIssue778TraceFieldReceivesResolverError(t *testing.T) {
+	t.Parallel()
+
+	rt := &issue772ErrorRecordingTracer{}
+	schema := graphql.MustParseSchema(`
+		schema {
+			query: Query
+		}
+
+		type Query {
+			FindDroid: Droid!
+			FindHuman: String
+		}
+		type Droid {
+			Name: String!
+		}
+	`, &findDroidOrHumanResolver{}, graphql.Tracer(rt))
+
+	schema.Exec(context.Background(), `{ FindDroid { Name } FindHuman }`, "", nil)
+
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+
+	if err := rt.fieldErr["Query.FindDroid"]; err == nil {
+		t.Error("TraceField finish func for Query.FindDroid was called with a nil error, want the resolver's error")
+	}
+	if err := rt.fieldErr["Query.FindHuman"]; err != nil {
+		t.Errorf("TraceField finish func for Query.FindHuman was called with error %v, want nil", err)
+	}
+}
