@@ -4670,6 +4670,64 @@ func TestQueryVariablesValidation(t *testing.T) {
 			Locations: []gqlerrors.Location{{Line: 3, Column: 5}},
 			Rule:      "VariablesOfCorrectType",
 		}},
+	}, {
+		// An entry not defined by the input object type must raise an error. The
+		// literal path already rejects this (see validateValueType); values arriving
+		// through a variable must be held to the same rule, otherwise the undefined
+		// entry is silently discarded and the request succeeds.
+		Schema: graphql.MustParseSchema(`
+			input SearchFilter {
+				required: String!
+				optional: String
+			}
+
+			type SearchResults {
+				match: String
+			}
+
+			type Query {
+				search(filter: SearchFilter!): [SearchResults!]!
+			}`, &queryVarResolver{}, graphql.UseFieldResolvers()),
+		Query: `
+			query q($filter: SearchFilter!) {
+				search(filter: $filter) {
+					match
+				}
+			}`,
+		Variables: map[string]any{"filter": map[string]any{"required": "a", "undefined": "b"}},
+		ExpectedErrors: []*gqlerrors.QueryError{{
+			Message:   "Variable \"filter\" has invalid value.\nField \"undefined\" is not defined by type \"SearchFilter\".",
+			Locations: []gqlerrors.Location{{Line: 2, Column: 12}},
+			Rule:      "VariablesOfCorrectType",
+		}},
+	}, {
+		// A near-miss name should suggest what the caller probably meant, matching
+		// the suggestion the literal path already produces.
+		Schema: graphql.MustParseSchema(`
+			input SearchFilter {
+				required: String!
+				optional: String
+			}
+
+			type SearchResults {
+				match: String
+			}
+
+			type Query {
+				search(filter: SearchFilter!): [SearchResults!]!
+			}`, &queryVarResolver{}, graphql.UseFieldResolvers()),
+		Query: `
+			query q($filter: SearchFilter!) {
+				search(filter: $filter) {
+					match
+				}
+			}`,
+		Variables: map[string]any{"filter": map[string]any{"required": "a", "optionl": "b"}},
+		ExpectedErrors: []*gqlerrors.QueryError{{
+			Message:   "Variable \"filter\" has invalid value.\nField \"optionl\" is not defined by type \"SearchFilter\". Did you mean \"optional\"?",
+			Locations: []gqlerrors.Location{{Line: 2, Column: 12}},
+			Rule:      "VariablesOfCorrectType",
+		}},
 	}})
 }
 

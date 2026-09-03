@@ -270,6 +270,23 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Typ
 			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid type %T.\nExpected type \"%s\", found %s.", v.Name.Name, val, t, val)
 			return
 		}
+		// Entries not defined by the type must raise a request error. Iterating the
+		// declared fields alone cannot see them, so walk the supplied map too. The
+		// literal path (validateValueType, case *ast.InputObject) already enforces
+		// this; without the same check here, an undefined entry supplied through a
+		// variable is silently dropped and the request succeeds.
+		unknown := make([]string, 0)
+		for name := range in {
+			if t.Values.Get(name) == nil {
+				unknown = append(unknown, name)
+			}
+		}
+		// Map iteration order is random; sort so repeated runs report identically.
+		slices.Sort(unknown)
+		for _, name := range unknown {
+			suggestion := makeSuggestion("Did you mean", t.Values.Names(), name)
+			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value.\nField %q is not defined by type %q.%s", v.Name.Name, name, t.Name, suggestion)
+		}
 		for _, f := range t.Values {
 			fieldVal := in[f.Name.Name]
 			validateValue(c, f, fieldVal, f.Type)
