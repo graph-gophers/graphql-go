@@ -287,6 +287,21 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Typ
 			suggestion := makeSuggestion("Did you mean", t.Values.Names(), name)
 			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value.\nField %q is not defined by type %q.%s", v.Name.Name, name, t.Name, suggestion)
 		}
+
+		// Validate @oneOf constraint: exactly one non-null field must be provided.
+		if t.Directives.Get("oneOf") != nil {
+			if len(in) != 1 {
+				c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value.\nOneOf Input Object %q must specify exactly one key.", v.Name.Name, t.Name)
+				return
+			}
+			for name, fieldVal := range in {
+				if fieldVal == nil {
+					c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value.\nField %q must be non-null.", v.Name.Name, t.Name+"."+name)
+					return
+				}
+			}
+		}
+
 		for _, f := range t.Values {
 			fieldVal := in[f.Name.Name]
 			validateValue(c, f, fieldVal, f.Type)

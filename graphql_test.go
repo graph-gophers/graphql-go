@@ -6256,6 +6256,97 @@ func TestOneOfInputValidation(t *testing.T) {
 				}
 			`,
 		},
+		{
+			// The whole input object is supplied through a variable (as opposed to
+			// the previous cases, where only a single field's value came from a
+			// variable). This exercises validateValue's *ast.InputObject case
+			// rather than validateValueType's, and must be rejected just like the
+			// literal `{}` case above.
+			Schema: schema,
+			Query: `
+				query($input: SearchInput!) {
+					searchUser(input: $input) {
+						id
+					}
+				}
+			`,
+			Variables: map[string]any{
+				"input": map[string]any{},
+			},
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: "Variable \"input\" has invalid value.\nOneOf Input Object \"SearchInput\" must specify exactly one key.",
+					Rule:    "VariablesOfCorrectType",
+					Locations: []gqlerrors.Location{
+						{Line: 2, Column: 11},
+					},
+				},
+			},
+		},
+		{
+			Schema: schema,
+			Query: `
+				query($input: SearchInput!) {
+					searchUser(input: $input) {
+						id
+					}
+				}
+			`,
+			Variables: map[string]any{
+				"input": map[string]any{"id": "123", "email": "test@example.com"},
+			},
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: "Variable \"input\" has invalid value.\nOneOf Input Object \"SearchInput\" must specify exactly one key.",
+					Rule:    "VariablesOfCorrectType",
+					Locations: []gqlerrors.Location{
+						{Line: 2, Column: 11},
+					},
+				},
+			},
+		},
+		{
+			Schema: schema,
+			Query: `
+				query($input: SearchInput!) {
+					searchUser(input: $input) {
+						id
+					}
+				}
+			`,
+			Variables: map[string]any{
+				"input": map[string]any{"id": nil},
+			},
+			ExpectedErrors: []*gqlerrors.QueryError{
+				{
+					Message: "Variable \"input\" has invalid value.\nField \"SearchInput.id\" must be non-null.",
+					Rule:    "VariablesOfCorrectType",
+					Locations: []gqlerrors.Location{
+						{Line: 2, Column: 11},
+					},
+				},
+			},
+		},
+		{
+			Schema: schema,
+			Query: `
+				query($input: SearchInput!) {
+					searchUser(input: $input) {
+						id
+					}
+				}
+			`,
+			Variables: map[string]any{
+				"input": map[string]any{"id": "456"},
+			},
+			ExpectedResult: `
+				{
+					"searchUser": {
+						"id": "456"
+					}
+				}
+			`,
+		},
 	})
 }
 
