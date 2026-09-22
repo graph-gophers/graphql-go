@@ -31,6 +31,9 @@ func ParseLiteral(l *Lexer, constOnly bool) ast.Value {
 		lit.Loc = loc
 		return lit
 	case '[':
+		l.Descend()
+		defer l.Ascend()
+
 		l.ConsumeToken('[')
 		var list []ast.Value
 		for l.Peek() != ']' {
@@ -40,6 +43,9 @@ func ParseLiteral(l *Lexer, constOnly bool) ast.Value {
 		return &ast.ListValue{Values: list, Loc: loc}
 
 	case '{':
+		l.Descend()
+		defer l.Ascend()
+
 		l.ConsumeToken('{')
 		var fields []*ast.ObjectField
 		for l.Peek() != '}' {

@@ -16,6 +16,9 @@ func ParseType(l *Lexer) ast.Type {
 
 func parseNullType(l *Lexer) ast.Type {
 	if l.Peek() == '[' {
+		l.Descend()
+		defer l.Ascend()
+
 		l.ConsumeToken('[')
 		ofType := ParseType(l)
 		l.ConsumeToken(']')
