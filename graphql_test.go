@@ -4815,6 +4815,14 @@ func TestCircularFragmentMaxDepth(t *testing.T) {
 
 func TestMaxQueryLength(t *testing.T) {
 	withMaxQueryLen := graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{}, graphql.MaxQueryLength(75))
+	oversizedQuery := `
+				query HeroForEpisode {
+					hero(episode: WRATH_OF_KHAN) {
+						name
+					}
+				}
+			`
+	const expectedMessage = `query length 91 exceeds the maximum allowed query length of 75 bytes`
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
 			Schema: withMaxQueryLen,
@@ -4830,18 +4838,26 @@ func TestMaxQueryLength(t *testing.T) {
 		},
 		{
 			Schema: withMaxQueryLen,
-			Query: `
-				query HeroForEpisode {
-					hero(episode: WRATH_OF_KHAN) {
-						name
-					}
-				}
-			`,
+			Query:  oversizedQuery,
 			ExpectedErrors: []*gqlerrors.QueryError{{
-				Message: `query length 91 exceeds the maximum allowed query length of 75 bytes`,
+				Message: expectedMessage,
 			}},
 		},
 	})
+
+	for name, validate := range map[string]func(string) []*gqlerrors.QueryError{
+		"Validate": withMaxQueryLen.Validate,
+		"ValidateWithVariables": func(query string) []*gqlerrors.QueryError {
+			return withMaxQueryLen.ValidateWithVariables(query, nil)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			errs := validate(oversizedQuery)
+			if len(errs) != 1 || errs[0].Message != expectedMessage {
+				t.Fatalf("expected max query length error %q, got %#v", expectedMessage, errs)
+			}
+		})
+	}
 }
 
 type (

@@ -154,6 +154,7 @@ schema := graphql.MustParseSchema(sdl, &RootResolver{}, nil)
 - `UseStringDescriptions()` enables schema/type-system description strings (double and triple quoted). When this is not enabled, schema comments are parsed as descriptions instead.
 - `UseFieldResolvers()` specifies whether to use struct field resolvers.
 - `MaxDepth(n int)` specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
+- `MaxQueryLength(n int)` specifies the maximum allowed query length in bytes. The default is 0 which disables max length checking. It is highly recommended to set this option when accepting queries from untrusted clients.
 - `MaxParallelism(n int)` specifies the maximum number of resolvers per request allowed to run in parallel. The default is 10.
 - `MaxPooledBufferCap(n int)` specifies the maximum buffer capacity of buffers stored in the internal memory pool. Defaults to 16KB. Buffers larger than this limit are discarded instead of pooled.
 - `Tracer(tracer trace.Tracer)` is used to trace queries and fields. It defaults to `noop.Tracer`.

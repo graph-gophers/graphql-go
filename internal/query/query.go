@@ -111,6 +111,9 @@ func parseFragment(l *common.Lexer) *ast.FragmentDefinition {
 }
 
 func parseSelectionSet(l *common.Lexer) []ast.Selection {
+	l.Descend()
+	defer l.Ascend()
+
 	var sels []ast.Selection
 	l.ConsumeToken('{')
 	sels = append(sels, parseSelection(l))

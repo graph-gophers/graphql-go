@@ -18,7 +18,11 @@ type Lexer struct {
 	next                  rune
 	comment               bytes.Buffer
 	useStringDescriptions bool
+	depth                 int
 }
+
+// MaxParserDepth is the maximum depth of nested selection sets, inline fragments, list literals, object literals, and list types that the parser will accept. This limit is in place to prevent stack overflows.
+const MaxParserDepth = 1000
 
 type Ident struct {
 	Name string
@@ -167,6 +171,17 @@ func (l *Lexer) DescString() string {
 
 func (l *Lexer) SyntaxError(message string) {
 	panic(syntaxError(message))
+}
+
+func (l *Lexer) Descend() {
+	l.depth++
+	if l.depth > MaxParserDepth {
+		l.SyntaxError("maximum nesting depth exceeded")
+	}
+}
+
+func (l *Lexer) Ascend() {
+	l.depth--
 }
 
 func (l *Lexer) Location() errors.Location {
