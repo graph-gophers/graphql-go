@@ -156,6 +156,85 @@ func TestTraceFieldContextPassedToResolver(t *testing.T) {
 	}
 }
 
+type traceCtxFieldKey struct{}
+
+// traceCtxRoot records the trace field context value each resolver receives.
+type traceCtxRoot struct {
+	mu   sync.Mutex
+	seen map[string]string
+}
+
+func (r *traceCtxRoot) record(ctx context.Context, field string) {
+	got, _ := ctx.Value(traceCtxFieldKey{}).(string)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.seen[field] = got
+}
+
+func (r *traceCtxRoot) Leaf(ctx context.Context) string {
+	r.record(ctx, "Query.leaf")
+	return ""
+}
+
+func (r *traceCtxRoot) Node(ctx context.Context) *traceCtxNode {
+	r.record(ctx, "Query.node")
+	return &traceCtxNode{r: r}
+}
+
+type traceCtxNode struct{ r *traceCtxRoot }
+
+func (n *traceCtxNode) Leaf(ctx context.Context) string {
+	n.r.record(ctx, "Node.leaf")
+	return ""
+}
+
+func TestTraceFieldContextPassedToEveryResolver(t *testing.T) {
+	t.Parallel()
+
+	const schema = `
+		schema { query: Query }
+		type Query { leaf: String! node: Node! }
+		type Node { leaf: String! }
+	`
+	tests := []struct {
+		name string
+		opts []graphql.SchemaOpt
+	}{
+		{name: "field selections enabled"},
+		{name: "field selections disabled", opts: []graphql.SchemaOpt{graphql.DisableFieldSelections()}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tr := &testTracer{mu: &sync.Mutex{}}
+			tr.fieldContextHook = func(ctx context.Context, fieldName string) context.Context {
+				// The hook only receives the field name, and "leaf" exists on
+				// both types; a nested field is traced under its parent's
+				// context, which carries "Query.node".
+				prefix := "Query."
+				if parent, _ := ctx.Value(traceCtxFieldKey{}).(string); parent == "Query.node" {
+					prefix = "Node."
+				}
+				return context.WithValue(ctx, traceCtxFieldKey{}, prefix+fieldName)
+			}
+
+			root := &traceCtxRoot{seen: map[string]string{}}
+			opts := append([]graphql.SchemaOpt{graphql.Tracer(tr)}, tt.opts...)
+			s := graphql.MustParseSchema(schema, root, opts...)
+			resp := s.Exec(context.Background(), `query { leaf node { leaf } }`, "", nil)
+			if len(resp.Errors) > 0 {
+				t.Fatalf("execution errors: %v", resp.Errors)
+			}
+			for _, field := range []string{"Query.leaf", "Query.node", "Node.leaf"} {
+				if got := root.seen[field]; got != field {
+					t.Errorf("%s resolver received trace field context %q, want %q", field, got, field)
+				}
+			}
+		})
+	}
+}
+
 func TestSelectedFieldNames_FragmentsAliasesMeta(t *testing.T) {
 	tests := []struct {
 		name, query string
