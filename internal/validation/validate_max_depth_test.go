@@ -320,16 +320,40 @@ func TestMaxDepthFragmentSpreads(t *testing.T) {
 			}
 
 			query laterDepthValidated {
-				...character # depth 1 (+1)
-				enemies { # depth 1
-					friends { # depth 2
-						...character # depth 2 (+1), should error!
+				characters { # depth 1
+					...character # depth 2 (+1)
+					enemies { # depth 2
+						friends { # depth 3
+							...character # depth 4 (+1), should error!
+						}
 					}
 				}
 			}
 			`,
-			depth:   2,
-			failure: true,
+			depth:          4,
+			failure:        true,
+			expectedErrors: []string{"MaxDepthExceeded"},
+		},
+		{
+			name: "fragmentChainSpreadShallowFirst",
+			query: `
+			fragment f1 on Character { friends { ...f2 } }
+			fragment f2 on Character { friends { ...f3 } }
+			fragment f3 on Character { friends { ...f4 } }
+			fragment f4 on Character { friends { name } }
+
+			query {
+				characters { # depth 1
+					...f4 # each fragment is first reached here, where it is shallow
+					...f3
+					...f2
+					...f1 # friends nest to depth 5, name to depth 6
+				}
+			}
+			`,
+			depth:          4,
+			failure:        true,
+			expectedErrors: []string{"MaxDepthExceeded"},
 		},
 		{
 			name: "spreadAtSameDepth",
