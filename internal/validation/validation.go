@@ -309,12 +309,22 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Typ
 	}
 }
 
+// fragmentDepth identifies a fragment spread at a given depth.
+type fragmentDepth struct {
+	frag  *ast.FragmentDefinition
+	depth int
+}
+
 // validates the query doesn't go deeper than maxDepth (if set). Returns whether
 // or not query validated max depth to avoid excessive recursion.
 //
-// The visited map is necessary to ensure that max depth validation does not get stuck in cyclical
-// fragment spreads.
-func validateMaxDepth(c *opContext, sels []ast.Selection, visited map[*ast.FragmentDefinition]struct{}, depth int) bool {
+// The visited map records each fragment together with the depth it was spread
+// at. A fragment spread again at a different depth must be checked again,
+// because its fields end up at different depths; a spread at a depth already
+// checked is skipped, which stops cyclical fragment spreads. Depth never grows
+// past maxDepth+1 (a field beyond maxDepth is not descended into), so each
+// fragment is walked at most maxDepth+1 times.
+func validateMaxDepth(c *opContext, sels []ast.Selection, visited map[fragmentDepth]struct{}, depth int) bool {
 	// maxDepth checking is turned off when maxDepth is 0
 	if c.maxDepth == 0 {
 		return false
@@ -322,7 +332,7 @@ func validateMaxDepth(c *opContext, sels []ast.Selection, visited map[*ast.Fragm
 
 	exceededMaxDepth := false
 	if visited == nil {
-		visited = map[*ast.FragmentDefinition]struct{}{}
+		visited = map[fragmentDepth]struct{}{}
 	}
 
 	for _, sel := range sels {
@@ -348,11 +358,12 @@ func validateMaxDepth(c *opContext, sels []ast.Selection, visited map[*ast.Fragm
 				continue
 			}
 
-			if _, ok := visited[frag]; ok {
-				// we've already seen this fragment, don't check depth again.
+			key := fragmentDepth{frag: frag, depth: depth}
+			if _, ok := visited[key]; ok {
+				// we've already checked this fragment at this depth.
 				continue
 			}
-			visited[frag] = struct{}{}
+			visited[key] = struct{}{}
 
 			// Depth is not incremented because fragments have the same depth as surrounding fields
 			exceededMaxDepth = exceededMaxDepth || validateMaxDepth(c, frag.Selections, visited, depth)
