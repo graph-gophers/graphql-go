@@ -268,8 +268,9 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 			return errors.Errorf("%s", err) // don't execute any more resolvers if context got cancelled
 		}
 
+		ctx = traceCtx
 		if len(f.sels) > 0 && !r.DisableFieldSelections {
-			ctx = selections.With(traceCtx, f.sels)
+			ctx = selections.With(ctx, f.sels)
 		}
 		var resolverErr error
 		result, resolverErr = f.resolve(ctx)
