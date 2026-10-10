@@ -644,6 +644,57 @@ func TestSchemaSubscribe_CustomResolverTimeout_Synctest(t *testing.T) {
 	})
 }
 
+type timeoutWhileUnreadRoot struct {
+	Name   string
+	events <-chan *timeoutWhileUnreadEvent
+}
+
+func (r *timeoutWhileUnreadRoot) Event() <-chan *timeoutWhileUnreadEvent {
+	return r.events
+}
+
+type timeoutWhileUnreadEvent struct {
+	entered chan struct{}
+}
+
+func (e *timeoutWhileUnreadEvent) Value(ctx context.Context) string {
+	if e.entered != nil {
+		close(e.entered)
+		<-ctx.Done()
+	}
+	return "ok"
+}
+
+func TestSchemaSubscribe_CancelWhileTimeoutErrorPending(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		entered := make(chan struct{})
+		events := make(chan *timeoutWhileUnreadEvent, 2)
+		events <- &timeoutWhileUnreadEvent{}
+		events <- &timeoutWhileUnreadEvent{entered: entered}
+		close(events)
+
+		s := graphql.MustParseSchema(`
+			type Query { name: String! }
+			type Subscription { event: Event! }
+			type Event { value: String! }
+		`, &timeoutWhileUnreadRoot{events: events},
+			graphql.UseFieldResolvers(),
+			graphql.SubscribeResolverTimeout(time.Second))
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		responses, err := s.Subscribe(ctx, `subscription { event { value } }`, "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = responses // Deliberately leave the first response unread.
+
+		<-entered
+		time.Sleep(2 * time.Second)
+		cancel()
+	})
+}
+
 func TestSchemaSubscribe_MaxQueryLength(t *testing.T) {
 	s := graphql.MustParseSchema(schema, &rootResolver{}, graphql.MaxQueryLength(25))
 	query := `
