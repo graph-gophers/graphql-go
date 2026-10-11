@@ -151,7 +151,10 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 					}()
 
 					if err := subCtx.Err(); err != nil {
-						c <- &Response{Errors: []*errors.QueryError{errors.Errorf("%s", err)}}
+						select {
+						case c <- &Response{Errors: []*errors.QueryError{errors.Errorf("%s", err)}}:
+						case <-ctx.Done():
+						}
 						return
 					}
 
