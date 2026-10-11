@@ -690,7 +690,7 @@ func TestSchemaSubscribe_CancelWhileTimeoutErrorPending(t *testing.T) {
 		_ = responses // Deliberately leave the first response unread.
 
 		<-entered
-		time.Sleep(2 * time.Second)
+		synctest.Wait()
 		cancel()
 	})
 }
