@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -6638,4 +6640,61 @@ func TestIssue778TraceFieldReceivesResolverError(t *testing.T) {
 	if err := rt.fieldErr["Query.FindHuman"]; err != nil {
 		t.Errorf("TraceField finish func for Query.FindHuman was called with error %v, want nil", err)
 	}
+}
+
+func fragmentChainQuery(n int) string {
+	var b strings.Builder
+	b.WriteString("fragment f0 on Query { hello }\n")
+	for i := 1; i <= n; i++ {
+		fmt.Fprintf(&b, "fragment f%d on Query { ...f%d ...f%d }\n", i, i-1, i-1)
+	}
+	fmt.Fprintf(&b, "query { ...f%d }", n)
+	return b.String()
+}
+
+func TestFragmentExpansionLimit(t *testing.T) {
+	t.Parallel()
+
+	schema := graphql.MustParseSchema(`
+		schema { query: Query }
+		type Query { hello: String! }
+	`, &helloWorldResolver1{})
+
+	t.Run("small chain succeeds", func(t *testing.T) {
+		resp := schema.Exec(context.Background(), fragmentChainQuery(4), "", nil)
+		if len(resp.Errors) != 0 {
+			t.Fatalf("unexpected errors: %v", resp.Errors)
+		}
+	})
+
+	t.Run("custom limit", func(t *testing.T) {
+		s := graphql.MustParseSchema(`schema { query: Query } type Query { hello: String! }`, &helloWorldResolver1{}, graphql.MaxSelections(10))
+		resp := s.Exec(context.Background(), fragmentChainQuery(4), "", nil)
+		if len(resp.Errors) != 1 || !errors.Is(resp.Errors[0], graphql.ErrTooManySelections) {
+			t.Fatalf("expected a selection limit error, got: %v", resp.Errors)
+		}
+	})
+
+	t.Run("non-positive limit uses the default", func(t *testing.T) {
+		s := graphql.MustParseSchema(`schema { query: Query } type Query { hello: String! }`, &helloWorldResolver1{}, graphql.MaxSelections(-1))
+		resp := s.Exec(context.Background(), fragmentChainQuery(17), "", nil)
+		if len(resp.Errors) != 1 || !errors.Is(resp.Errors[0], graphql.ErrTooManySelections) {
+			t.Fatalf("expected a selection limit error, got: %v", resp.Errors)
+		}
+	})
+
+	t.Run("large limit allows bigger documents", func(t *testing.T) {
+		s := graphql.MustParseSchema(`schema { query: Query } type Query { hello: String! }`, &helloWorldResolver1{}, graphql.MaxSelections(math.MaxInt))
+		resp := s.Exec(context.Background(), fragmentChainQuery(17), "", nil)
+		if len(resp.Errors) != 0 {
+			t.Fatalf("unexpected errors: %v", resp.Errors)
+		}
+	})
+
+	t.Run("exponential chain is rejected", func(t *testing.T) {
+		resp := schema.Exec(context.Background(), fragmentChainQuery(17), "", nil)
+		if len(resp.Errors) != 1 || !errors.Is(resp.Errors[0], graphql.ErrTooManySelections) {
+			t.Fatalf("expected a selection limit error, got: %v", resp.Errors)
+		}
+	})
 }

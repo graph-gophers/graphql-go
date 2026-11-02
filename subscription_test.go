@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -746,5 +748,109 @@ func TestSchemaSubscribe_PanicInResolver(t *testing.T) {
 		ExpectedResults: []gqltesting.TestResponse{
 			{Errors: []*qerrors.QueryError{{Message: "panic occurred: subscriptionsPanicInResolver"}}},
 		},
+	})
+}
+
+type limitSubscriptionResolver struct {
+	calls atomic.Int32
+}
+
+func (r *limitSubscriptionResolver) Hello() string { return "hello" }
+
+func (r *limitSubscriptionResolver) HelloSaid(ctx context.Context) <-chan *helloSaidEventResolver {
+	r.calls.Add(1)
+	c := make(chan *helloSaidEventResolver, 1)
+	c <- &helloSaidEventResolver{msg: "Hello world!"}
+	close(c)
+	return c
+}
+
+func subscriptionFragmentChainQuery(n int) string {
+	var b strings.Builder
+	b.WriteString("fragment f0 on Subscription { helloSaid { msg } }\n")
+	for i := 1; i <= n; i++ {
+		fmt.Fprintf(&b, "fragment f%d on Subscription { ...f%d ...f%d }\n", i, i-1, i-1)
+	}
+	fmt.Fprintf(&b, "subscription { ...f%d }", n)
+	return b.String()
+}
+
+func TestSubscribeMaxSelections(t *testing.T) {
+	const sdl = `
+		schema { query: Query subscription: Subscription }
+		type Query { hello: String! }
+		type Subscription { helloSaid: HelloSaidEvent! }
+		type HelloSaidEvent { msg: String! }
+	`
+
+	collect := func(t *testing.T, c <-chan any) []*graphql.Response {
+		t.Helper()
+		var got []*graphql.Response
+		timeout := time.After(5 * time.Second)
+		for {
+			select {
+			case v, ok := <-c:
+				if !ok {
+					return got
+				}
+				got = append(got, v.(*graphql.Response))
+			case <-timeout:
+				t.Fatal("response channel was not closed")
+			}
+		}
+	}
+
+	t.Run("over limit returns an error and does not call the resolver", func(t *testing.T) {
+		res := &limitSubscriptionResolver{}
+		s := graphql.MustParseSchema(sdl, res)
+
+		c, err := s.Subscribe(context.Background(), subscriptionFragmentChainQuery(17), "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := collect(t, c)
+		if len(got) != 1 || len(got[0].Errors) != 1 || !errors.Is(got[0].Errors[0], graphql.ErrTooManySelections) {
+			t.Fatalf("expected a single ErrTooManySelections response, got: %+v", got)
+		}
+		if n := res.calls.Load(); n != 0 {
+			t.Fatalf("subscription resolver was called %d times, want 0", n)
+		}
+	})
+
+	t.Run("custom limit is propagated", func(t *testing.T) {
+		res := &limitSubscriptionResolver{}
+		s := graphql.MustParseSchema(sdl, res, graphql.MaxSelections(5))
+
+		c, err := s.Subscribe(context.Background(), subscriptionFragmentChainQuery(3), "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := collect(t, c)
+		if len(got) != 1 || len(got[0].Errors) != 1 || !errors.Is(got[0].Errors[0], graphql.ErrTooManySelections) {
+			t.Fatalf("expected a single ErrTooManySelections response, got: %+v", got)
+		}
+		if n := res.calls.Load(); n != 0 {
+			t.Fatalf("subscription resolver was called %d times, want 0", n)
+		}
+	})
+
+	t.Run("under limit delivers events", func(t *testing.T) {
+		res := &limitSubscriptionResolver{}
+		s := graphql.MustParseSchema(sdl, res)
+
+		c, err := s.Subscribe(context.Background(), subscriptionFragmentChainQuery(3), "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := collect(t, c)
+		if len(got) != 1 || len(got[0].Errors) != 0 {
+			t.Fatalf("expected a single successful response, got: %+v", got)
+		}
+		if want := `{"helloSaid":{"msg":"Hello world!"}}`; string(got[0].Data) != want {
+			t.Fatalf("got %s, want %s", got[0].Data, want)
+		}
+		if n := res.calls.Load(); n != 1 {
+			t.Fatalf("subscription resolver was called %d times, want 1", n)
+		}
 	})
 }

@@ -54,7 +54,12 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *ast.Ope
 	var out bytes.Buffer
 	func() {
 		defer r.handlePanic(ctx)
-		sels := selected.ApplyOperation(&r.Request, s, op)
+		sels, err := selected.ApplyOperation(&r.Request, s, op)
+		if err != nil {
+			r.Errs = []*errors.QueryError{err}
+			out.Write([]byte("null"))
+			return
+		}
 		var resolver reflect.Value
 		switch op.Type {
 		case query.Query:

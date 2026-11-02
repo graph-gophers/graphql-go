@@ -2,6 +2,7 @@ package selected
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -21,7 +22,32 @@ type Request struct {
 	Mu                 sync.Mutex
 	Errs               []*errors.QueryError
 	AllowIntrospection bool
+
+	// MaxSelections caps the number of selections processed while flattening
+	// the operation. Zero or a negative value means DefaultMaxSelections.
+	MaxSelections int
+
+	// expanded counts the selections processed while flattening the operation.
+	expanded int
 }
+
+// DefaultMaxSelections bounds the number of selections processed while
+// flattening one operation. Fragment spreads are expanded by value, so a
+// chain of fragments can otherwise grow exponentially with document size.
+const DefaultMaxSelections = 100_000
+
+// ErrTooManySelections is wrapped by the error returned when an operation
+// expands to more selections than allowed.
+var ErrTooManySelections = stderrors.New("too many selections")
+
+func (r *Request) limit() int {
+	if r.MaxSelections <= 0 {
+		return DefaultMaxSelections
+	}
+	return r.MaxSelections
+}
+
+type selectionLimitPanic struct{}
 
 func (r *Request) AddError(err *errors.QueryError) {
 	r.Mu.Lock()
@@ -29,7 +55,18 @@ func (r *Request) AddError(err *errors.QueryError) {
 	r.Mu.Unlock()
 }
 
-func ApplyOperation(r *Request, s *resolvable.Schema, op *ast.OperationDefinition) []Selection {
+func ApplyOperation(r *Request, s *resolvable.Schema, op *ast.OperationDefinition) (sels []Selection, err *errors.QueryError) {
+	defer func() {
+		if v := recover(); v != nil {
+			if _, ok := v.(selectionLimitPanic); !ok {
+				panic(v)
+			}
+			sels, err = nil, &errors.QueryError{
+				Err:     ErrTooManySelections,
+				Message: fmt.Sprintf("query expands to too many selections (limit %d)", r.limit()),
+			}
+		}
+	}()
 	var obj *resolvable.Object
 	switch op.Type {
 	case query.Query:
@@ -39,7 +76,7 @@ func ApplyOperation(r *Request, s *resolvable.Schema, op *ast.OperationDefinitio
 	case query.Subscription:
 		obj = s.Subscription.(*resolvable.Object)
 	}
-	return applySelectionSet(r, s, obj, op.Selections)
+	return applySelectionSet(r, s, obj, op.Selections), nil
 }
 
 type Selection interface {
@@ -76,6 +113,10 @@ func (*TypenameField) isSelection() {}
 
 func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, sels []ast.Selection) (flattenedSels []Selection) {
 	for _, sel := range sels {
+		r.expanded++
+		if r.expanded > r.limit() {
+			panic(selectionLimitPanic{})
+		}
 		switch sel := sel.(type) {
 		case *ast.Field:
 			field := sel

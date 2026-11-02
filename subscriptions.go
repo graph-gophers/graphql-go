@@ -53,9 +53,10 @@ func (s *Schema) subscribe(ctx context.Context, queryString string, operationNam
 
 	r := &exec.Request{
 		Request: selected.Request{
-			Doc:    doc,
-			Vars:   variables,
-			Schema: s.schema,
+			Doc:           doc,
+			Vars:          variables,
+			Schema:        s.schema,
+			MaxSelections: s.maxSelections,
 		},
 		Limiter:                  make(chan struct{}, s.maxParallelism),
 		Tracer:                   s.tracer,

@@ -1,8 +1,44 @@
 # CHANGELOG
 
-* [FEATURE] Add `ValidateDeprecated()` schema option to enable validation of deprecated fields, arguments (including directive arguments), input fields, and enum values in queries. When enabled, usage of deprecated schema elements results in validation errors. This opt-in approach allows applications to enforce deprecation policies without breaking existing clients.
+[v1.11.0](https://github.com/graph-gophers/graphql-go/releases/tag/v1.11.0) Release v1.11.0
 
+
+* [FEATURE] Add the `MaxSelections(n)` schema option to change the limit on expanded selections per operation. Zero and negative values select the default (100,000); use a very large value such as `math.MaxInt` for effectively no limit.
+* [BUGFIX] Check max depth for every depth at which a fragment is spread, not only the first.
+* [BUGFIX] Pass the `TraceField` context to every resolver.
+* [BUGFIX] Stop the subscription resolver timeout from sending after the subscription context is cancelled.
+
+[v1.10.3](https://github.com/graph-gophers/graphql-go/releases/tag/v1.10.3) Release v1.10.3
+
+* [BUGFIX] Fail validation for very long queries.
+* [BUGFIX] Limit the lexer recursion depth.
+* [BUGFIX] Enforce `@oneOf` for values supplied through variables.
+* [BUGFIX] Reject undefined input object fields supplied via variables.
+* [BUGFIX] Preserve the Go interface type when resolving fields (#763).
+* [BUGFIX] Fix `TraceField` finish function never receiving the resolver's error.
+
+[v1.10.2](https://github.com/graph-gophers/graphql-go/releases/tag/v1.10.2) Release v1.10.2
+
+* [FEATURE] Add `ValidateDeprecated()` schema option to enable validation of deprecated fields, arguments (including directive arguments), input fields, and enum values in queries. When enabled, usage of deprecated schema elements results in validation errors. Schemas created with `Clone` inherit the setting.
+
+[v1.10.1](https://github.com/graph-gophers/graphql-go/releases/tag/v1.10.1) Release v1.10.1
+
+* [BUGFIX] Fix panics on recursive interfaces.
+* [BUGFIX] Fix resolver cycles where one of the types is a union.
+
+[v1.10.0](https://github.com/graph-gophers/graphql-go/releases/tag/v1.10.0) Release v1.10.0
+
+* [FEATURE] Add the `@oneOf` input object directive.
+* [FEATURE] Allow `int64` custom scalars.
 * [FEATURE] Support executable-document description strings on full-form operations, fragments, and variable definitions. Descriptions remain non-semantic and do not change validation or execution behavior. Executable `#` comments remain ignored.
+* [FEATURE] Support full Unicode in the lexer.
+* [FEATURE] Validate that deprecated interface fields are consistent in implementations.
+* [IMPROVEMENT] Improve validation performance and parity with graphql-js.
+* [IMPROVEMENT] Enforce `MaxQueryLength` for subscriptions.
+* [BUGFIX] Fix introspection: deprecation reasons, `isDeprecated`, `includeDeprecated` on arguments and input fields, and default values.
+* [BUGFIX] Reject empty queries at parse time.
+* [BUGFIX] Disallow `@skip` and `@include` on top-level subscription fields.
+* [BUGFIX] Fix the trace context passed to tracers.
 
 [v1.9.0](https://github.com/graph-gophers/graphql-go/releases/tag/v1.9.0) Release v1.9.0
 

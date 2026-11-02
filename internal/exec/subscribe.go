@@ -26,7 +26,11 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 	func() {
 		defer r.handlePanic(ctx)
 
-		sels := selected.ApplyOperation(&r.Request, s, op)
+		sels, applyErr := selected.ApplyOperation(&r.Request, s, op)
+		if applyErr != nil {
+			err = applyErr
+			return
+		}
 		var fields []*fieldToExec
 		collectFieldsToResolve(sels, s, s.SubscriptionResolver, &fields, make(map[string]*fieldToExec))
 		f = fields[0]
@@ -109,9 +113,10 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 
 				subR := &Request{
 					Request: selected.Request{
-						Doc:    r.Doc,
-						Vars:   r.Vars,
-						Schema: r.Schema,
+						Doc:           r.Doc,
+						Vars:          r.Vars,
+						Schema:        r.Schema,
+						MaxSelections: r.MaxSelections,
 					},
 					Limiter:                 r.Limiter,
 					Tracer:                  r.Tracer,
