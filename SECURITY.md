@@ -9,6 +9,9 @@ We always try to maintain the library secure and suggest our users to upgrade to
 | 1.x     | :white_check_mark: |
 | < 1.0   | :x:                |
 
+## MaxSelections
+Fragment spreads are expanded by value, so a short chain of fragments that each spread the previous one twice can expand to an exponential number of selections. The executor caps this at 100000 expanded selections per operation by default. Use `graphql.MaxSelections(n)` to lower or raise the cap (zero or negative values select the default).
+
 ## MaxDepth
 If you are using the `graphql.MaxDepth` schema option, make sure that you upgrade to version v1.3.0 or higher due to a bug causing security vulnerability in earlier versions.
 

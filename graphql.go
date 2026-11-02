@@ -183,6 +183,7 @@ type Schema struct {
 	allowIntrospection       func(ctx context.Context) bool
 	maxQueryLength           int
 	maxDepth                 int
+	maxSelections            int
 	maxParallelism           int
 	tracer                   tracer.Tracer
 	validationTracer         tracer.ValidationTracer
@@ -254,6 +255,24 @@ func DisableMemoryPooling() SchemaOpt {
 func MaxPooledBufferCap(n int) SchemaOpt {
 	return func(s *Schema) {
 		s.maxPooledBufferCapacity = n
+	}
+}
+
+// ErrTooManySelections is wrapped by the query error returned when an operation expands
+// to more selections than allowed by MaxSelections. Use errors.Is to detect it.
+var ErrTooManySelections = selected.ErrTooManySelections
+
+// MaxSelections specifies the maximum number of selections an operation may expand to
+// after fragment spreads are resolved. This protects against documents with chains of
+// fragments that expand exponentially. The default is 100000. Unlike MaxDepth and MaxQueryLength,
+// zero and negative values do not disable the check; they select the default. Use a very large
+// value such as math.MaxInt for effectively no limit.
+func MaxSelections(n int) SchemaOpt {
+	if n <= 0 {
+		n = 0
+	}
+	return func(s *Schema) {
+		s.maxSelections = n
 	}
 }
 
@@ -458,6 +477,7 @@ func (s *Schema) exec(ctx context.Context, queryString string, operationName str
 			Doc:                doc,
 			Vars:               variables,
 			Schema:             s.schema,
+			MaxSelections:      s.maxSelections,
 			AllowIntrospection: s.allowIntrospection == nil || s.allowIntrospection(ctx), // allow introspection by default, i.e. when allowIntrospection is nil
 		},
 		Limiter:                 make(chan struct{}, s.maxParallelism),
