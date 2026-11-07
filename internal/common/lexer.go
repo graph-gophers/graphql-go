@@ -72,6 +72,13 @@ func (l *Lexer) ConsumeWhitespace() {
 	for {
 		l.next = l.sc.Scan()
 
+		if l.next == scanner.Float {
+			text := l.sc.TokenText()
+			if len(text) > 0 && text[0] == '.' {
+				l.SyntaxError(fmt.Sprintf("invalid number, expected digit before \".\", did you mean \"0%s\"?", text))
+			}
+		}
+
 		if l.next == ',' {
 			// Similar to white space and line terminators, commas (',') are used to improve the
 			// legibility of source text and separate lexical tokens but are otherwise syntactically and
