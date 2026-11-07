@@ -132,3 +132,28 @@ func TestMultilineString(t *testing.T) {
 		})
 	}
 }
+
+func TestLexerRejectsDotPrefixedNumber(t *testing.T) {
+	lex := common.NewLexer(".123", false)
+
+	err := lex.CatchSyntaxError(func() {
+		lex.ConsumeWhitespace()
+	})
+	if err == nil {
+		t.Fatal("expected syntax error for a number without an integer part")
+	}
+}
+
+func TestLexerAcceptsNumbersWithIntegerPart(t *testing.T) {
+	for _, input := range []string{"0.123", "1e3", "-0.5"} {
+		t.Run(input, func(t *testing.T) {
+			lex := common.NewLexer(input, false)
+			err := lex.CatchSyntaxError(func() {
+				lex.ConsumeWhitespace()
+			})
+			if err != nil {
+				t.Fatalf("unexpected syntax error for %q: %v", input, err)
+			}
+		})
+	}
+}
