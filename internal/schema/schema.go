@@ -33,6 +33,12 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 		return err
 	}
 
+	for _, enum := range s.Enums {
+		if err := validateEnumValues(enum); err != nil {
+			return err
+		}
+	}
+
 	if err := mergeExtensions(s); err != nil {
 		return err
 	}
@@ -296,6 +302,17 @@ func typesEqual(a, b ast.Type) bool {
 	}
 }
 
+func validateEnumValues(enum *ast.EnumTypeDefinition) error {
+	seen := make(map[string]struct{}, len(enum.EnumValuesDefinition))
+	for _, v := range enum.EnumValuesDefinition {
+		if _, ok := seen[v.EnumValue]; ok {
+			return fmt.Errorf("enum value %q already declared in %q", v.EnumValue, enum.Name)
+		}
+		seen[v.EnumValue] = struct{}{}
+	}
+	return nil
+}
+
 func mergeExtensions(s *ast.Schema) error {
 	for _, ext := range s.Extensions {
 		typ := s.Types[ext.Type.TypeName()]
@@ -362,6 +379,9 @@ func mergeExtensions(s *ast.Schema) error {
 		case *ast.EnumTypeDefinition:
 			e := ext.Type.(*ast.EnumTypeDefinition)
 
+			if err := validateEnumValues(e); err != nil {
+				return err
+			}
 			for _, en := range e.EnumValuesDefinition {
 				for _, on := range og.EnumValuesDefinition {
 					if on.EnumValue == en.EnumValue {
