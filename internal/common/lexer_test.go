@@ -2,7 +2,9 @@ package common_test
 
 import (
 	"testing"
+	"text/scanner"
 
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/internal/common"
 )
 
@@ -134,10 +136,25 @@ func TestMultilineString(t *testing.T) {
 }
 
 func TestLexerRejectsDotPrefixedNumber(t *testing.T) {
-	lex := common.NewLexer(".123", false)
+	for _, input := range []string{".123", "-.5", "-.5e2"} {
+		t.Run(input, func(t *testing.T) {
+			lex := common.NewLexer(input, false)
 
+			err := lex.CatchSyntaxError(func() {
+				lex.ConsumeWhitespace()
+			})
+			if err == nil {
+				t.Fatal("expected syntax error for a number without an integer part")
+			}
+		})
+	}
+}
+
+func TestLexerRejectsNegativeDotPrefixedNumberAfterToken(t *testing.T) {
+	lex := common.NewLexer("value # comment\n -.5", false)
 	err := lex.CatchSyntaxError(func() {
 		lex.ConsumeWhitespace()
+		lex.ConsumeToken(scanner.Ident)
 	})
 	if err == nil {
 		t.Fatal("expected syntax error for a number without an integer part")
@@ -145,11 +162,19 @@ func TestLexerRejectsDotPrefixedNumber(t *testing.T) {
 }
 
 func TestLexerAcceptsNumbersWithIntegerPart(t *testing.T) {
-	for _, input := range []string{"0.123", "1e3", "-0.5"} {
+	for _, input := range []string{"0.123", "1e3", "-0.5", "-1", "-1e3"} {
 		t.Run(input, func(t *testing.T) {
 			lex := common.NewLexer(input, false)
 			err := lex.CatchSyntaxError(func() {
 				lex.ConsumeWhitespace()
+				value := common.ParseLiteral(lex, false)
+				lit, ok := value.(*ast.PrimitiveValue)
+				if !ok || lit.Text != input {
+					t.Fatalf("got literal %#v, want %q", value, input)
+				}
+				if lex.Peek() != scanner.EOF {
+					t.Fatalf("unexpected token after %q", input)
+				}
 			})
 			if err != nil {
 				t.Fatalf("unexpected syntax error for %q: %v", input, err)

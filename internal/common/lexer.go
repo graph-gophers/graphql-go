@@ -72,6 +72,10 @@ func (l *Lexer) ConsumeWhitespace() {
 	for {
 		l.next = l.sc.Scan()
 
+		if l.next == '-' && l.sc.Peek() == '.' {
+			l.SyntaxError("invalid number, expected digit between \"-\" and \".\"")
+		}
+
 		if l.next == scanner.Float {
 			text := l.sc.TokenText()
 			if len(text) > 0 && text[0] == '.' {
