@@ -433,6 +433,52 @@ func TestRootOperations_invalidSchema(t *testing.T) {
 	}
 }
 
+func TestDuplicateEnumValues(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		sdl       string
+		wantError string
+	}{
+		{
+			name:      "duplicate in enum definition",
+			sdl:       `enum SomeEnum { FOO BAR FOO }`,
+			wantError: `enum value "FOO" already declared in "SomeEnum"`,
+		},
+		{
+			name:      "duplicate in enum extension",
+			sdl:       `enum SomeEnum { FOO } extend enum SomeEnum { BAR BAR }`,
+			wantError: `enum value "BAR" already declared in "SomeEnum"`,
+		},
+		{
+			name:      "extension repeats original value",
+			sdl:       `enum SomeEnum { FOO } extend enum SomeEnum { FOO }`,
+			wantError: `enum value "FOO" already declared in "SomeEnum"`,
+		},
+		{
+			name:      "extensions repeat a value",
+			sdl:       `enum SomeEnum { FOO } extend enum SomeEnum { BAR } extend enum SomeEnum { BAR }`,
+			wantError: `enum value "BAR" already declared in "SomeEnum"`,
+		},
+		{
+			name: "same value in different enums",
+			sdl:  `enum SomeEnum { FOO } enum OtherEnum { FOO } extend enum OtherEnum { BAR } extend enum SomeEnum { BAR }`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := graphql.ParseSchema(`type Query { e: SomeEnum } `+tt.sdl, nil)
+			if tt.wantError == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("got error %v, want error containing %q", err, tt.wantError)
+			}
+		})
+	}
+}
+
 func TestRootOperations_validSchema(t *testing.T) {
 	type resolver struct {
 		helloSaidResolver
