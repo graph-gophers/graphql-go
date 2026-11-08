@@ -165,7 +165,7 @@ func (l *Lexer) ConsumeLiteral() *ast.PrimitiveValue {
 
 func (l *Lexer) consumeNumber(negative bool) *ast.PrimitiveValue {
 	if l.next != scanner.Int && l.next != scanner.Float {
-		l.SyntaxError("expected number after '-'")
+		l.SyntaxError("expected number")
 	}
 	text := l.sc.TokenText()
 	if negative {

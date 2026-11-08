@@ -201,3 +201,14 @@ func TestParseLiteralRejectsInvalidNumbers(t *testing.T) {
 		})
 	}
 }
+
+func TestParseLiteralRejectsNonNumberAfterMinus(t *testing.T) {
+	lex := common.NewLexer("-true", false)
+	err := lex.CatchSyntaxError(func() {
+		lex.ConsumeWhitespace()
+		common.ParseLiteral(lex, false)
+	})
+	if err == nil || err.Message != "syntax error: expected number" {
+		t.Fatalf("expected number syntax error, got %v", err)
+	}
+}

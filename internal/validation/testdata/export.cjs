@@ -50,6 +50,16 @@ const graphqlRootDir = path.dirname(require.resolve('graphql/package.json'));
 
 const { printSchema } = require('graphql/src/utilities/printSchema.ts');
 
+const fixtureKey = test => JSON.stringify([test.schema, test.rule, test.query]);
+const previousTests = fs.existsSync('tests.json')
+  ? JSON.parse(fs.readFileSync('tests.json', 'utf8')).tests
+  : [];
+const expectedParseErrors = new Map(
+  previousTests
+    .filter(test => test.expectedParseError)
+    .map(test => [fixtureKey(test), test.expectedParseError]),
+);
+
 function describe(name, fn) {
   if (name === 'within schema language') {
     return;
@@ -159,11 +169,17 @@ let schemas = schemaRefs.map(schema => {
 
 const tests = captured.map(testCase => {
   const schema = schemas[testCase.schema];
+  const expectedParseError = expectedParseErrors.get(fixtureKey({
+    schema: schema.id,
+    rule: testCase.rule,
+    query: testCase.query,
+  }));
   return {
     name: testCase.name,
     rule: testCase.rule,
     schema: schema.id,
     query: testCase.query,
+    ...(expectedParseError && { expectedParseError }),
     errors: testCase.errors,
   };
 });

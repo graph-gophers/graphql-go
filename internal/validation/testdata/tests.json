@@ -4780,6 +4780,7 @@
       "rule": "ValuesOfCorrectTypeRule",
       "schema": "70tUDwcPSZzv9khhs9WW2+o2xvsp13FhjrvVhLjYen4=",
       "query": "\n        {\n          complicatedArgs {\n            intArgField(intArg: 829384293849283498239482938)\n          }\n        }\n      ",
+      "expectedParseError": "syntax error: numeric literal out of range",
       "errors": [
         {
           "message": "Int cannot represent non 32-bit signed integer value: 829384293849283498239482938",
