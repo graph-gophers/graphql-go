@@ -1,13 +1,91 @@
 package schema_test
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/graph-gophers/graphql-go/ast"
+	qerrors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/schema"
 )
+
+func TestDescriptionBeforeExtension(t *testing.T) {
+	extensions := []struct {
+		name string
+		base string
+		ext  string
+	}{
+		{"schema", `type Query { x: String }`, `extend schema { query: Query }`},
+		{"type", `type Query { x: String }`, `extend type Query { y: String }`},
+		{"interface", `interface Node { x: String }`, `extend interface Node { y: String }`},
+		{"union", `type A { x: String } type B { x: String } union U = A`, `extend union U = B`},
+		{"enum", `enum E { A }`, `extend enum E { B }`},
+		{"input", `input I { x: String }`, `extend input I { y: String }`},
+		{"scalar", `scalar S`, `extend scalar S @specifiedBy(url: "https://example.com")`},
+	}
+	descriptions := []struct {
+		name string
+		text string
+	}{
+		{"string", `"description"`},
+		{"empty string", `""`},
+		{"block", "\"\"\"\nDescription\n\"\"\""},
+		{"empty block", `""""""`},
+		{"embedded syntax", `"secret \" extend type Query { admin: String }"`},
+		{"untrusted text", `"` + strings.Repeat("x", 4096) + `"`},
+	}
+
+	for _, extension := range extensions {
+		for _, description := range descriptions {
+			for _, useStrings := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%s/stringDescriptions=%t", extension.name, description.name, useStrings), func(t *testing.T) {
+					sdl := extension.base + "\n   " + description.text + "\n# comment\n" + extension.ext
+					_, err := schema.ParseSchema(sdl, useStrings)
+					var queryErr *qerrors.QueryError
+					if !errors.As(err, &queryErr) || !errors.Is(err, qerrors.ErrSyntax) {
+						t.Fatalf("expected syntax error, got %v", err)
+					}
+					if queryErr.Message != "syntax error: descriptions are not allowed on type system extensions" {
+						t.Fatalf("unexpected error: %v", queryErr)
+					}
+					if len(queryErr.Locations) != 1 || queryErr.Locations[0] != (qerrors.Location{Line: 2, Column: 4}) {
+						t.Fatalf("expected description location, got %v", queryErr.Locations)
+					}
+				})
+			}
+		}
+		if extension.name == "scalar" {
+			continue
+		}
+		for _, useStrings := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/comment/stringDescriptions=%t", extension.name, useStrings), func(t *testing.T) {
+				if _, err := schema.ParseSchema(extension.base+"\n# description-like comment\n"+extension.ext, useStrings); err != nil {
+					t.Fatalf("comment before extension should be accepted: %v", err)
+				}
+			})
+		}
+	}
+}
+
+func TestDescriptionsOnDefinitionsRemainSupported(t *testing.T) {
+	sdl := `"type description"
+		type Query {
+			"field description"
+			field("argument description" arg: String): String
+		}`
+	s, err := schema.ParseSchema(sdl, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := s.Types["Query"].(*ast.ObjectTypeDefinition)
+	field := query.Fields.Get("field")
+	arg := field.Arguments.Get("arg")
+	if query.Desc != "type description" || field.Desc != "field description" || arg.Desc != "argument description" {
+		t.Fatalf("unexpected descriptions: type=%q field=%q argument=%q", query.Desc, field.Desc, arg.Desc)
+	}
+}
 
 func TestParse(t *testing.T) {
 	for _, test := range []struct {
