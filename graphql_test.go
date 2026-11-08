@@ -82,6 +82,69 @@ func (r *echoResolver) Echo(args struct{ Value *string }) *string {
 	return args.Value
 }
 
+type numericLiteralScalar struct{}
+
+func (*numericLiteralScalar) ImplementsGraphQLType(name string) bool {
+	return name == "NumericLiteralScalar"
+}
+func (*numericLiteralScalar) UnmarshalGraphQL(any) error { return nil }
+
+type numericLiteralResolver struct{}
+
+func (*numericLiteralResolver) Plain(args struct{ N int32 }) string { return "ok" }
+func (*numericLiteralResolver) Custom(args struct{ N numericLiteralScalar }) string {
+	return "ok"
+}
+func (*numericLiteralResolver) Tick(args struct{ N int32 }) <-chan int32 { return nil }
+
+func TestInvalidNumericLiteralsReturnErrors(t *testing.T) {
+	schema := graphql.MustParseSchema(`
+		scalar NumericLiteralScalar
+		type Query {
+			plain(n: Int!): String!
+			custom(n: NumericLiteralScalar!): String!
+		}
+		type Subscription { tick(n: Int!): Int! }
+	`, &numericLiteralResolver{})
+
+	for _, literal := range []string{"0x10", "0b11", "0o17", "1_0", "99999999999999999999", "1e999", "-true"} {
+		for _, query := range []string{
+			`{ custom(n: ` + literal + `) }`,
+			`query($n: NumericLiteralScalar = ` + literal + `) { custom(n: $n) }`,
+			`{ a: plain(n: ` + literal + `) ... on Query { a: plain(n: ` + literal + `) } }`,
+			`{ a: custom(n: ` + literal + `) ... on Query { a: custom(n: ` + literal + `) } }`,
+		} {
+			t.Run(query, func(t *testing.T) {
+				if errs := schema.Validate(query); len(errs) == 0 {
+					t.Fatal("expected validation error")
+				}
+				if resp := schema.Exec(context.Background(), query, "", nil); len(resp.Errors) == 0 {
+					t.Fatal("expected execution error")
+				}
+			})
+		}
+	}
+
+	if resp := schema.Exec(context.Background(), `{ plain(n: 1) custom(n: -1.5e2) }`, "", nil); len(resp.Errors) != 0 {
+		t.Fatalf("valid literals rejected: %v", resp.Errors)
+	}
+
+	responses, err := schema.Subscribe(context.Background(), `subscription {
+		a: tick(n: 0x10) ... on Subscription { a: tick(n: 0x10) }
+	}`, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp, ok := (<-responses).(*graphql.Response); !ok || len(resp.Errors) == 0 {
+		t.Fatalf("expected subscription error, got %#v", resp)
+	}
+
+	if _, err := graphql.ParseSchema(`scalar NumericLiteralScalar
+		type Query { custom(n: NumericLiteralScalar = 0x10): String! }`, &numericLiteralResolver{}); err == nil {
+		t.Fatal("expected invalid schema default to be rejected")
+	}
+}
+
 var starwarsSchema = graphql.MustParseSchema(starwars.Schema, &starwars.Resolver{})
 
 type ResolverError interface {

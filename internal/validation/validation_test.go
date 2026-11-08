@@ -79,6 +79,12 @@ func TestValidate(t *testing.T) {
 			}
 
 			d, err := query.Parse(test.Query)
+			if test.Name == "Validate: Values of correct type/Invalid Int values/Big Int into Int" {
+				if err == nil || err.Message != "syntax error: numeric literal out of range" {
+					t.Fatalf("expected out-of-range syntax error, got %v", err)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("failed to parse query: %s", err)
 			}

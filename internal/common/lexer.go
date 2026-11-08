@@ -3,6 +3,7 @@ package common
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"strconv"
 	"text/scanner"
 
@@ -12,6 +13,8 @@ import (
 )
 
 type syntaxError string
+
+var numericLiteralPattern = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$`)
 
 type Lexer struct {
 	sc                    *scanner.Scanner
@@ -157,6 +160,31 @@ func (l *Lexer) ConsumeLiteral() *ast.PrimitiveValue {
 		lit.Text = strconv.Quote(l.consumeTripleQuoteComment())
 	}
 	l.ConsumeWhitespace()
+	return lit
+}
+
+func (l *Lexer) consumeNumber(negative bool) *ast.PrimitiveValue {
+	if l.next != scanner.Int && l.next != scanner.Float {
+		l.SyntaxError("expected number after '-'")
+	}
+	text := l.sc.TokenText()
+	if negative {
+		text = "-" + text
+	}
+	if !numericLiteralPattern.MatchString(text) {
+		l.SyntaxError("invalid numeric literal")
+	}
+	var err error
+	if l.next == scanner.Int {
+		_, err = strconv.ParseInt(text, 10, 64)
+	} else {
+		_, err = strconv.ParseFloat(text, 64)
+	}
+	if err != nil {
+		l.SyntaxError("numeric literal out of range")
+	}
+	lit := l.ConsumeLiteral()
+	lit.Text = text
 	return lit
 }
 
