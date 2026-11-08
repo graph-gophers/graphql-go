@@ -12,7 +12,10 @@ import (
 	"github.com/graph-gophers/graphql-go/internal/common/norm"
 )
 
-type syntaxError string
+type syntaxError struct {
+	message  string
+	location errors.Location
+}
 
 var numericLiteralPattern = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$`)
 
@@ -48,9 +51,9 @@ func (l *Lexer) CatchSyntaxError(f func()) (errRes *errors.QueryError) {
 	defer func() {
 		if err := recover(); err != nil {
 			if err, ok := err.(syntaxError); ok {
-				errRes = errors.Errorf("syntax error: %s", err)
-				errRes.Err = fmt.Errorf("%w: %s", errors.ErrSyntax, err)
-				errRes.Locations = []errors.Location{l.Location()}
+				errRes = errors.Errorf("syntax error: %s", err.message)
+				errRes.Err = fmt.Errorf("%w: %s", errors.ErrSyntax, err.message)
+				errRes.Locations = []errors.Location{err.location}
 				return
 			}
 			panic(err)
@@ -209,7 +212,11 @@ func (l *Lexer) DescString() string {
 }
 
 func (l *Lexer) SyntaxError(message string) {
-	panic(syntaxError(message))
+	l.SyntaxErrorAt(message, l.Location())
+}
+
+func (l *Lexer) SyntaxErrorAt(message string, location errors.Location) {
+	panic(syntaxError{message: message, location: location})
 }
 
 func (l *Lexer) Descend() {

@@ -505,6 +505,8 @@ func parseSchema(s *ast.Schema, l *common.Lexer) {
 	l.ConsumeWhitespace()
 
 	for l.Peek() != scanner.EOF {
+		hasStringDesc := l.Peek() == scanner.String
+		descLoc := l.Location()
 		desc := l.DescComment()
 		switch x := l.ConsumeIdent(); x {
 
@@ -563,6 +565,9 @@ func parseSchema(s *ast.Schema, l *common.Lexer) {
 			s.Directives[directive.Name] = directive
 
 		case "extend":
+			if hasStringDesc {
+				l.SyntaxErrorAt("descriptions are not allowed on type system extensions", descLoc)
+			}
 			parseExtension(s, l)
 
 		default:
