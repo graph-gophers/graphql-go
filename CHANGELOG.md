@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## Unreleased
+
+* [BUGFIX] Reject malformed or out-of-range numeric literals during parsing instead of allowing panics. Custom scalars continue to receive numeric literals within the supported int64 and float64 ranges.
+
 [v1.11.0](https://github.com/graph-gophers/graphql-go/releases/tag/v1.11.0) Release v1.11.0
 
 

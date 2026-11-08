@@ -162,7 +162,7 @@ func TestLexerRejectsNegativeDotPrefixedNumberAfterToken(t *testing.T) {
 }
 
 func TestLexerAcceptsNumbersWithIntegerPart(t *testing.T) {
-	for _, input := range []string{"0.123", "1e3", "-0.5", "-1", "-1e3"} {
+	for _, input := range []string{"0", "-0", "0.123", "1e3", "-0.5", "-1", "-1e3", "9223372036854775807", "-9223372036854775808", "1.7976931348623157e308"} {
 		t.Run(input, func(t *testing.T) {
 			lex := common.NewLexer(input, false)
 			err := lex.CatchSyntaxError(func() {
@@ -180,5 +180,35 @@ func TestLexerAcceptsNumbersWithIntegerPart(t *testing.T) {
 				t.Fatalf("unexpected syntax error for %q: %v", input, err)
 			}
 		})
+	}
+}
+
+func TestParseLiteralRejectsInvalidNumbers(t *testing.T) {
+	for _, input := range []string{
+		"0x10", "0b11", "0o17", "1_0", "1.0_0", "0x1p2",
+		"01", "1.", "9223372036854775808", "-9223372036854775809",
+		"1e999", "-1e999", "-true", `-"text"`, "-]",
+	} {
+		t.Run(input, func(t *testing.T) {
+			lex := common.NewLexer(input, false)
+			err := lex.CatchSyntaxError(func() {
+				lex.ConsumeWhitespace()
+				common.ParseLiteral(lex, false)
+			})
+			if err == nil {
+				t.Fatalf("expected syntax error for %q", input)
+			}
+		})
+	}
+}
+
+func TestParseLiteralRejectsNonNumberAfterMinus(t *testing.T) {
+	lex := common.NewLexer("-true", false)
+	err := lex.CatchSyntaxError(func() {
+		lex.ConsumeWhitespace()
+		common.ParseLiteral(lex, false)
+	})
+	if err == nil || err.Message != "syntax error: expected number" {
+		t.Fatalf("expected number syntax error, got %v", err)
 	}
 }

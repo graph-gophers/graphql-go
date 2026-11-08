@@ -17,7 +17,11 @@ func ParseLiteral(l *Lexer, constOnly bool) ast.Value {
 		l.ConsumeToken('$')
 		return &ast.Variable{Name: l.ConsumeIdent(), Loc: loc}
 
-	case scanner.Int, scanner.Float, scanner.String, scanner.Ident:
+	case scanner.Int, scanner.Float:
+		lit := l.consumeNumber(false)
+		lit.Loc = loc
+		return lit
+	case scanner.String, scanner.Ident:
 		lit := l.ConsumeLiteral()
 		if lit.Type == scanner.Ident && lit.Text == "null" {
 			return &ast.NullValue{Loc: loc}
@@ -26,8 +30,7 @@ func ParseLiteral(l *Lexer, constOnly bool) ast.Value {
 		return lit
 	case '-':
 		l.ConsumeToken('-')
-		lit := l.ConsumeLiteral()
-		lit.Text = "-" + lit.Text
+		lit := l.consumeNumber(true)
 		lit.Loc = loc
 		return lit
 	case '[':

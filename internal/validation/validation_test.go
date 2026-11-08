@@ -20,12 +20,13 @@ type Schema struct {
 }
 
 type Test struct {
-	Name   string
-	Rule   string
-	Schema string
-	Query  string
-	Vars   map[string]any
-	Errors []*errors.QueryError
+	Name               string
+	Rule               string
+	Schema             string
+	Query              string
+	Vars               map[string]any
+	Errors             []*errors.QueryError
+	ExpectedParseError string
 }
 
 func TestValidate(t *testing.T) {
@@ -79,6 +80,12 @@ func TestValidate(t *testing.T) {
 			}
 
 			d, err := query.Parse(test.Query)
+			if test.ExpectedParseError != "" {
+				if err == nil || err.Message != test.ExpectedParseError {
+					t.Fatalf("expected parse error %q, got %v", test.ExpectedParseError, err)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("failed to parse query: %s", err)
 			}
