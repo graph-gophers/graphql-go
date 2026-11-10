@@ -14,12 +14,14 @@ type InterfaceTypeDefinition struct {
 	PossibleTypes []*ObjectTypeDefinition
 	Fields        FieldsDefinition
 	Desc          string
+	DescIsSet     bool
 	Directives    DirectiveList
 	Loc           errors.Location
 	Interfaces    []*InterfaceTypeDefinition
 }
 
-func (*InterfaceTypeDefinition) Kind() string          { return "INTERFACE" }
-func (t *InterfaceTypeDefinition) String() string      { return t.Name }
-func (t *InterfaceTypeDefinition) TypeName() string    { return t.Name }
-func (t *InterfaceTypeDefinition) Description() string { return t.Desc }
+func (*InterfaceTypeDefinition) Kind() string             { return "INTERFACE" }
+func (t *InterfaceTypeDefinition) String() string         { return t.Name }
+func (t *InterfaceTypeDefinition) TypeName() string       { return t.Name }
+func (t *InterfaceTypeDefinition) Description() string    { return t.Desc }
+func (t *InterfaceTypeDefinition) DescriptionIsSet() bool { return t.DescIsSet || t.Desc != "" }

@@ -151,7 +151,7 @@ schema := graphql.MustParseSchema(sdl, &RootResolver{}, nil)
 
 ### Schema Options
 
-- `UseStringDescriptions()` enables schema/type-system description strings (double and triple quoted). When this is not enabled, schema comments are parsed as descriptions instead.
+- `UseStringDescriptions()` enables schema/type-system description strings (double and triple quoted). Explicitly empty descriptions are reported as empty strings in introspection; absent descriptions are `null`. When this is not enabled, schema comments are parsed as descriptions instead.
 - `UseFieldResolvers()` specifies whether to use struct field resolvers.
 - `MaxDepth(n int)` specifies the maximum field nesting depth in a query. The default is 0 which disables max depth checking.
 - `MaxQueryLength(n int)` specifies the maximum allowed query length in bytes. The default is 0 which disables max length checking. It is highly recommended to set this option when accepting queries from untrusted clients.

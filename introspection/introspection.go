@@ -92,7 +92,10 @@ func (r *Type) Description() *string {
 	if named, ok := r.typ.(ast.NamedType); ok {
 		desc := named.Description()
 		if desc == "" {
-			return nil
+			present, ok := named.(interface{ DescriptionIsSet() bool })
+			if !ok || !present.DescriptionIsSet() {
+				return nil
+			}
 		}
 		return &desc
 	}
@@ -214,7 +217,7 @@ func (r *Field) Name() string {
 }
 
 func (r *Field) Description() *string {
-	if r.field.Desc == "" {
+	if r.field.Desc == "" && !r.field.DescIsSet {
 		return nil
 	}
 	return &r.field.Desc
@@ -256,7 +259,7 @@ func (r *InputValue) Name() string {
 }
 
 func (r *InputValue) Description() *string {
-	if r.value.Desc == "" {
+	if r.value.Desc == "" && !r.value.DescIsSet {
 		return nil
 	}
 	return &r.value.Desc
@@ -296,7 +299,7 @@ func (r *EnumValue) Name() string {
 }
 
 func (r *EnumValue) Description() *string {
-	if r.value.Desc == "" {
+	if r.value.Desc == "" && !r.value.DescIsSet {
 		return nil
 	}
 	return &r.value.Desc
@@ -324,7 +327,7 @@ func (r *Directive) Name() string {
 }
 
 func (r *Directive) Description() *string {
-	if r.directive.Desc == "" {
+	if r.directive.Desc == "" && !r.directive.DescIsSet {
 		return nil
 	}
 	return &r.directive.Desc

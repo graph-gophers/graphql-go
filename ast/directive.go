@@ -16,6 +16,7 @@ type Directive struct {
 type DirectiveDefinition struct {
 	Name       string
 	Desc       string
+	DescIsSet  bool
 	Repeatable bool
 	Locations  []string
 	Arguments  ArgumentsDefinition

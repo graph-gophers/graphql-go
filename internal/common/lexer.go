@@ -206,12 +206,19 @@ func (l *Lexer) ConsumeToken(expected rune) {
 }
 
 func (l *Lexer) DescComment() string {
+	desc, _ := l.ConsumeDescription()
+	return desc
+}
+
+// ConsumeDescription also reports whether the selected description is present.
+func (l *Lexer) ConsumeDescription() (string, bool) {
 	comment := l.comment.String()
+	present := l.useStringDescriptions && l.next == scanner.String
 	desc := l.consumeDescription()
 	if l.useStringDescriptions {
-		return desc
+		return desc, present
 	}
-	return comment
+	return comment, comment != ""
 }
 
 func (l *Lexer) DescString() string {
