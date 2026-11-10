@@ -86,6 +86,7 @@ type Selection interface {
 type SchemaField struct {
 	resolvable.Field
 	Alias       string
+	Loc         errors.Location
 	Args        map[string]any
 	PackedArgs  reflect.Value
 	Sels        []Selection
@@ -138,6 +139,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 					flattenedSels = append(flattenedSels, &SchemaField{
 						Field:       s.FieldSchema,
 						Alias:       field.Alias.Name,
+						Loc:         field.Name.Loc,
 						Sels:        applySelectionSet(r, s, s.Meta.Schema, field.SelectionSet),
 						Async:       true,
 						FixedResult: reflect.ValueOf(introspection.WrapSchema(r.Schema)),
@@ -162,6 +164,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 					flattenedSels = append(flattenedSels, &SchemaField{
 						Field:       s.FieldType,
 						Alias:       field.Alias.Name,
+						Loc:         field.Name.Loc,
 						Sels:        applySelectionSet(r, s, s.Type, field.SelectionSet),
 						Async:       true,
 						FixedResult: reflect.ValueOf(resolvedType),
@@ -192,6 +195,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 				flattenedSels = append(flattenedSels, &SchemaField{
 					Field:      *fe,
 					Alias:      field.Alias.Name,
+					Loc:        field.Name.Loc,
 					Args:       args,
 					PackedArgs: packedArgs,
 					Sels:       fieldSels,
