@@ -89,6 +89,13 @@ func (l *Lexer) ConsumeWhitespace() {
 			}
 		}
 
+		if l.next == scanner.Int || l.next == scanner.Float {
+			r := l.sc.Peek()
+			if r == '_' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' {
+				l.SyntaxError(fmt.Sprintf("invalid number, unexpected %q after %q", r, l.sc.TokenText()))
+			}
+		}
+
 		if l.next == ',' {
 			// Similar to white space and line terminators, commas (',') are used to improve the
 			// legibility of source text and separate lexical tokens but are otherwise syntactically and

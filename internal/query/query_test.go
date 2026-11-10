@@ -1,10 +1,11 @@
-package query
+package query_test
 
 import (
 	"strings"
 	"testing"
 
 	"github.com/graph-gophers/graphql-go/internal/common"
+	"github.com/graph-gophers/graphql-go/internal/query"
 )
 
 func TestParseRejectsEmptyOperationSelectionSet(t *testing.T) {
@@ -24,7 +25,7 @@ func TestParseRejectsEmptyOperationSelectionSet(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := Parse(tc.query)
+			_, err := query.Parse(tc.query)
 			if err == nil {
 				t.Fatalf("Parse(%q): expected syntax error, got nil", tc.query)
 			}
@@ -35,7 +36,7 @@ func TestParseRejectsEmptyOperationSelectionSet(t *testing.T) {
 func TestParseRejectsEmptyNestedSelectionSet(t *testing.T) {
 	t.Parallel()
 
-	_, err := Parse("query { user {} }")
+	_, err := query.Parse("query { user {} }")
 	if err == nil {
 		t.Fatalf("expected syntax error for empty nested selection set, got nil")
 	}
@@ -44,7 +45,7 @@ func TestParseRejectsEmptyNestedSelectionSet(t *testing.T) {
 func TestParseAcceptsFullUnicodeEscapeSyntax(t *testing.T) {
 	t.Parallel()
 
-	_, err := Parse(`query { user(id: "\u{1F37A}") { id } }`)
+	_, err := query.Parse(`query { user(id: "\u{1F37A}") { id } }`)
 	if err != nil {
 		t.Fatalf("expected query to parse, got error: %v", err)
 	}
@@ -53,7 +54,7 @@ func TestParseAcceptsFullUnicodeEscapeSyntax(t *testing.T) {
 func TestParseAcceptsSupplementaryPlaneCodePoint(t *testing.T) {
 	t.Parallel()
 
-	_, err := Parse(`query { user(id: "🍺") { id } }`)
+	_, err := query.Parse(`query { user(id: "🍺") { id } }`)
 	if err != nil {
 		t.Fatalf("expected query to parse, got error: %v", err)
 	}
@@ -62,7 +63,7 @@ func TestParseAcceptsSupplementaryPlaneCodePoint(t *testing.T) {
 func TestParseAcceptsValidSurrogatePairEscape(t *testing.T) {
 	t.Parallel()
 
-	_, err := Parse(`query { user(id: "\uD83C\uDF7A") { id } }`)
+	_, err := query.Parse(`query { user(id: "\uD83C\uDF7A") { id } }`)
 	if err != nil {
 		t.Fatalf("expected query to parse, got error: %v", err)
 	}
@@ -71,7 +72,7 @@ func TestParseAcceptsValidSurrogatePairEscape(t *testing.T) {
 func TestParseRejectsInvalidSurrogatePairEscape(t *testing.T) {
 	t.Parallel()
 
-	_, err := Parse(`query { user(id: "\uD83C\u0041") { id } }`)
+	_, err := query.Parse(`query { user(id: "\uD83C\u0041") { id } }`)
 	if err == nil {
 		t.Fatal("expected syntax error for invalid surrogate pair, got nil")
 	}
@@ -132,7 +133,7 @@ func TestParseNestingDepth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := Parse(tt.query)
+			_, err := query.Parse(tt.query)
 			if tt.valid {
 				if err != nil {
 					t.Fatal(err)
@@ -167,4 +168,55 @@ func nestedObjectLiteral(depth int) string {
 
 func nestedListType(depth int) string {
 	return "query($value:" + strings.Repeat("[", depth) + "Int" + strings.Repeat("]", depth) + "){field}"
+}
+
+func TestParseAcceptsNumberSeparatedFromName(t *testing.T) {
+	t.Parallel()
+
+	for _, q := range []string{
+		`{ a(b: 123 cde: 456) }`,
+		`{ a(b: 123, cde: 456) }`,
+		`{ a(b: 1.0 y: 2) }`,
+	} {
+		t.Run(q, func(t *testing.T) {
+			t.Parallel()
+
+			if _, err := query.Parse(q); err != nil {
+				t.Fatalf("expected %q to parse, got: %v", q, err)
+			}
+		})
+	}
+}
+
+func TestNumberFollowedByNameStartShouldFail(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "integer immediately followed by name",
+			input: `{ a(b: 123cde: 456) }`,
+		},
+		{
+			name:  "float immediately followed by name",
+			input: `{ a(b: 1.0y: 2) }`,
+		},
+		{
+			name:  "float with exponent immediately followed by name",
+			input: `{ a(b: 12.3e5cfg: 456) }`,
+		},
+		{
+			name:  "integer followed by name in input object default",
+			input: `query($input: SomeInput = { i1: 12i2: 15 }) { t }`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := query.Parse(tt.input)
+			if err == nil {
+				t.Errorf("expected a parse error for input %q, but parsing succeeded", tt.input)
+			}
+		})
+	}
 }
