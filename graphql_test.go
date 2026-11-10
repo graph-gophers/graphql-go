@@ -6897,3 +6897,47 @@ func TestEmptyDescriptionPreserved(t *testing.T) {
 		},
 	})
 }
+
+type arrayListResolver struct{}
+
+func (r *arrayListResolver) Items() [3]string {
+	return [3]string{"foo", "bar", "baz"}
+}
+
+func TestArrayAsGraphQLListValue(t *testing.T) {
+	t.Parallel()
+
+	schema, err := graphql.ParseSchema(`
+		schema {
+			query: Query
+		}
+		type Query {
+			items: [String!]!
+		}
+	`, &arrayListResolver{})
+	if err != nil {
+		t.Fatalf("ParseSchema should accept array return type for list field, but got error: %s", err)
+	}
+
+	resp := schema.Exec(context.Background(), `{ items }`, "", nil)
+	if len(resp.Errors) > 0 {
+		t.Fatalf("unexpected query errors: %v", resp.Errors)
+	}
+
+	var got struct {
+		Items []string `json:"items"`
+	}
+	if err := json.Unmarshal(resp.Data, &got); err != nil {
+		t.Fatalf("failed to unmarshal response: %s", err)
+	}
+
+	want := []string{"foo", "bar", "baz"}
+	if len(got.Items) != len(want) {
+		t.Fatalf("got %d items, want %d", len(got.Items), len(want))
+	}
+	for i := range want {
+		if got.Items[i] != want[i] {
+			t.Errorf("items[%d] = %q, want %q", i, got.Items[i], want[i])
+		}
+	}
+}

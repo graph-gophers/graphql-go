@@ -326,8 +326,8 @@ func (b *execBuilder) makeExec(t ast.Type, resolverType reflect.Type) (Resolvabl
 		return &Scalar{}, nil
 
 	case *ast.List:
-		if resolverType.Kind() != reflect.Slice {
-			return nil, fmt.Errorf("%s is not a slice", resolverType)
+		if k := resolverType.Kind(); k != reflect.Slice && k != reflect.Array {
+			return nil, fmt.Errorf("%s is not a slice or array", resolverType)
 		}
 		e := &List{}
 		if err := b.assignExec(&e.Elem, t.OfType, resolverType.Elem()); err != nil {
