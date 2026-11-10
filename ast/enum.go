@@ -11,6 +11,7 @@ type EnumTypeDefinition struct {
 	Name                 string
 	EnumValuesDefinition []*EnumValueDefinition
 	Desc                 string
+	DescIsSet            bool
 	Directives           DirectiveList
 	Loc                  errors.Location
 }
@@ -23,10 +24,12 @@ type EnumValueDefinition struct {
 	EnumValue  string
 	Directives DirectiveList
 	Desc       string
+	DescIsSet  bool
 	Loc        errors.Location
 }
 
-func (*EnumTypeDefinition) Kind() string          { return "ENUM" }
-func (t *EnumTypeDefinition) String() string      { return t.Name }
-func (t *EnumTypeDefinition) TypeName() string    { return t.Name }
-func (t *EnumTypeDefinition) Description() string { return t.Desc }
+func (*EnumTypeDefinition) Kind() string             { return "ENUM" }
+func (t *EnumTypeDefinition) String() string         { return t.Name }
+func (t *EnumTypeDefinition) TypeName() string       { return t.Name }
+func (t *EnumTypeDefinition) Description() string    { return t.Desc }
+func (t *EnumTypeDefinition) DescriptionIsSet() bool { return t.DescIsSet || t.Desc != "" }

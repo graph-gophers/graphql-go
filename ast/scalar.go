@@ -12,11 +12,13 @@ import "github.com/graph-gophers/graphql-go/errors"
 type ScalarTypeDefinition struct {
 	Name       string
 	Desc       string
+	DescIsSet  bool
 	Directives DirectiveList
 	Loc        errors.Location
 }
 
-func (*ScalarTypeDefinition) Kind() string          { return "SCALAR" }
-func (t *ScalarTypeDefinition) String() string      { return t.Name }
-func (t *ScalarTypeDefinition) TypeName() string    { return t.Name }
-func (t *ScalarTypeDefinition) Description() string { return t.Desc }
+func (*ScalarTypeDefinition) Kind() string             { return "SCALAR" }
+func (t *ScalarTypeDefinition) String() string         { return t.Name }
+func (t *ScalarTypeDefinition) TypeName() string       { return t.Name }
+func (t *ScalarTypeDefinition) Description() string    { return t.Desc }
+func (t *ScalarTypeDefinition) DescriptionIsSet() bool { return t.DescIsSet || t.Desc != "" }

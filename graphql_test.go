@@ -6807,3 +6807,93 @@ func TestFragmentExpansionLimit(t *testing.T) {
 		}
 	})
 }
+
+type emptyDescResolver struct{}
+
+func (r *emptyDescResolver) SomeField(args struct{ SomeArg *string }) *string {
+	return nil
+}
+
+func TestEmptyDescriptionPreserved(t *testing.T) {
+	sdl := `
+		"""
+		"""
+		type Query {
+			"""
+			"""
+			someField(
+				"""
+				"""
+				someArg: String
+			): String
+		}
+
+		"""
+		"""
+		enum SomeEnum {
+			"""
+			"""
+			SOME_VALUE
+		}
+	`
+	schema := graphql.MustParseSchema(sdl, &emptyDescResolver{}, graphql.UseStringDescriptions())
+
+	gqltesting.RunTests(t, []*gqltesting.Test{
+		{
+			Schema: schema,
+			Query: `{
+				__type(name: "Query") {
+					description
+					fields {
+						name
+						description
+						args {
+							name
+							description
+						}
+					}
+				}
+			}`,
+			ExpectedResult: `{
+				"__type": {
+					"description": "",
+					"fields": [
+						{
+							"name": "someField",
+							"description": "",
+							"args": [
+								{
+									"name": "someArg",
+									"description": ""
+								}
+							]
+						}
+					]
+				}
+			}`,
+		},
+		{
+			Schema: schema,
+			Query: `{
+				__type(name: "SomeEnum") {
+					description
+					enumValues {
+						name
+						description
+					}
+				}
+			}`,
+			ExpectedResult: `{
+				"__type": {
+					"description": "",
+					"enumValues": [
+						{
+							"name": "SOME_VALUE",
+							"description": ""
+						}
+					]
+				}
+			}`,
+		},
+	})
+}

@@ -7,7 +7,7 @@ import (
 func ParseInputValue(l *Lexer) *ast.InputValueDefinition {
 	p := &ast.InputValueDefinition{}
 	p.Loc = l.Location()
-	p.Desc = l.DescComment()
+	p.Desc, p.DescIsSet = l.ConsumeDescription()
 	p.Name = l.ConsumeIdentWithLoc()
 	l.ConsumeToken(':')
 	p.TypeLoc = l.Location()

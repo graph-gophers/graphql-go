@@ -13,12 +13,14 @@ type Union struct {
 	Name             string
 	UnionMemberTypes []*ObjectTypeDefinition
 	Desc             string
+	DescIsSet        bool
 	Directives       DirectiveList
 	TypeNames        []string
 	Loc              errors.Location
 }
 
-func (*Union) Kind() string          { return "UNION" }
-func (t *Union) String() string      { return t.Name }
-func (t *Union) TypeName() string    { return t.Name }
-func (t *Union) Description() string { return t.Desc }
+func (*Union) Kind() string             { return "UNION" }
+func (t *Union) String() string         { return t.Name }
+func (t *Union) TypeName() string       { return t.Name }
+func (t *Union) Description() string    { return t.Desc }
+func (t *Union) DescriptionIsSet() bool { return t.DescIsSet || t.Desc != "" }

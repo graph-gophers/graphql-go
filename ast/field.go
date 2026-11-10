@@ -11,6 +11,7 @@ type FieldDefinition struct {
 	Type       Type
 	Directives DirectiveList
 	Desc       string
+	DescIsSet  bool
 	Loc        errors.Location
 }
 

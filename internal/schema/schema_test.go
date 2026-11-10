@@ -9,6 +9,7 @@ import (
 	"github.com/graph-gophers/graphql-go/ast"
 	qerrors "github.com/graph-gophers/graphql-go/errors"
 	"github.com/graph-gophers/graphql-go/internal/schema"
+	"github.com/graph-gophers/graphql-go/introspection"
 )
 
 func TestDescriptionBeforeExtension(t *testing.T) {
@@ -84,6 +85,92 @@ func TestDescriptionsOnDefinitionsRemainSupported(t *testing.T) {
 	arg := field.Arguments.Get("arg")
 	if query.Desc != "type description" || field.Desc != "field description" || arg.Desc != "argument description" {
 		t.Fatalf("unexpected descriptions: type=%q field=%q argument=%q", query.Desc, field.Desc, arg.Desc)
+	}
+}
+
+func TestIntrospectionDescriptionPresence(t *testing.T) {
+	sdl := `
+		"" type Query {
+			"" field("" arg: String, missing: String, "text" text: String): String
+			plain: String
+		}
+		extend type Query { "" extended: String }
+		"" interface Node { "" name: String }
+		"" union Search = Query
+		"" enum Choice { "" EMPTY PLAIN "text" TEXT }
+		"" input Input { "" empty: String plain: String "text" text: String }
+		"" scalar Custom
+		type Undescribed { value: String }
+		"" directive @empty("" arg: String, missing: String) on FIELD
+		directive @plain on FIELD
+		# comment description
+		type Commented { value: String }
+	`
+	for _, useStrings := range []bool{false, true} {
+		t.Run(fmt.Sprintf("stringDescriptions=%t", useStrings), func(t *testing.T) {
+			s, err := schema.ParseSchema(sdl, useStrings)
+			if err != nil {
+				t.Fatal(err)
+			}
+			check := func(label string, got *string, want *string) {
+				t.Helper()
+				if got == nil && want == nil {
+					return
+				}
+				if got == nil || want == nil || *got != *want {
+					format := func(value *string) string {
+						if value == nil {
+							return "null"
+						}
+						return fmt.Sprintf("%q", *value)
+					}
+					t.Errorf("%s: got %s, want %s", label, format(got), format(want))
+				}
+			}
+			empty, text, comment := "", "text", "comment description"
+			var wantEmpty, wantText, wantComment *string
+			if useStrings {
+				wantEmpty, wantText = &empty, &text
+			} else {
+				wantComment = &comment
+			}
+			for _, name := range []string{"Query", "Node", "Search", "Choice", "Input", "Custom"} {
+				check(name, introspection.WrapType(s.Types[name]).Description(), wantEmpty)
+			}
+			check("Undescribed", introspection.WrapType(s.Types["Undescribed"]).Description(), nil)
+			check("Commented", introspection.WrapType(s.Types["Commented"]).Description(), wantComment)
+
+			fields := *introspection.WrapType(s.Types["Query"]).Fields(&struct{ IncludeDeprecated bool }{})
+			check("field", fields[0].Description(), wantEmpty)
+			check("plain field", fields[1].Description(), nil)
+			check("extension field", fields[2].Description(), wantEmpty)
+			args := fields[0].Args(&struct{ IncludeDeprecated bool }{})
+			check("argument", args[0].Description(), wantEmpty)
+			check("plain argument", args[1].Description(), nil)
+			check("text argument", args[2].Description(), wantText)
+
+			values := *introspection.WrapType(s.Types["Choice"]).EnumValues(&struct{ IncludeDeprecated bool }{})
+			check("enum value", values[0].Description(), wantEmpty)
+			check("plain enum value", values[1].Description(), nil)
+			check("text enum value", values[2].Description(), wantText)
+			inputs := *introspection.WrapType(s.Types["Input"]).InputFields(&struct{ IncludeDeprecated bool }{})
+			check("input field", inputs[0].Description(), wantEmpty)
+			check("plain input field", inputs[1].Description(), nil)
+			check("text input field", inputs[2].Description(), wantText)
+
+			for _, directive := range introspection.WrapSchema(s).Directives() {
+				switch directive.Name() {
+				case "empty":
+					check("directive", directive.Description(), wantEmpty)
+					args := directive.Args(&struct{ IncludeDeprecated bool }{})
+					check("directive argument", args[0].Description(), wantEmpty)
+					check("plain directive argument", args[1].Description(), nil)
+				case "plain":
+					check("plain directive", directive.Description(), nil)
+				}
+			}
+			check("list", introspection.WrapType(&ast.List{OfType: s.Types["Query"]}).Description(), nil)
+		})
 	}
 }
 

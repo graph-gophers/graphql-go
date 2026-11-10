@@ -10,6 +10,7 @@ type InputValueDefinition struct {
 	Type       Type
 	Default    Value
 	Desc       string
+	DescIsSet  bool
 	Directives DirectiveList
 	Loc        errors.Location
 	TypeLoc    errors.Location
@@ -36,12 +37,14 @@ func (l InputValueDefinitionList) Get(name string) *InputValueDefinition {
 type InputObject struct {
 	Name       string
 	Desc       string
+	DescIsSet  bool
 	Values     ArgumentsDefinition
 	Directives DirectiveList
 	Loc        errors.Location
 }
 
-func (*InputObject) Kind() string          { return "INPUT_OBJECT" }
-func (t *InputObject) String() string      { return t.Name }
-func (t *InputObject) TypeName() string    { return t.Name }
-func (t *InputObject) Description() string { return t.Desc }
+func (*InputObject) Kind() string             { return "INPUT_OBJECT" }
+func (t *InputObject) String() string         { return t.Name }
+func (t *InputObject) TypeName() string       { return t.Name }
+func (t *InputObject) Description() string    { return t.Desc }
+func (t *InputObject) DescriptionIsSet() bool { return t.DescIsSet || t.Desc != "" }
