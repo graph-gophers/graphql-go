@@ -168,3 +168,54 @@ func nestedObjectLiteral(depth int) string {
 func nestedListType(depth int) string {
 	return "query($value:" + strings.Repeat("[", depth) + "Int" + strings.Repeat("]", depth) + "){field}"
 }
+
+func TestParseAcceptsNumberSeparatedFromName(t *testing.T) {
+	t.Parallel()
+
+	for _, q := range []string{
+		`{ a(b: 123 cde: 456) }`,
+		`{ a(b: 123, cde: 456) }`,
+		`{ a(b: 1.0 y: 2) }`,
+	} {
+		t.Run(q, func(t *testing.T) {
+			t.Parallel()
+
+			if _, err := Parse(q); err != nil {
+				t.Fatalf("expected %q to parse, got: %v", q, err)
+			}
+		})
+	}
+}
+
+func TestNumberFollowedByNameStartShouldFail(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "integer immediately followed by name",
+			input: `{ a(b: 123cde: 456) }`,
+		},
+		{
+			name:  "float immediately followed by name",
+			input: `{ a(b: 1.0y: 2) }`,
+		},
+		{
+			name:  "float with exponent immediately followed by name",
+			input: `{ a(b: 12.3e5cfg: 456) }`,
+		},
+		{
+			name:  "integer followed by name in input object default",
+			input: `query($input: SomeInput = { i1: 12i2: 15 }) { t }`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse(tt.input)
+			if err == nil {
+				t.Errorf("expected a parse error for input %q, but parsing succeeded", tt.input)
+			}
+		})
+	}
+}
