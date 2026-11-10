@@ -65,7 +65,7 @@ func validateSelections(ctx context.Context, sels []selected.Selection, path *pa
 	collectFieldsToValidate(sels, s, &fields, make(map[string]*fieldToValidate))
 
 	for _, f := range fields {
-		errs = append(errs, validateFieldSelection(ctx, s, f, &pathSegment{path, f.field.Alias})...)
+		errs = append(errs, validateFieldSelection(ctx, s, f, &pathSegment{parent: path, value: f.field.Alias, loc: f.field.Loc})...)
 	}
 
 	return errs
@@ -73,5 +73,5 @@ func validateSelections(ctx context.Context, sels []selected.Selection, path *pa
 
 func validateList(ctx context.Context, sels []selected.Selection, typ *ast.List, path *pathSegment, s *resolvable.Schema) []*errors.QueryError {
 	// For lists, we only need to apply validation once. Nothing has been evaluated, so we have no list, and need to use '0' as the path index
-	return validateSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, 0}, s)
+	return validateSelectionSet(ctx, sels, typ.OfType, &pathSegment{parent: path, value: 0}, s)
 }

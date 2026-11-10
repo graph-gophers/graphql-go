@@ -141,7 +141,7 @@ func (r *Request) Subscribe(ctx context.Context, s *resolvable.Schema, op *ast.O
 
 						buf := subR.acquireBuffer()
 						defer subR.releaseBuffer(buf)
-						subR.execSelectionSet(subCtx, f.sels, f.field.Type, &pathSegment{nil, f.field.Alias}, s, resp, buf)
+						subR.execSelectionSet(subCtx, f.sels, f.field.Type, &pathSegment{value: f.field.Alias, loc: f.field.Loc}, s, resp, buf)
 
 						propagateChildError := false
 						if _, nonNullChild := f.field.Type.(*ast.NonNull); nonNullChild && resolvedToNull(buf) {

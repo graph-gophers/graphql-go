@@ -1871,7 +1871,10 @@ func TestEnums(t *testing.T) {
 			ExpectedErrors: []*gqlerrors.QueryError{
 				{
 					Message: "Invalid value STAR_TREK.\nExpected type Episode, found STAR_TREK.",
-					Path:    []any{"hero", "appearsIn", 0},
+					Locations: []gqlerrors.Location{
+						{Line: 5, Column: 7},
+					},
+					Path: []any{"hero", "appearsIn", 0},
 				},
 			},
 		},
@@ -6938,6 +6941,39 @@ func TestArrayAsGraphQLListValue(t *testing.T) {
 	for i := range want {
 		if got.Items[i] != want[i] {
 			t.Errorf("items[%d] = %q, want %q", i, got.Items[i], want[i])
+		}
+	}
+}
+
+type invalidEnumValueResolver struct{}
+
+func (r *invalidEnumValueResolver) Color() string {
+	return "YELLOW"
+}
+
+func TestEnumCompletionErrorIncludesLocation(t *testing.T) {
+	schema := graphql.MustParseSchema(`
+		schema {
+			query: Query
+		}
+		type Query {
+			color: Color!
+		}
+		enum Color {
+			RED
+			GREEN
+			BLUE
+		}
+	`, &invalidEnumValueResolver{})
+
+	resp := schema.Exec(context.Background(), `{ color }`, "", nil)
+	if len(resp.Errors) == 0 {
+		t.Fatal("expected an error for the invalid enum value, got none")
+	}
+
+	for i, err := range resp.Errors {
+		if len(err.Locations) == 0 {
+			t.Errorf("error[%d]: expected Locations to be non-empty for value completion error, but got none; error: %+v", i, err)
 		}
 	}
 }

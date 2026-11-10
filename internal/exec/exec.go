@@ -151,14 +151,14 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 				defer wg.Done()
 				defer r.handlePanic(ctx)
 				f.out = r.acquireBuffer()
-				execFieldSelection(ctx, r, s, f, &pathSegment{path, f.field.Alias}, true)
+				execFieldSelection(ctx, r, s, f, &pathSegment{parent: path, value: f.field.Alias, loc: f.field.Loc}, true)
 			}(f)
 		}
 		wg.Wait()
 	} else {
 		for _, f := range fields {
 			f.out = r.acquireBuffer()
-			execFieldSelection(ctx, r, s, f, &pathSegment{path, f.field.Alias}, true)
+			execFieldSelection(ctx, r, s, f, &pathSegment{parent: path, value: f.field.Alias, loc: f.field.Loc}, true)
 		}
 	}
 
@@ -364,6 +364,9 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 		if !valid {
 			err := errors.Errorf("Invalid value %s.\nExpected type %s, found %s.", name, t.Name, name)
 			err.Path = path.toSlice()
+			if loc := path.location(); loc != (errors.Location{}) {
+				err.Locations = []errors.Location{loc}
+			}
 			r.AddError(err)
 			out.WriteString("null")
 			return
@@ -398,14 +401,14 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 				defer wg.Done()
 				defer func() { <-sem }()
 				defer r.handlePanic(ctx)
-				r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), entryouts[i])
+				r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{parent: path, value: i}, s, resolver.Index(i), entryouts[i])
 			}(i)
 		}
 		wg.Wait()
 	} else {
 		for i := range l {
 			entryouts[i] = r.acquireBuffer()
-			r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{path, i}, s, resolver.Index(i), entryouts[i])
+			r.execSelectionSet(ctx, sels, typ.OfType, &pathSegment{parent: path, value: i}, s, resolver.Index(i), entryouts[i])
 		}
 	}
 
@@ -445,6 +448,7 @@ func unwrapNonNull(t ast.Type) (ast.Type, bool) {
 type pathSegment struct {
 	parent *pathSegment
 	value  any
+	loc    errors.Location
 }
 
 func (p *pathSegment) toSlice() []any {
@@ -452,4 +456,13 @@ func (p *pathSegment) toSlice() []any {
 		return nil
 	}
 	return append(p.parent.toSlice(), p.value)
+}
+
+func (p *pathSegment) location() errors.Location {
+	for ; p != nil; p = p.parent {
+		if p.loc != (errors.Location{}) {
+			return p.loc
+		}
+	}
+	return errors.Location{}
 }
