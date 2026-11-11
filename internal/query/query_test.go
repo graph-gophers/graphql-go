@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/query"
 )
@@ -218,5 +219,18 @@ func TestNumberFollowedByNameStartShouldFail(t *testing.T) {
 				t.Errorf("expected a parse error for input %q, but parsing succeeded", tt.input)
 			}
 		})
+	}
+}
+
+func TestParseBlockStringEscapedTripleQuote(t *testing.T) {
+	t.Parallel()
+
+	doc, err := query.Parse(`{ a(b: """x \""" y""") }`)
+	if err != nil {
+		t.Fatalf("expected query to parse, got error: %v", err)
+	}
+	got := doc.Operations[0].Selections[0].(*ast.Field).Arguments[0].Value.Deserialize(nil)
+	if want := `x """ y`; got != want {
+		t.Fatalf("got %q, want %q", got, want)
 	}
 }

@@ -267,6 +267,13 @@ func (l *Lexer) consumeTripleQuoteComment() string {
 			numQuotes = 0
 		}
 		buf.WriteRune(l.next)
+		if numQuotes == 3 && bytes.HasSuffix(buf.Bytes(), []byte(`\"""`)) {
+			// \""" is an escaped triple quote, not the end of the block string.
+			buf.Truncate(buf.Len() - 4)
+			buf.WriteString(`"""`)
+			numQuotes = 0
+			continue
+		}
 		if numQuotes == 3 || l.next == scanner.EOF {
 			break
 		}
