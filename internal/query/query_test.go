@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/internal/common"
 	"github.com/graph-gophers/graphql-go/internal/query"
 )
@@ -216,6 +217,45 @@ func TestNumberFollowedByNameStartShouldFail(t *testing.T) {
 			_, err := query.Parse(tt.input)
 			if err == nil {
 				t.Errorf("expected a parse error for input %q, but parsing succeeded", tt.input)
+			}
+		})
+	}
+}
+
+func TestParseBlockStringEscapedTripleQuote(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "escaped triple quote with content after it",
+			input: `{ a(b: """x \""" y""") }`,
+			want:  `x """ y`,
+		},
+		{
+			name:  "multiple backslashes before escaped triple quote",
+			input: `{ a(b: """x ` + `\\` + `""" y""") }`,
+			want:  `x \""" y`,
+		},
+		{
+			name:  "escaped triple quote immediately before closing delimiter",
+			input: `{ a(b: """x \"""""" ) }`,
+			want:  `x """`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc, err := query.Parse(tt.input)
+			if err != nil {
+				t.Fatalf("expected query to parse, got error: %v", err)
+			}
+			got := doc.Operations[0].Selections[0].(*ast.Field).Arguments[0].Value.Deserialize(nil)
+			if got != tt.want {
+				t.Fatalf("got %q, want %q", got, tt.want)
 			}
 		})
 	}

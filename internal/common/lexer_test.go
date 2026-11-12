@@ -71,6 +71,17 @@ type Hello {
 }`,
 	expected:              "New style comments\nAnother line",
 	useStringDescriptions: true,
+}, {
+	description: "escaped triple quote in block string description",
+	definition: `
+"""
+Use \""" to quote
+"""
+type Hello {
+	world: String!
+}`,
+	expected:              `Use """ to quote`,
+	useStringDescriptions: true,
 }}
 
 func TestConsume(t *testing.T) {
