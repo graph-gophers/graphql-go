@@ -6966,14 +6966,28 @@ func TestEnumCompletionErrorIncludesLocation(t *testing.T) {
 		}
 	`, &invalidEnumValueResolver{})
 
-	resp := schema.Exec(context.Background(), `{ color }`, "", nil)
-	if len(resp.Errors) == 0 {
-		t.Fatal("expected an error for the invalid enum value, got none")
+	tests := []struct {
+		name     string
+		query    string
+		location gqlerrors.Location
+	}{
+		{"unaliased", `{ color }`, gqlerrors.Location{Line: 1, Column: 3}},
+		{"aliased", `{ display: color }`, gqlerrors.Location{Line: 1, Column: 3}},
+		{"alias on separate line", "{\n  display:\n    color\n}", gqlerrors.Location{Line: 2, Column: 3}},
 	}
-
-	for i, err := range resp.Errors {
-		if len(err.Locations) == 0 {
-			t.Errorf("error[%d]: expected Locations to be non-empty for value completion error, but got none; error: %+v", i, err)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := schema.Exec(context.Background(), tt.query, "", nil)
+			if len(resp.Errors) != 1 {
+				t.Fatalf("expected one error for the invalid enum value, got %v", resp.Errors)
+			}
+			err := resp.Errors[0]
+			if err.Message != "Invalid value YELLOW.\nExpected type Color, found YELLOW." {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(err.Locations) != 1 || err.Locations[0] != tt.location {
+				t.Errorf("got locations %v, want [%v]", err.Locations, tt.location)
+			}
+		})
 	}
 }

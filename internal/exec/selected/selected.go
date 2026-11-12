@@ -195,7 +195,7 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 				flattenedSels = append(flattenedSels, &SchemaField{
 					Field:      *fe,
 					Alias:      field.Alias.Name,
-					Loc:        field.Name.Loc,
+					Loc:        field.Alias.Loc,
 					Args:       args,
 					PackedArgs: packedArgs,
 					Sels:       fieldSels,
