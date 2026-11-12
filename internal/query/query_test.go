@@ -225,12 +225,38 @@ func TestNumberFollowedByNameStartShouldFail(t *testing.T) {
 func TestParseBlockStringEscapedTripleQuote(t *testing.T) {
 	t.Parallel()
 
-	doc, err := query.Parse(`{ a(b: """x \""" y""") }`)
-	if err != nil {
-		t.Fatalf("expected query to parse, got error: %v", err)
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "escaped triple quote with content after it",
+			input: `{ a(b: """x \""" y""") }`,
+			want:  `x """ y`,
+		},
+		{
+			name:  "multiple backslashes before escaped triple quote",
+			input: `{ a(b: """x ` + `\\` + `""" y""") }`,
+			want:  `x \""" y`,
+		},
+		{
+			name:  "escaped triple quote immediately before closing delimiter",
+			input: `{ a(b: """x \"""""" ) }`,
+			want:  `x """`,
+		},
 	}
-	got := doc.Operations[0].Selections[0].(*ast.Field).Arguments[0].Value.Deserialize(nil)
-	if want := `x """ y`; got != want {
-		t.Fatalf("got %q, want %q", got, want)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc, err := query.Parse(tt.input)
+			if err != nil {
+				t.Fatalf("expected query to parse, got error: %v", err)
+			}
+			got := doc.Operations[0].Selections[0].(*ast.Field).Arguments[0].Value.Deserialize(nil)
+			if got != tt.want {
+				t.Fatalf("got %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
