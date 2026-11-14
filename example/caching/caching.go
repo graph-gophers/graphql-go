@@ -25,12 +25,12 @@ const Schema = `
 type Resolver struct{}
 
 func (r Resolver) Hello(ctx context.Context, args struct{ Name string }) string {
-	cache.AddHint(ctx, cache.Hint{MaxAge: cache.TTL(1 * time.Hour), Scope: cache.ScopePublic})
+	cache.AddHint(ctx, cache.Hint{MaxAge: new(1 * time.Hour), Scope: cache.ScopePublic})
 	return "Hello " + args.Name + "!"
 }
 
 func (r Resolver) Me(ctx context.Context) *UserProfile {
-	cache.AddHint(ctx, cache.Hint{MaxAge: cache.TTL(1 * time.Minute), Scope: cache.ScopePrivate})
+	cache.AddHint(ctx, cache.Hint{MaxAge: new(1 * time.Minute), Scope: cache.ScopePrivate})
 	return &UserProfile{name: "World"}
 }
 

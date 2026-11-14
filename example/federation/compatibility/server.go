@@ -230,9 +230,9 @@ type Service struct {
 func populateResolver(sdl string) *resolver {
 	defaultUser := &User{
 		Email:                         graphql.ID("support@apollographql.com"),
-		Name:                          strptr("Jane Smith"),
-		TotalProductsCreated:          intptr(1337),
-		AverageProductsCreatedPerYear: intptr(134),
+		Name:                          new("Jane Smith"),
+		TotalProductsCreated:          new(int32(1337)),
+		AverageProductsCreatedPerYear: new(int32(134)),
 		YearsOfEmployment:             10,
 	}
 	users := map[graphql.ID]User{
@@ -242,13 +242,13 @@ func populateResolver(sdl string) *resolver {
 	prodResearch1 := ProductResearch{
 		Study: CaseStudy{
 			CaseNumber:  "1234",
-			Description: strptr("Federation Study"),
+			Description: new("Federation Study"),
 		},
 	}
 	prodResearch2 := ProductResearch{
 		Study: CaseStudy{
 			CaseNumber:  "1235",
-			Description: strptr("Studio Study"),
+			Description: new("Studio Study"),
 		},
 	}
 	researches := map[graphql.ID]ProductResearch{
@@ -257,22 +257,22 @@ func populateResolver(sdl string) *resolver {
 	}
 
 	dim := ProductDimension{
-		Size:   strptr("small"),
-		Weight: floatptr(1),
-		Unit:   strptr("kg"),
+		Size:   new("small"),
+		Weight: new(float64(1)),
+		Unit:   new("kg"),
 	}
 	prod1 := Product{
 		ID:         "apollo-federation",
-		SKU:        strptr("federation"),
+		SKU:        new("federation"),
 		Dimensions: &dim,
 		CreatedBy:  defaultUser,
-		Package:    strptr("@apollo/federation"),
+		Package:    new("@apollo/federation"),
 		Variation:  &ProductVariation{ID: "OSS"},
 		Research:   []ProductResearch{prodResearch1},
 	}
 	prod2 := Product{
 		ID:         "apollo-studio",
-		SKU:        strptr("studio"),
+		SKU:        new("studio"),
 		Dimensions: &dim,
 		CreatedBy:  defaultUser,
 		Variation:  &ProductVariation{ID: "platform"},
@@ -286,7 +286,7 @@ func populateResolver(sdl string) *resolver {
 	depProduct1 := DeprecatedProduct{
 		SKU:       "apollo-federation-v1",
 		Package:   "@apollo/federation-v1",
-		Reason:    strptr("Migrate to Federation V2"),
+		Reason:    new("Migrate to Federation V2"),
 		CreatedBy: defaultUser,
 	}
 	depProducts := map[string]DeprecatedProduct{
@@ -307,18 +307,6 @@ func populateResolver(sdl string) *resolver {
 		Entities:    entities(depProducts, invs, products, researches, users),
 		Service:     service(sdl),
 	}
-}
-
-func intptr(i int32) *int32 {
-	return &i
-}
-
-func strptr(s string) *string {
-	return &s
-}
-
-func floatptr(f float64) *float64 {
-	return &f
 }
 
 func main() {

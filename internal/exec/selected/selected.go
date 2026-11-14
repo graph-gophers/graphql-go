@@ -231,7 +231,7 @@ func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag 
 		if !ok && frag.On.Name != "" {
 			a, ok2 := e.TypeAssertions[frag.On.Name]
 			if !ok2 {
-				panic(fmt.Errorf("%q does not implement %q", frag.On, e.Name)) // TODO proper error handling
+				panic(fmt.Errorf("%q does not implement %q", frag.On.Name, e.Name)) // TODO proper error handling
 			}
 
 			return []Selection{&TypeAssertion{
@@ -259,7 +259,7 @@ func applyFragment(r *Request, s *resolvable.Schema, e *resolvable.Object, frag 
 				}
 			}
 			if len(sels) == 0 {
-				panic(fmt.Errorf("%q does not implement %q", e.Name, frag.On)) // TODO proper error handling
+				panic(fmt.Errorf("%q does not implement %q", e.Name, frag.On.Name)) // TODO proper error handling
 			}
 			return sels
 		}

@@ -349,7 +349,7 @@ func mergeExtensions(s *ast.Schema) error {
 
 			for _, field := range e.Values {
 				if og.Values.Get(field.Name.Name) != nil {
-					return fmt.Errorf("extended field %q already exists", field.Name)
+					return fmt.Errorf("extended field %q already exists", field.Name.Name)
 				}
 			}
 			og.Values = append(og.Values, e.Values...)

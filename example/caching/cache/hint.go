@@ -45,8 +45,10 @@ func (h Hint) String() string {
 }
 
 // TTL defines the cache duration.
+//
+//go:fix inline
 func TTL(d time.Duration) *time.Duration {
-	return &d
+	return new(d)
 }
 
 // AddHint applies a caching hint to the request context.
