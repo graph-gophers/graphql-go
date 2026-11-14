@@ -687,7 +687,6 @@ func fieldCount(t reflect.Type, count, tagsCount map[string]int) (map[string]int
 	}
 
 	for field := range t.Fields() {
-		field := field
 		var fieldName, gt string
 		var hasTag bool
 		if gt, hasTag = field.Tag.Lookup("graphql"); hasTag && gt != "" {
