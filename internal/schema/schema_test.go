@@ -828,7 +828,7 @@ Second line of the description.
 				}
 				for _, pt := range typ.Values {
 					if _, ok := posible[pt.Name.Name]; !ok {
-						return fmt.Errorf("Unexpected possible type %q", pt.Name)
+						return fmt.Errorf("Unexpected possible type %q", pt.Name.Name)
 					}
 				}
 				categoryField := typ.Values.Get("category")
@@ -873,7 +873,7 @@ Second line of the description.
 				name: String!
 			}`,
 			validateError: func(err error) error {
-				msg := `extended field {"name" {'\x06' '\x05'}} already exists`
+				msg := `extended field "name" already exists`
 				if err == nil || err.Error() != msg {
 					return fmt.Errorf("expected error %q, but got %q", msg, err)
 				}
