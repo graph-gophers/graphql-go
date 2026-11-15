@@ -3952,6 +3952,112 @@ func TestErrorPropagation(t *testing.T) {
 	})
 }
 
+// largeText is above the size from which the executor keeps values out of line,
+// and contains every kind of character that encoding/json escapes.
+var largeText = strings.Repeat("<a href=\"x\">&amp;</a>\t\\\b\f\r\n\x00\x7f\u2028\u2029 日本 \xff\xe2\x80 ", 4<<10)
+
+type largeJSON json.RawMessage
+
+func (largeJSON) ImplementsGraphQLType(name string) bool { return name == "JSON" }
+
+func (*largeJSON) UnmarshalGraphQL(input any) error { return errors.New("unsupported") }
+
+func (j largeJSON) MarshalJSON() ([]byte, error) { return j, nil }
+
+type largeScalarsResolver struct{ fail bool }
+
+func (r *largeScalarsResolver) Node(ctx context.Context) *largeScalarsResolver { return r }
+func (r *largeScalarsResolver) Nodes() *[]*largeScalarsResolver {
+	return &[]*largeScalarsResolver{{}, {fail: true}}
+}
+func (r *largeScalarsResolver) Text(ctx context.Context) string { return largeText }
+func (r *largeScalarsResolver) JSON() largeJSON {
+	b, err := json.MarshalIndent(map[string]string{"text": largeText}, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+func (r *largeScalarsResolver) Failing() (string, error) {
+	if r.fail {
+		return "", errExample
+	}
+	return largeText, nil
+}
+
+func TestLargeScalars(t *testing.T) {
+	t.Parallel()
+
+	const schemaString = `
+		scalar JSON
+		type Query {
+			node: Node!
+			nodes: [Node!]
+		}
+		type Node {
+			node: Node!
+			text: String!
+			json: JSON!
+			failing: String!
+		}
+	`
+	schemas := map[string]*graphql.Schema{
+		"pooled":   graphql.MustParseSchema(schemaString, &largeScalarsResolver{}),
+		"unpooled": graphql.MustParseSchema(schemaString, &largeScalarsResolver{}, graphql.DisableMemoryPooling()),
+		// Pools even the buffers that large values were written to.
+		"pooled large buffers": graphql.MustParseSchema(schemaString, &largeScalarsResolver{}, graphql.MaxPooledBufferCap(1<<30)),
+	}
+
+	text, err := json.Marshal(largeText)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonValue, err := json.Marshal((&largeScalarsResolver{}).JSON())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tt := range []struct {
+		query   string
+		data    string
+		errPath []any
+	}{
+		{
+			query: `{ node { node { text json t: text } } }`,
+			data:  fmt.Sprintf(`{"node":{"node":{"text":%s,"json":%s,"t":%s}}}`, text, jsonValue, text),
+		},
+		{
+			// The first node resolves to large values before the second one
+			// resolves to null and nulls the whole list.
+			query:   `{ node { text } nodes { text json failing } }`,
+			data:    fmt.Sprintf(`{"node":{"text":%s},"nodes":null}`, text),
+			errPath: []any{"nodes", 1, "failing"},
+		},
+	} {
+		for name, schema := range schemas {
+			// Execute concurrently, so that pooled buffers get reused while
+			// other responses are still being assembled.
+			var wg sync.WaitGroup
+			for range 8 {
+				wg.Go(func() {
+					for range 4 {
+						// Compare the raw bytes, as gqltesting normalizes the escaping.
+						res := schema.Exec(context.Background(), tt.query, "", nil)
+						if string(res.Data) != tt.data {
+							t.Errorf("%s: %s: got data that differs from json.Marshal", name, tt.query)
+						}
+						if tt.errPath == nil && len(res.Errors) != 0 || tt.errPath != nil && (len(res.Errors) != 1 || fmt.Sprint(res.Errors[0].Path) != fmt.Sprint(tt.errPath)) {
+							t.Errorf("%s: %s: got errors %v, want path %v", name, tt.query, res.Errors, tt.errPath)
+						}
+					}
+				})
+			}
+			wg.Wait()
+		}
+	}
+}
+
 type assertionResolver struct{}
 
 func (r *assertionResolver) ToHuman() (*struct{ Name string }, bool) {

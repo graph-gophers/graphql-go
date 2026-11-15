@@ -3,7 +3,6 @@ package exec
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"sync"
@@ -19,9 +18,9 @@ import (
 	"github.com/graph-gophers/graphql-go/trace/tracer"
 )
 
-var bytesBufferPool = sync.Pool{ //nolint:gochecknoglobals
+var outputPool = sync.Pool{ //nolint:gochecknoglobals
 	New: func() any {
-		return &bytes.Buffer{}
+		return new(output)
 	},
 }
 
@@ -51,7 +50,7 @@ type extensionser interface {
 }
 
 func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *ast.OperationDefinition) ([]byte, []*errors.QueryError) {
-	var out bytes.Buffer
+	var out output
 	func() {
 		defer r.handlePanic(ctx)
 		sels, err := selected.ApplyOperation(&r.Request, s, op)
@@ -85,7 +84,7 @@ func (r *Request) Execute(ctx context.Context, s *resolvable.Schema, op *ast.Ope
 		return nil, []*errors.QueryError{errors.Errorf("%s", err)}
 	}
 
-	return out.Bytes(), r.Errs
+	return out.bytes(), r.Errs
 }
 
 type fieldToValidate struct {
@@ -97,37 +96,36 @@ type fieldToExec struct {
 	field    *selected.SchemaField
 	sels     []selected.Selection
 	resolver reflect.Value
-	out      *bytes.Buffer
+	out      *output
 }
 
 func (f *fieldToExec) resolve(ctx context.Context) (reflect.Value, error) {
 	return f.field.Resolve(ctx, f.resolver)
 }
 
-func resolvedToNull(b *bytes.Buffer) bool {
-	return bytes.Equal(b.Bytes(), nullLiteral)
+func resolvedToNull(o *output) bool {
+	return len(o.segs) == 0 && bytes.Equal(o.tail.Bytes(), nullLiteral)
 }
 
-func (r *Request) acquireBuffer() *bytes.Buffer {
+func (r *Request) acquireBuffer() *output {
 	if r.DisableMemoryPooling {
-		return &bytes.Buffer{}
+		return new(output)
 	}
-	b := bytesBufferPool.Get().(*bytes.Buffer)
-	b.Reset()
-	return b
+	return outputPool.Get().(*output)
 }
 
-func (r *Request) releaseBuffer(b *bytes.Buffer) {
+func (r *Request) releaseBuffer(o *output) {
 	if r.DisableMemoryPooling {
 		return
 	}
-	if b == nil {
+	if o == nil {
 		return
 	}
-	if b.Cap() > r.MaxPooledBufferCapacity {
+	if o.tail.Cap() > r.MaxPooledBufferCapacity {
 		return
 	}
-	bytesBufferPool.Put(b)
+	o.Reset() // drops references to large values
+	outputPool.Put(o)
 }
 
 func (r *Request) releaseFieldBuffers(fields []*fieldToExec) {
@@ -137,7 +135,7 @@ func (r *Request) releaseFieldBuffers(fields []*fieldToExec) {
 	}
 }
 
-func (r *Request) execSelections(ctx context.Context, sels []selected.Selection, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *bytes.Buffer, serially bool) {
+func (r *Request) execSelections(ctx context.Context, sels []selected.Selection, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *output, serially bool) {
 	async := !serially && selected.HasAsyncSel(sels)
 
 	var fields []*fieldToExec
@@ -181,7 +179,7 @@ func (r *Request) execSelections(ctx context.Context, sels []selected.Selection,
 		out.WriteString(f.field.Alias)
 		out.WriteByte('"')
 		out.WriteByte(':')
-		out.Write(f.out.Bytes())
+		out.writeOutput(f.out)
 		r.releaseBuffer(f.out)
 		f.out = nil
 	}
@@ -307,7 +305,7 @@ func execFieldSelection(ctx context.Context, r *Request, s *resolvable.Schema, f
 	r.execSelectionSet(traceCtx, f.sels, f.field.Type, path, s, result, f.out)
 }
 
-func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selection, typ ast.Type, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *bytes.Buffer) {
+func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selection, typ ast.Type, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *output) {
 	t, nonNull := unwrapNonNull(typ)
 
 	// a reflect.Value of a nil interface will show up as an Invalid value
@@ -342,11 +340,9 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 
 	case *ast.ScalarTypeDefinition:
 		v := resolver.Interface()
-		data, err := json.Marshal(v)
-		if err != nil {
+		if err := out.writeScalar(v); err != nil {
 			panic(errors.Errorf("could not marshal %v: %s", v, err))
 		}
-		out.Write(data)
 
 	case *ast.EnumTypeDefinition:
 		var stringer fmt.Stringer = resolver
@@ -380,9 +376,9 @@ func (r *Request) execSelectionSet(ctx context.Context, sels []selected.Selectio
 	}
 }
 
-func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *ast.List, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *bytes.Buffer) {
+func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *ast.List, path *pathSegment, s *resolvable.Schema, resolver reflect.Value, out *output) {
 	l := resolver.Len()
-	entryouts := make([]*bytes.Buffer, l)
+	entryouts := make([]*output, l)
 
 	if selected.HasAsyncSel(sels) {
 		// Limit the number of concurrent goroutines spawned as it can lead to large
@@ -431,7 +427,7 @@ func (r *Request) execList(ctx context.Context, sels []selected.Selection, typ *
 		if i > 0 {
 			out.WriteByte(',')
 		}
-		out.Write(entryout.Bytes())
+		out.writeOutput(entryout)
 		r.releaseBuffer(entryout)
 		entryouts[i] = nil
 	}
