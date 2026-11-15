@@ -19,6 +19,8 @@ func FuzzWriteScalar(f *testing.F) {
 		"\xff\xfe \xed\xa0\x80 \xe2\x80",
 		"日本語 🎉",
 		` { "a" : [ 1 , "<\u2028>" ] } `,
+		strings.Repeat("\x00", 12000),
+		`"` + strings.Repeat("<", 11000) + `"`,
 	} {
 		f.Add(s)
 	}
@@ -35,12 +37,13 @@ func FuzzWriteScalar(f *testing.F) {
 				t.Fatalf("%T %q: got error %v, want %v", v, v, err, wantErr)
 			}
 			if err == nil {
+				segmented := len(o.segs) > 0
 				got := o.bytes()
 				if string(got) != "["+string(want)+"]" {
 					t.Fatalf("%T %q: got %q, want [%q]", v, v, got, want)
 				}
 				// Large values must be encoded straight into a buffer of the exact size.
-				if len(want) >= largeValueSize && cap(got) != len(got) {
+				if segmented && cap(got) != len(got) {
 					t.Fatalf("%T %q: got capacity %d for %d bytes", v, v, cap(got), len(got))
 				}
 			}
