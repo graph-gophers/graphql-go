@@ -3,6 +3,7 @@ package exec
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"unicode/utf8"
 )
@@ -153,16 +154,27 @@ func (o *output) writeMarshaler(m json.Marshaler) error {
 		}
 	}
 	if err != nil {
-		// The error json.Marshal reports differs between the v1 and v2 backed
-		// encoding/json, so let it report the error. This only calls
-		// m.MarshalJSON again when it failed or returned invalid JSON.
-		if _, mErr := json.Marshal(m); mErr != nil {
-			return mErr
+		t := reflect.TypeOf(m)
+		if marshalerErrorAddrType && t.Kind() != reflect.Pointer {
+			t = reflect.PointerTo(t)
 		}
-		return &json.MarshalerError{Type: reflect.TypeOf(m), Err: err}
+		return &json.MarshalerError{Type: t, Err: err}
 	}
 	return nil
 }
+
+// marshalerErrorAddrType reports whether json.Marshal names the pointer type
+// of a non-pointer marshaler in its errors, as encoding/json backed by v2
+// (GOEXPERIMENT=jsonv2, the default since Go 1.27) does.
+var marshalerErrorAddrType = func() bool { //nolint:gochecknoglobals
+	_, err := json.Marshal(failingMarshaler{})
+	var me *json.MarshalerError
+	return errors.As(err, &me) && me.Type.Kind() == reflect.Pointer
+}()
+
+type failingMarshaler struct{}
+
+func (failingMarshaler) MarshalJSON() ([]byte, error) { return nil, errors.New("fail") }
 
 // htmlEscapeGrowth returns by how many bytes json.HTMLEscape grows b.
 func htmlEscapeGrowth(b []byte) int {
