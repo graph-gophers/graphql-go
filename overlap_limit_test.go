@@ -1,13 +1,16 @@
 package graphql_test
 
 import (
+	"context"
+	"math"
+	"strings"
 	"testing"
 
 	graphql "github.com/graph-gophers/graphql-go"
 	gqlerrors "github.com/graph-gophers/graphql-go/errors"
 )
 
-const overlapLimitSchemaSDL = `schema { query: Query } type Query { root: Thing } type Thing { id: ID! name: String }`
+const overlapLimitSchemaSDL = `schema { query: Query } type Query { root: Thing } type Thing { id: ID! name: String self: Thing! }`
 
 type overlapLimitRoot struct{}
 
@@ -15,11 +18,10 @@ func (r *overlapLimitRoot) Root() *overlapThing { return &overlapThing{} }
 
 type overlapThing struct{}
 
-func (t *overlapThing) ID() graphql.ID { return graphql.ID("1") }
-func (t *overlapThing) Name() *string  { s := "n"; return &s }
+func (t *overlapThing) ID() graphql.ID      { return graphql.ID("1") }
+func (t *overlapThing) Name() *string       { s := "n"; return &s }
+func (t *overlapThing) Self() *overlapThing { return t }
 
-// TestOverlapValidationLimit exercises overlap pair limit behaviors (exceeded, unlimited, not reached)
-// in a single table-driven test for clarity and concision.
 func TestOverlapValidationLimit(t *testing.T) {
 	t.Parallel()
 
@@ -47,18 +49,31 @@ func TestOverlapValidationLimit(t *testing.T) {
 			comment:        "should trigger OverlapValidationLimitExceeded",
 		},
 		{
-			name:           "unlimited_no_option",
-			opts:           []graphql.SchemaOpt{}, // no option => unlimited
+			name:           "default_not_reached",
 			query:          `query { root { id id id id id } }`,
 			expectLimitErr: false,
-			comment:        "no limit option supplied, cap disabled",
+			comment:        "default limit not reached",
 		},
 		{
-			name:           "not_reached",
-			opts:           []graphql.SchemaOpt{graphql.OverlapValidationLimit(100)}, // 3 id fields -> combinations C(3,2)=3 < 100 => no error
+			name:           "at_limit",
+			opts:           []graphql.SchemaOpt{graphql.OverlapValidationLimit(3)},
 			query:          `query { root { id id id } }`,
 			expectLimitErr: false,
-			comment:        "below configured limit",
+			comment:        "exactly at configured limit",
+		},
+		{
+			name:           "shared_across_operations",
+			opts:           []graphql.SchemaOpt{graphql.OverlapValidationLimit(1)},
+			query:          `query A { root { id id } } query B { root { id id } }`,
+			expectLimitErr: true,
+			comment:        "limit applies to the whole document",
+		},
+		{
+			name:           "fragment_definition",
+			opts:           []graphql.SchemaOpt{graphql.OverlapValidationLimit(1)},
+			query:          `query { root { ...F } } fragment F on Thing { id id id }`,
+			expectLimitErr: true,
+			comment:        "fragment validation respects the limit",
 		},
 	}
 
@@ -73,4 +88,55 @@ func TestOverlapValidationLimit(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestOverlapValidationDefaultLimit(t *testing.T) {
+	belowLimit := `query { root { ` + strings.Repeat("id ", 447) + `} }`
+	aboveLimit := `query { root { ` + strings.Repeat("id ", 448) + `} }`
+
+	for _, tc := range []struct {
+		name        string
+		opts        []graphql.SchemaOpt
+		expectError bool
+	}{
+		{name: "default", expectError: true},
+		{name: "zero", opts: []graphql.SchemaOpt{graphql.OverlapValidationLimit(0)}, expectError: true},
+		{name: "negative", opts: []graphql.SchemaOpt{graphql.OverlapValidationLimit(-1)}, expectError: true},
+		{name: "large_limit", opts: []graphql.SchemaOpt{graphql.OverlapValidationLimit(math.MaxInt)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := graphql.MustParseSchema(overlapLimitSchemaSDL, &overlapLimitRoot{}, tc.opts...)
+			if errs := s.Validate(belowLimit); len(errs) != 0 {
+				t.Fatalf("below limit: %v", errs)
+			}
+			errs := s.Validate(aboveLimit)
+			if tc.expectError {
+				if len(errs) != 1 || errs[0].Rule != "OverlapValidationLimitExceeded" {
+					t.Fatalf("expected overlap limit error, got %v", errs)
+				}
+			} else if len(errs) != 0 {
+				t.Fatalf("unexpected validation errors: %v", errs)
+			}
+		})
+	}
+
+	t.Run("exec_before_selection_limit", func(t *testing.T) {
+		s := graphql.MustParseSchema(overlapLimitSchemaSDL, &overlapLimitRoot{}, graphql.MaxSelections(1))
+		q := `query { root { ` + strings.Repeat("x: self { id } ", 4000) + `} }`
+		res := s.Exec(context.Background(), q, "", nil)
+		if len(res.Errors) != 1 || res.Errors[0].Rule != "OverlapValidationLimitExceeded" {
+			t.Fatalf("expected overlap limit error, got %v", res.Errors)
+		}
+	})
+
+	t.Run("clone_resets_to_default", func(t *testing.T) {
+		s := graphql.MustParseSchema(overlapLimitSchemaSDL, &overlapLimitRoot{}, graphql.OverlapValidationLimit(1))
+		clone := s.MustClone(&overlapLimitRoot{}, graphql.OverlapValidationLimit(0))
+		if errs := clone.Validate(belowLimit); len(errs) != 0 {
+			t.Fatalf("clone did not use default limit: %v", errs)
+		}
+		if errs := clone.Validate(aboveLimit); len(errs) != 1 || errs[0].Rule != "OverlapValidationLimitExceeded" {
+			t.Fatalf("expected overlap limit error, got %v", errs)
+		}
+	})
 }

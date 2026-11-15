@@ -297,10 +297,11 @@ func MaxQueryLength(n int) SchemaOpt {
 	}
 }
 
-// OverlapValidationLimit caps the number of overlapping selection pairs that will be examined
-// during validation of a single operation (including fragments). A value of 0 disables the cap.
-// When the cap is exceeded validation aborts early with an error (rule: OverlapValidationLimitExceeded)
-// to protect against maliciously constructed queries designed to exhaust memory/CPU.
+// OverlapValidationLimit caps the number of overlapping selection pair comparisons during
+// validation of an entire document, including fragments and repeated comparisons. The default
+// is 100000. Zero and negative values select the default; use a very large value such as
+// math.MaxInt for effectively no limit. When the limit is exceeded, validation aborts with
+// an OverlapValidationLimitExceeded error to protect against excessive memory and CPU use.
 func OverlapValidationLimit(n int) SchemaOpt {
 	return func(s *Schema) { s.overlapPairLimit = n }
 }
