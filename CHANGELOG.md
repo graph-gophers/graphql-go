@@ -1,7 +1,8 @@
 # CHANGELOG
 
-## Unreleased
+## [v1.11.1](https://github.com/graph-gophers/graphql-go/releases/tag/v1.11.0) Release v1.11.0
 
+* [SECURITY] Limit overlapping field validation to 100,000 pair comparisons per document by default and stop promptly when the limit is exceeded to prevent memory exhaustion. `OverlapValidationLimit(0)` and negative values now select the default; use a large value such as `math.MaxInt` for effectively no limit.
 * [IMPROVEMENT] Reduce the memory needed to return large scalars. Values of 64KiB or more are no longer copied into every enclosing field's buffer, and large strings are escaped once, directly into the response. Returning a 16MiB string nested three fields deep now allocates about the size of the response instead of 7-8x that. Output stays byte-identical to `json.Marshal`.
 * [BUGFIX] Reject string descriptions before schema and type extensions instead of silently discarding them.
 * [BUGFIX] Reject malformed or out-of-range numeric literals during parsing instead of allowing panics. Custom scalars continue to receive numeric literals within the supported int64 and float64 ranges.

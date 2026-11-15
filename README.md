@@ -163,7 +163,7 @@ schema := graphql.MustParseSchema(sdl, &RootResolver{}, nil)
 - `DisableIntrospection()` disables introspection queries.
 - `DisableFieldSelections()` disables capturing child field selections used by helper APIs (see below).
 - `DisableMemoryPooling()` disables internal execution-path memory pooling. Pooling is enabled by default; this option is intended for diagnostics and benchmark comparisons.
-- `OverlapValidationLimit(n int)` sets a hard cap on examined overlap pairs during validation; exceeding it emits `OverlapValidationLimitExceeded` error.
+- `OverlapValidationLimit(n int)` limits overlap pair comparisons across an entire document, including fragments and repeated comparisons. The default is 100,000; zero and negative values select the default. Use a very large value such as `math.MaxInt` for effectively no limit. Exceeding the limit emits an `OverlapValidationLimitExceeded` error.
 
 ### Field Selection Inspection Helpers
 

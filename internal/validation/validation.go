@@ -31,6 +31,9 @@ type valueTypeIssue struct {
 	message string
 }
 
+// DefaultOverlapPairLimit bounds overlap comparisons for an entire document.
+const DefaultOverlapPairLimit = 100_000
+
 type context struct {
 	schema               *ast.Schema
 	doc                  *ast.ExecutableDefinition
@@ -64,6 +67,9 @@ type opContext struct {
 }
 
 func newContext(s *ast.Schema, doc *ast.ExecutableDefinition, maxDepth int, overlapPairLimit int, validateDeprecated bool) *context {
+	if overlapPairLimit <= 0 {
+		overlapPairLimit = DefaultOverlapPairLimit
+	}
 	return &context{
 		schema:             s,
 		doc:                doc,
@@ -162,6 +168,9 @@ func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string
 		}
 
 		validateSelectionSet(opc, op.Selections, entryPoint)
+		if c.overlapLimitHit {
+			return c.errs
+		}
 
 		fragUsed := make(map[*ast.FragmentDefinition]struct{})
 		markUsedFragments(c, op.Selections, fragUsed)
@@ -191,6 +200,9 @@ func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string
 		}
 
 		validateSelectionSet(opc, frag.Selections, t)
+		if c.overlapLimitHit {
+			return c.errs
+		}
 
 		if _, ok := fragVisited[frag]; !ok {
 			detectFragmentCycle(c, frag.Selections, fragVisited, nil, map[string]int{frag.Name.Name: 0})
@@ -874,6 +886,26 @@ func detectFragmentCycleSel(c *context, sel ast.Selection, fragVisited map[*ast.
 }
 
 func (c *context) validateOverlap(a, b ast.Selection, reasons *[]string, locs *[]errors.Location, parentMutuallyExclusive bool) {
+	if c.overlapLimitHit {
+		return
+	}
+	// Cached and identical pairs still cost work and can be revisited many times.
+	if c.overlapPairsObserved >= c.overlapPairLimit {
+		c.overlapLimitHit = true
+		var loc errors.Location
+		switch sel := a.(type) {
+		case *ast.Field:
+			loc = sel.Alias.Loc
+		case *ast.InlineFragment:
+			loc = sel.Loc
+		case *ast.FragmentSpread:
+			loc = sel.Loc
+		}
+		c.addErr(loc, "OverlapValidationLimitExceeded", "Overlapping field validation aborted after examining %d pairs (limit %d). Consider restructuring the query or increasing the limit.", c.overlapPairsObserved, c.overlapPairLimit)
+		return
+	}
+	c.overlapPairsObserved++
+
 	if a == b {
 		return
 	}
@@ -896,32 +928,15 @@ func (c *context) validateOverlap(a, b ast.Selection, reasons *[]string, locs *[
 	}
 	c.overlapValidated[key] = parentMutuallyExclusive
 
-	if c.overlapPairLimit > 0 && !c.overlapLimitHit {
-		c.overlapPairsObserved++
-		if c.overlapPairsObserved > c.overlapPairLimit {
-			c.overlapLimitHit = true
-			// determine a representative location for error reporting
-			var loc errors.Location
-			switch sel := a.(type) {
-			case *ast.Field:
-				loc = sel.Alias.Loc
-			case *ast.InlineFragment:
-				loc = sel.Loc
-			case *ast.FragmentSpread:
-				loc = sel.Loc
-			default:
-				// leave zero value
-			}
-			c.addErr(loc, "OverlapValidationLimitExceeded", "Overlapping field validation aborted after examining %d pairs (limit %d). Consider restructuring the query or increasing the limit.", c.overlapPairsObserved-1, c.overlapPairLimit)
-			return
-		}
-	}
-
 	switch a := a.(type) {
 	case *ast.Field:
 		switch b := b.(type) {
 		case *ast.Field:
-			if reasons2, locs2 := c.validateFieldOverlap(a, b, parentMutuallyExclusive); len(reasons2) != 0 {
+			reasons2, locs2 := c.validateFieldOverlap(a, b, parentMutuallyExclusive)
+			if c.overlapLimitHit {
+				return
+			}
+			if len(reasons2) != 0 {
 				locs2 = append(locs2, a.Alias.Loc, b.Alias.Loc)
 				if reasons == nil {
 					c.addErrMultiLoc(locs2, "OverlappingFieldsCanBeMergedRule", "Fields %q conflict because %s. Use different aliases on the fields to fetch both if this was intentional.", a.Alias.Name, strings.Join(reasons2, " and "))
@@ -936,12 +951,18 @@ func (c *context) validateOverlap(a, b ast.Selection, reasons *[]string, locs *[
 		case *ast.InlineFragment:
 			for _, sel := range b.Selections {
 				c.validateOverlap(a, sel, reasons, locs, parentMutuallyExclusive)
+				if c.overlapLimitHit {
+					return
+				}
 			}
 
 		case *ast.FragmentSpread:
 			if frag := c.doc.Fragments.Get(b.Name.Name); frag != nil {
 				for _, sel := range frag.Selections {
 					c.validateOverlap(a, sel, reasons, locs, parentMutuallyExclusive)
+					if c.overlapLimitHit {
+						return
+					}
 				}
 			}
 
@@ -952,12 +973,18 @@ func (c *context) validateOverlap(a, b ast.Selection, reasons *[]string, locs *[
 	case *ast.InlineFragment:
 		for _, sel := range a.Selections {
 			c.validateOverlap(sel, b, reasons, locs, parentMutuallyExclusive)
+			if c.overlapLimitHit {
+				return
+			}
 		}
 
 	case *ast.FragmentSpread:
 		if frag := c.doc.Fragments.Get(a.Name.Name); frag != nil {
 			for _, sel := range frag.Selections {
 				c.validateOverlap(sel, b, reasons, locs, parentMutuallyExclusive)
+				if c.overlapLimitHit {
+					return
+				}
 			}
 		}
 
@@ -1023,16 +1050,25 @@ func (c *context) validateFieldOverlap(a, b *ast.Field, parentMutuallyExclusive 
 			if matches := bFieldIndex[name]; len(matches) != 0 {
 				for _, bMatch := range matches {
 					c.validateOverlap(a2, bMatch, &reasons, &locs, areMutuallyExclusive)
+					if c.overlapLimitHit {
+						return nil, nil
+					}
 				}
 			}
 			for _, bnf := range bNonField {
 				c.validateOverlap(a2, bnf, &reasons, &locs, areMutuallyExclusive)
+				if c.overlapLimitHit {
+					return nil, nil
+				}
 			}
 			continue
 		}
 		// For fragments / inline fragments we still need to compare against every selection in B.
 		for _, b2 := range b.SelectionSet {
 			c.validateOverlap(a2, b2, &reasons, &locs, areMutuallyExclusive)
+			if c.overlapLimitHit {
+				return nil, nil
+			}
 		}
 	}
 
