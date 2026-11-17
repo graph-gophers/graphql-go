@@ -116,7 +116,7 @@ func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string
 			if !canBeInput(t) {
 				c.addErr(v.TypeLoc, "VariablesAreInputTypesRule", "Variable %q cannot be non-input type %q.", "$"+v.Name.Name, t)
 			}
-			validateValue(opc, v, variables[v.Name.Name], t)
+			validateValue(opc, v, variables[v.Name.Name], t, v.Name.Name)
 
 			if v.Default != nil {
 				validateLiteral(opc, v.Default)
@@ -237,14 +237,18 @@ func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string
 	return c.errs
 }
 
-func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Type) {
+func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Type, path string) {
+	at := ""
+	if path != v.Name.Name {
+		at = fmt.Sprintf(" at %q", path)
+	}
 	switch t := t.(type) {
 	case *ast.NonNull:
 		if val == nil {
-			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value null.\nExpected type \"%s\", found null.", v.Name.Name, t)
+			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value null%s.\nExpected type \"%s\", found null.", v.Name.Name, at, t)
 			return
 		}
-		validateValue(c, v, val, t.OfType)
+		validateValue(c, v, val, t.OfType, path)
 	case *ast.List:
 		if val == nil {
 			return
@@ -252,11 +256,11 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Typ
 		vv, ok := val.([]any)
 		if !ok {
 			// Input coercion rules allow single items without wrapping array
-			validateValue(c, v, val, t.OfType)
+			validateValue(c, v, val, t.OfType, path)
 			return
 		}
-		for _, elem := range vv {
-			validateValue(c, v, elem, t.OfType)
+		for i, elem := range vv {
+			validateValue(c, v, elem, t.OfType, fmt.Sprintf("%s[%d]", path, i))
 		}
 	case *ast.EnumTypeDefinition:
 		if val == nil {
@@ -264,7 +268,7 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Typ
 		}
 		e, ok := val.(string)
 		if !ok {
-			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid type %T.\nExpected type \"%s\", found %v.", v.Name.Name, val, t, val)
+			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid type %T%s.\nExpected type \"%s\", found %v.", v.Name.Name, val, at, t, val)
 			return
 		}
 		for _, option := range t.EnumValuesDefinition {
@@ -272,14 +276,14 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Typ
 				return
 			}
 		}
-		c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value %s.\nExpected type \"%s\", found %s.", v.Name.Name, e, t, e)
+		c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value %s%s.\nExpected type \"%s\", found %s.", v.Name.Name, e, at, t, e)
 	case *ast.InputObject:
 		if val == nil {
 			return
 		}
 		in, ok := val.(map[string]any)
 		if !ok {
-			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid type %T.\nExpected type \"%s\", found %s.", v.Name.Name, val, t, val)
+			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid type %T%s.\nExpected type \"%s\", found %s.", v.Name.Name, val, at, t, val)
 			return
 		}
 		// Entries not defined by the type must raise a request error. Iterating the
@@ -297,18 +301,18 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Typ
 		slices.Sort(unknown)
 		for _, name := range unknown {
 			suggestion := makeSuggestion("Did you mean", t.Values.Names(), name)
-			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value.\nField %q is not defined by type %q.%s", v.Name.Name, name, t.Name, suggestion)
+			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value%s.\nField %q is not defined by type %q.%s", v.Name.Name, at, name, t.Name, suggestion)
 		}
 
 		// Validate @oneOf constraint: exactly one non-null field must be provided.
 		if t.Directives.Get("oneOf") != nil {
 			if len(in) != 1 {
-				c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value.\nOneOf Input Object %q must specify exactly one key.", v.Name.Name, t.Name)
+				c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value%s.\nOneOf Input Object %q must specify exactly one key.", v.Name.Name, at, t.Name)
 				return
 			}
 			for name, fieldVal := range in {
 				if fieldVal == nil {
-					c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value.\nField %q must be non-null.", v.Name.Name, t.Name+"."+name)
+					c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value%s.\nField %q must be non-null.", v.Name.Name, at, t.Name+"."+name)
 					return
 				}
 			}
@@ -319,7 +323,7 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Typ
 			if !ok && f.Default != nil {
 				continue
 			}
-			validateValue(c, f, fieldVal, f.Type)
+			validateValue(c, v, fieldVal, f.Type, path+"."+f.Name.Name)
 		}
 	}
 }
