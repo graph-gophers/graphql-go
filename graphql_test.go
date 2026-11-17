@@ -4951,6 +4951,46 @@ func TestQueryVariablesValidation(t *testing.T) {
 	}})
 }
 
+type inputFieldDefaultResolver struct{}
+
+func (r *inputFieldDefaultResolver) Items(args struct{ Page struct{ Limit int32 } }) int32 {
+	return args.Page.Limit
+}
+
+func TestInputFieldDefaultInVariable(t *testing.T) {
+	schema := graphql.MustParseSchema(`
+		input Page {
+			limit: Int! = 10
+		}
+
+		type Query {
+			items(page: Page!): Int!
+		}`, &inputFieldDefaultResolver{})
+	query := `query q($page: Page!) { items(page: $page) }`
+
+	gqltesting.RunTests(t, []*gqltesting.Test{{
+		Schema:         schema,
+		Query:          `{ items(page: {}) }`,
+		ExpectedResult: `{"items": 10}`,
+	}, {
+		Schema:         schema,
+		Query:          query,
+		Variables:      map[string]any{"page": map[string]any{}},
+		ExpectedResult: `{"items": 10}`,
+	}, {
+		Schema:         schema,
+		Query:          query,
+		Variables:      map[string]any{"page": map[string]any{"limit": 3}},
+		ExpectedResult: `{"items": 3}`,
+	}})
+
+	// An explicit null is not an omitted field, so the default does not apply.
+	res := schema.Exec(context.Background(), query, "", map[string]any{"page": map[string]any{"limit": nil}})
+	if len(res.Errors) != 1 || res.Errors[0].Rule != "VariablesOfCorrectType" {
+		t.Fatalf("want one VariablesOfCorrectType error for an explicit null, got %v", res.Errors)
+	}
+}
+
 type (
 	interfaceImplementingInterfaceResolver struct{}
 	interfaceImplementingInterfaceExample  struct {

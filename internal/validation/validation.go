@@ -315,7 +315,10 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Typ
 		}
 
 		for _, f := range t.Values {
-			fieldVal := in[f.Name.Name]
+			fieldVal, ok := in[f.Name.Name]
+			if !ok && f.Default != nil {
+				continue
+			}
 			validateValue(c, f, fieldVal, f.Type)
 		}
 	}
