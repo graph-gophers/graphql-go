@@ -4953,14 +4953,16 @@ func TestQueryVariablesValidation(t *testing.T) {
 
 type nestedQueryVarResolver struct{}
 
-func (*nestedQueryVarResolver) Echo(args struct {
+func (*nestedQueryVarResolver) Echo(args NestedQueryVarInput) string {
+	return ""
+}
+
+type NestedQueryVarInput struct {
 	Input struct {
 		Items []struct {
 			Required string
 		}
 	}
-}) string {
-	return ""
 }
 
 func TestNestedListVariableValidationErrorPath(t *testing.T) {
