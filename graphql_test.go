@@ -4886,8 +4886,8 @@ func TestQueryVariablesValidation(t *testing.T) {
 			}`,
 		Variables: map[string]any{"filter": map[string]any{}},
 		ExpectedErrors: []*gqlerrors.QueryError{{
-			Message:   "Variable \"required\" has invalid value null.\nExpected type \"String!\", found null.",
-			Locations: []gqlerrors.Location{{Line: 3, Column: 5}},
+			Message:   "Variable \"filter\" has invalid value null at \"filter.required\".\nExpected type \"String!\", found null.",
+			Locations: []gqlerrors.Location{{Line: 2, Column: 12}},
 			Rule:      "VariablesOfCorrectType",
 		}},
 	}, {
@@ -4949,6 +4949,54 @@ func TestQueryVariablesValidation(t *testing.T) {
 			Rule:      "VariablesOfCorrectType",
 		}},
 	}})
+}
+
+type nestedQueryVarResolver struct{}
+
+func (*nestedQueryVarResolver) Echo(args struct {
+	Input struct {
+		Items []struct {
+			Required string
+		}
+	}
+}) string {
+	return ""
+}
+
+func TestNestedListVariableValidationErrorPath(t *testing.T) {
+	schema := graphql.MustParseSchema(`
+		input NestedQueryVarItem {
+			required: String!
+		}
+
+		input NestedQueryVarInput {
+			items: [NestedQueryVarItem!]!
+		}
+
+		type Query {
+			echo(input: NestedQueryVarInput!): String!
+		}
+	`, &nestedQueryVarResolver{})
+	result := schema.Exec(context.Background(),
+		`query q($input: NestedQueryVarInput!) { echo(input: $input) }`,
+		"",
+		map[string]any{
+			"input": map[string]any{
+				"items": []any{
+					map[string]any{"required": "ok"},
+					map[string]any{"required": nil},
+				},
+			},
+		},
+	)
+
+	if len(result.Errors) != 1 {
+		t.Fatalf("expected one validation error, got %v", result.Errors)
+	}
+	want := "Variable \"input\" has invalid value null at \"input.items[1].required\".\nExpected type \"String!\", found null."
+	if result.Errors[0].Message != want {
+		t.Errorf("unexpected validation error:\n got: %s\nwant: %s", result.Errors[0].Message, want)
+	}
 }
 
 type inputFieldDefaultResolver struct{}
