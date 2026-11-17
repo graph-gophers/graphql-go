@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"text/scanner"
 
 	"github.com/graph-gophers/graphql-go/ast"
@@ -464,8 +465,12 @@ func resolveDirectives(s *ast.Schema, directives ast.DirectiveList, loc string) 
 			return errors.Errorf("invalid location %q for directive %q (must be one of %v)", loc, dirName, dd.Locations)
 		}
 		for _, arg := range d.Arguments {
-			if dd.Arguments.Get(arg.Name.Name) == nil {
+			argDef := dd.Arguments.Get(arg.Name.Name)
+			if argDef == nil {
 				return errors.Errorf("invalid argument %q for directive %q", arg.Name.Name, dirName)
+			}
+			if reason := validateConstValue(s, arg.Value, argDef.Type); reason != "" {
+				return errors.Errorf("invalid value %s for argument %q of directive %q: %s", arg.Value, arg.Name.Name, dirName, reason)
 			}
 		}
 		for _, arg := range dd.Arguments {
@@ -483,6 +488,116 @@ func resolveDirectives(s *ast.Schema, directives ast.DirectiveList, loc string) 
 		alreadySeenNonRepeatable[dirName] = struct{}{}
 	}
 	return nil
+}
+
+func validateConstValue(s *ast.Schema, value ast.Value, t ast.Type) string {
+	if value == nil {
+		return fmt.Sprintf("expected value of type %q, found no value", t)
+	}
+
+	resolvedType, err := common.ResolveType(t, s.Resolve)
+	if err != nil {
+		return err.Error()
+	}
+	t = resolvedType
+
+	_, isNull := value.(*ast.NullValue)
+	if nonNull, ok := t.(*ast.NonNull); ok {
+		if isNull {
+			return fmt.Sprintf("expected value of type %q, found null", t)
+		}
+		t = nonNull.OfType
+	}
+	if isNull {
+		return ""
+	}
+
+	switch t := t.(type) {
+	case *ast.List:
+		list, ok := value.(*ast.ListValue)
+		if !ok {
+			return validateConstValue(s, value, t.OfType)
+		}
+		for _, entry := range list.Values {
+			if reason := validateConstValue(s, entry, t.OfType); reason != "" {
+				return reason
+			}
+		}
+		return ""
+
+	case *ast.InputObject:
+		object, ok := value.(*ast.ObjectValue)
+		if !ok {
+			return fmt.Sprintf("expected value of type %q, found %s", t, value)
+		}
+		provided := make(map[string]struct{}, len(object.Fields))
+		for _, field := range object.Fields {
+			inputField := t.Values.Get(field.Name.Name)
+			if inputField == nil {
+				return fmt.Sprintf("field %q is not defined by type %q", field.Name.Name, t.Name)
+			}
+			if reason := validateConstValue(s, field.Value, inputField.Type); reason != "" {
+				return reason
+			}
+			provided[field.Name.Name] = struct{}{}
+		}
+		for _, inputField := range t.Values {
+			if _, ok := provided[inputField.Name.Name]; ok {
+				continue
+			}
+			if _, required := inputField.Type.(*ast.NonNull); required && inputField.Default == nil {
+				return fmt.Sprintf("field %q of required type %q was not provided", t.Name+"."+inputField.Name.Name, inputField.Type)
+			}
+		}
+		return ""
+
+	case *ast.EnumTypeDefinition:
+		if literal, ok := value.(*ast.PrimitiveValue); ok && literal.Type == scanner.Ident {
+			for _, option := range t.EnumValuesDefinition {
+				if option.EnumValue == literal.Text {
+					return ""
+				}
+			}
+		}
+		return fmt.Sprintf("enum %q cannot represent value %s", t.Name, value)
+
+	case *ast.ScalarTypeDefinition:
+		literal, ok := value.(*ast.PrimitiveValue)
+		if !ok {
+			return fmt.Sprintf("expected value of type %q, found %s", t, value)
+		}
+		var valid bool
+		switch t.Name {
+		case "Int":
+			if literal.Type == scanner.Int {
+				_, err := strconv.ParseInt(literal.Text, 10, 32)
+				valid = err == nil
+			}
+		case "Float":
+			if literal.Type == scanner.Int || literal.Type == scanner.Float {
+				_, err := strconv.ParseFloat(literal.Text, 64)
+				valid = err == nil
+			}
+		case "String":
+			valid = literal.Type == scanner.String
+		case "Boolean":
+			valid = literal.Type == scanner.Ident && (literal.Text == "true" || literal.Text == "false")
+		case "ID":
+			valid = literal.Type == scanner.String
+			if literal.Type == scanner.Int {
+				_, err := strconv.ParseInt(literal.Text, 10, 32)
+				valid = err == nil
+			}
+		default:
+			valid = true
+		}
+		if !valid {
+			return fmt.Sprintf("%s cannot represent value %s", t.Name, value)
+		}
+		return ""
+	}
+
+	return fmt.Sprintf("expected value of type %q, found %s", t, value)
 }
 
 func resolveInputObject(s *ast.Schema, values ast.ArgumentsDefinition) error {
