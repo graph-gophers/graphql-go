@@ -88,6 +88,75 @@ func TestDescriptionsOnDefinitionsRemainSupported(t *testing.T) {
 	}
 }
 
+func TestDirectiveArgumentValuesAreValidated(t *testing.T) {
+	tests := []struct {
+		name    string
+		sdl     string
+		wantErr string
+	}{
+		{
+			name: "accepts valid enum value",
+			sdl: `enum Size { SMALL MEDIUM }
+				directive @tshirt(size: Size!) on OBJECT
+				type Shirt @tshirt(size: MEDIUM) { color: String }
+				type Query { shirt: Shirt }`,
+		},
+		{
+			name: "rejects invalid enum value",
+			sdl: `enum Size { SMALL MEDIUM }
+				directive @tshirt(size: Size) on OBJECT
+				type Shirt @tshirt(size: MEDUIM) { color: String }
+				type Query { shirt: Shirt }`,
+			wantErr: `invalid value MEDUIM for argument "size" of directive "tshirt"`,
+		},
+		{
+			name: "rejects null for non-null argument",
+			sdl: `directive @limit(value: Int!) on OBJECT
+				type Item @limit(value: null) { name: String }
+				type Query { item: Item }`,
+			wantErr: `invalid value null for argument "value" of directive "limit"`,
+		},
+		{
+			name: "rejects invalid scalar value",
+			sdl: `directive @limit(value: Int) on OBJECT
+				type Item @limit(value: "many") { name: String }
+				type Query { item: Item }`,
+			wantErr: `invalid value "many" for argument "value" of directive "limit"`,
+		},
+		{
+			name: "validates list elements",
+			sdl: `enum Size { SMALL MEDIUM }
+				directive @sizes(values: [Size!]) on OBJECT
+				type Item @sizes(values: [SMALL, MEDUIM]) { name: String }
+				type Query { item: Item }`,
+			wantErr: `invalid value [SMALL, MEDUIM] for argument "values" of directive "sizes"`,
+		},
+		{
+			name: "validates input object required fields",
+			sdl: `input Options { count: Int! }
+				directive @options(value: Options) on OBJECT
+				type Item @options(value: {}) { name: String }
+				type Query { item: Item }`,
+			wantErr: `invalid value {} for argument "value" of directive "options"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := schema.ParseSchema(tt.sdl, false)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("expected no error, got: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("expected error containing %q, got: %v", tt.wantErr, err)
+			}
+		})
+	}
+}
+
 func TestIntrospectionDescriptionPresence(t *testing.T) {
 	sdl := `
 		"" type Query {
