@@ -1418,6 +1418,38 @@ func TestVariables(t *testing.T) {
 	})
 }
 
+func TestNonNullVariableWithDefault(t *testing.T) {
+	schema := graphql.MustParseSchema(`
+		type Query {
+			echo(value: String): String
+		}
+	`, &echoResolver{})
+	query := `query Echo($value: String! = "default") { echo(value: $value) }`
+
+	gqltesting.RunTests(t, []*gqltesting.Test{{
+		Schema:         schema,
+		Query:          query,
+		ExpectedResult: `{"echo":"default"}`,
+	}, {
+		Schema:    schema,
+		Query:     query,
+		Variables: map[string]any{"value": nil},
+		ExpectedErrors: []*gqlerrors.QueryError{{
+			Message:   "Variable \"value\" has invalid value null.\nExpected type \"String!\", found null.",
+			Locations: []gqlerrors.Location{{Line: 1, Column: 12}},
+			Rule:      "VariablesOfCorrectType",
+		}},
+	}, {
+		Schema: schema,
+		Query:  `query Echo($value: String!) { echo(value: $value) }`,
+		ExpectedErrors: []*gqlerrors.QueryError{{
+			Message:   "Variable \"value\" has invalid value null.\nExpected type \"String!\", found null.",
+			Locations: []gqlerrors.Location{{Line: 1, Column: 12}},
+			Rule:      "VariablesOfCorrectType",
+		}},
+	}})
+}
+
 func TestSkipDirective(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{
