@@ -116,16 +116,14 @@ func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string
 			if !canBeInput(t) {
 				c.addErr(v.TypeLoc, "VariablesAreInputTypesRule", "Variable %q cannot be non-input type %q.", "$"+v.Name.Name, t)
 			}
-			validateValue(opc, v, variables[v.Name.Name], t, v.Name.Name)
+			if val, ok := variables[v.Name.Name]; ok || v.Default == nil {
+				validateValue(opc, v, val, t, v.Name.Name)
+			}
 
 			if v.Default != nil {
 				validateLiteral(opc, v.Default)
 
 				if t != nil {
-					if nn, ok := t.(*ast.NonNull); ok {
-						c.addErr(v.Default.Location(), "DefaultValuesOfCorrectType", "Variable %q of type %q is required and will not use the default value. Perhaps you meant to use type %q.", "$"+v.Name.Name, t, nn.OfType)
-					}
-
 					if inputType := unwrapInputObjectType(t); inputType != nil {
 						if obj, ok := v.Default.(*ast.ObjectValue); ok {
 							issues := collectInputObjectValueIssues(opc, obj, inputType)
