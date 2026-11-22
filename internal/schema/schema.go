@@ -274,7 +274,7 @@ func resolveNamedType(s *ast.Schema, t ast.NamedType) error {
 			return err
 		}
 	case *ast.InputObject:
-		if err := resolveInputObject(s, t.Values); err != nil {
+		if err := resolveInputObject(s, t.Values, "INPUT_FIELD_DEFINITION"); err != nil {
 			return err
 		}
 		if err := resolveDirectives(s, t.Directives, "INPUT_OBJECT"); err != nil {
@@ -297,7 +297,7 @@ func resolveField(s *ast.Schema, f *ast.FieldDefinition) error {
 	if err := resolveDirectives(s, f.Directives, "FIELD_DEFINITION"); err != nil {
 		return err
 	}
-	return resolveInputObject(s, f.Arguments)
+	return resolveInputObject(s, f.Arguments, "ARGUMENT_DEFINITION")
 }
 
 func resolveDirectives(s *ast.Schema, directives ast.DirectiveList, loc string) error {
@@ -340,7 +340,7 @@ func resolveDirectives(s *ast.Schema, directives ast.DirectiveList, loc string) 
 	return nil
 }
 
-func resolveInputObject(s *ast.Schema, values ast.ArgumentsDefinition) error {
+func resolveInputObject(s *ast.Schema, values ast.ArgumentsDefinition, loc string) error {
 	for _, v := range values {
 		t, err := common.ResolveType(v.Type, s.Resolve)
 		if err != nil {
@@ -348,7 +348,7 @@ func resolveInputObject(s *ast.Schema, values ast.ArgumentsDefinition) error {
 		}
 		v.Type = t
 
-		if err := resolveDirectives(s, v.Directives, "ARGUMENT_DEFINITION"); err != nil {
+		if err := resolveDirectives(s, v.Directives, loc); err != nil {
 			return err
 		}
 
