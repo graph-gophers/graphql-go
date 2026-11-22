@@ -3490,7 +3490,7 @@ func TestInputArguments_failSchemaParsing(t *testing.T) {
 					}
 				`,
 			},
-			Want: want{Error: "field \"Input\": type of kind OBJECT can not be used as input\n\tused by (*graphql_test.inputArgumentsHello).Hello"},
+			Want: want{Error: "graphql: input value \"input\": type \"HelloInput\" is not an input type"},
 		},
 		"Missing Args Wrapper for scalar input": {
 			Args: args{

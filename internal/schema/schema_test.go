@@ -273,7 +273,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "Parses implementing type without providing required fields",
 			sdl: `
-			interface Greeting { 
+			interface Greeting {
 				message: String!
 			}
 			type Welcome implements Greeting {
@@ -293,7 +293,7 @@ func TestParse(t *testing.T) {
 			name: "Parses type with description string",
 			sdl: `
 			"Single line description."
-			type Type { 
+			type Type {
 				field: String
 			}`,
 			useStringDescriptions: true,
@@ -484,8 +484,8 @@ Second line of the description.
 			name: "Description is correctly parsed for non-described types",
 			sdl: `
 			"Some description."
-			scalar MyInt 
-			type Type { 
+			scalar MyInt
+			type Type {
 				field: String
 			}`,
 			useStringDescriptions: true,
@@ -506,8 +506,8 @@ Second line of the description.
 			# Multi-line
 			# comment.
 			" This description should be ignored. "
-			scalar MyInt 
-			type Type { 
+			scalar MyInt
+			type Type {
 				field: String
 			}`,
 			validateSchema: func(s *ast.Schema) error {
@@ -841,7 +841,7 @@ Second line of the description.
 			type Coloured {
 				Colour: String!
 			}
-			
+
 			extend union Item = Coloured
 			`,
 			validateSchema: func(s *ast.Schema) error {
@@ -1661,6 +1661,155 @@ func TestInterfaceImplementsInterface(t *testing.T) {
 				if err2 := tt.validateSchema(s); err2 != nil {
 					t.Fatal(err2)
 				}
+			}
+		})
+	}
+}
+
+func TestSchemaValidatesInputOutputTypes(t *testing.T) {
+	tests := []struct {
+		name string
+		sdl  string
+	}{
+		{
+			name: "Object type used as input object field",
+			sdl: `
+				type Query {
+					field(arg: SomeInputObject): String
+				}
+
+				type SomeObject {
+					field: String
+				}
+
+				input SomeInputObject {
+					badField: SomeObject
+				}
+			`,
+		},
+		{
+			name: "Object type used as field argument",
+			sdl: `
+				type Query {
+					hello(input: HelloInput): String!
+				}
+				type HelloInput {
+					name: String
+				}
+			`,
+		},
+		{
+			name: "Interface type used as input object field",
+			sdl: `
+				type Query {
+					field(arg: SomeInputObject): String
+				}
+
+				interface SomeInterface {
+					field: String
+				}
+
+				input SomeInputObject {
+					badField: SomeInterface
+				}
+			`,
+		},
+		{
+			name: "Union type used as input object field",
+			sdl: `
+				type Query {
+					field(arg: SomeInputObject): String
+				}
+
+				type TypeA {
+					field: String
+				}
+				type TypeB {
+					field: String
+				}
+
+				union SomeUnion = TypeA | TypeB
+
+				input SomeInputObject {
+					badField: SomeUnion
+				}
+			`,
+		},
+		{
+			name: "Input object used as output field type",
+			sdl: `
+				type Query {
+					field: SomeInputObject
+				}
+
+				input SomeInputObject {
+					name: String
+				}
+			`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := schema.ParseSchema(tt.sdl, false)
+			if err == nil {
+				t.Fatal("expected error for invalid type usage, but schema was accepted without error")
+			}
+		})
+	}
+}
+
+func TestSchemaValidatesWrappedAndExtendedTypes(t *testing.T) {
+	tests := []struct {
+		name, sdl, want string
+	}{
+		{
+			name: "wrapped input field",
+			sdl:  `type Query { field: String } type Object { field: String } input Input { field: [[Object!]!]! }`,
+			want: `input value "field": type "[[Object!]!]!" is not an input type`,
+		},
+		{
+			name: "interface output field",
+			sdl:  `input Input { field: String } interface Node { field: [Input!]! }`,
+			want: `field "field": type "[Input!]!" is not an output type`,
+		},
+		{
+			name: "extended field argument",
+			sdl:  `type Query { field: String } type Object { field: String } extend type Query { added(arg: [Object!]): String }`,
+			want: `input value "arg": type "[Object!]" is not an input type`,
+		},
+		{
+			name: "directive argument",
+			sdl:  `type Object { field: String } directive @test(arg: [Object!]!) on FIELD_DEFINITION`,
+			want: `directive "test" argument "arg": type "[Object!]!" is not an input type`,
+		},
+		{
+			name: "valid input and output types",
+			sdl: `
+				scalar Custom
+				enum Choice { A B }
+				input Input { scalar: Custom, choice: [Choice!], nested: Input }
+				interface Node { field(arg: [Input!]): [Choice!]! }
+				type Query { field(arg: [Input!]): [Choice!]!, object: Object, node: Node, result: Result }
+				type Object { field: Custom }
+				union Result = Object
+				directive @test(arg: [Input!]) on FIELD_DEFINITION
+			`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := schema.ParseSchema(tt.sdl, false)
+			if tt.want == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+
+			var qerr *qerrors.QueryError
+			if !errors.As(err, &qerr) || qerr.Message != tt.want {
+				t.Fatalf("expected GraphQL error message %q, got %v", tt.want, err)
 			}
 		})
 	}
