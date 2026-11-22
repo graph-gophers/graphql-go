@@ -359,6 +359,17 @@ func resolveInputObject(s *ast.Schema, values ast.ArgumentsDefinition) error {
 func parseSchema(s *ast.Schema, l *common.Lexer) {
 	l.ConsumeWhitespace()
 
+	// Track names defined in this SDL document. s.Types and s.Directives also
+	// contain built-in definitions, so they cannot be used to detect duplicates.
+	typeNames := make(map[string]struct{})
+	directiveNames := make(map[string]struct{})
+	addType := func(name string) {
+		if _, ok := typeNames[name]; ok {
+			l.SyntaxError(fmt.Sprintf("there can be only one type named %q", name))
+		}
+		typeNames[name] = struct{}{}
+	}
+
 	for l.Peek() != scanner.EOF {
 		desc := l.DescComment()
 		switch x := l.ConsumeIdent(); x {
@@ -381,40 +392,50 @@ func parseSchema(s *ast.Schema, l *common.Lexer) {
 		case "type":
 			obj := parseObjectDef(l)
 			obj.Desc = desc
+			addType(obj.Name)
 			s.Types[obj.Name] = obj
 			s.Objects = append(s.Objects, obj)
 
 		case "interface":
 			iface := parseInterfaceDef(l)
 			iface.Desc = desc
+			addType(iface.Name)
 			s.Types[iface.Name] = iface
 
 		case "union":
 			union := parseUnionDef(l)
 			union.Desc = desc
+			addType(union.Name)
 			s.Types[union.Name] = union
 			s.Unions = append(s.Unions, union)
 
 		case "enum":
 			enum := parseEnumDef(l)
 			enum.Desc = desc
+			addType(enum.Name)
 			s.Types[enum.Name] = enum
 			s.Enums = append(s.Enums, enum)
 
 		case "input":
 			input := parseInputDef(l)
 			input.Desc = desc
+			addType(input.Name)
 			s.Types[input.Name] = input
 
 		case "scalar":
 			loc := l.Location()
 			name := l.ConsumeIdent()
 			directives := common.ParseDirectives(l)
+			addType(name)
 			s.Types[name] = &ast.ScalarTypeDefinition{Name: name, Desc: desc, Directives: directives, Loc: loc}
 
 		case "directive":
 			directive := parseDirectiveDef(l)
 			directive.Desc = desc
+			if _, ok := directiveNames[directive.Name]; ok {
+				l.SyntaxError(fmt.Sprintf("there can be only one directive named %q", "@"+directive.Name))
+			}
+			directiveNames[directive.Name] = struct{}{}
 			s.Directives[directive.Name] = directive
 
 		case "extend":
