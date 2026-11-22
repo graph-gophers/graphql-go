@@ -5033,6 +5033,84 @@ func TestNestedListVariableValidationErrorPath(t *testing.T) {
 	}
 }
 
+type variableValidationLimitResolver struct{}
+
+func (*variableValidationLimitResolver) StringList(struct{ Input *[]string }) string { return "" }
+func (*variableValidationLimitResolver) ColorList(struct{ Input *[]string }) string  { return "" }
+
+func TestMaxVariableValidationErrors(t *testing.T) {
+	const maxErrors = 20
+	sdl := `
+		enum Color {
+			RED
+			GREEN
+			BLUE
+		}
+
+		type Query {
+			stringList(input: [String!]): String!
+			colorList(input: [Color!]): String!
+		}
+	`
+	resolver := &variableValidationLimitResolver{}
+	schema := graphql.MustParseSchema(sdl, resolver)
+	nulls := make([]any, 100)
+	invalidColors := make([]any, 100)
+	for i := range invalidColors {
+		invalidColors[i] = "INVALID"
+	}
+
+	tests := []struct {
+		name      string
+		query     string
+		variables map[string]any
+		validate  bool
+	}{
+		{
+			name:      "null list elements in Exec",
+			query:     `query ($input: [String!]) { stringList(input: $input) }`,
+			variables: map[string]any{"input": nulls},
+		},
+		{
+			name:      "invalid enum list elements in ValidateWithVariables",
+			query:     `query ($input: [Color!]) { colorList(input: $input) }`,
+			variables: map[string]any{"input": invalidColors},
+			validate:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var errs []*gqlerrors.QueryError
+			if tt.validate {
+				errs = schema.ValidateWithVariables(tt.query, tt.variables)
+			} else {
+				errs = schema.Exec(context.Background(), tt.query, "", tt.variables).Errors
+			}
+			if len(errs) != maxErrors+1 {
+				t.Fatalf("expected %d validation errors including the limit error, got %d", maxErrors+1, len(errs))
+			}
+			if errs[maxErrors].Rule != "MaxVariableValidationErrors" {
+				t.Errorf("expected final error rule MaxVariableValidationErrors, got %q", errs[maxErrors].Rule)
+			}
+			if errs[maxErrors].Message != "Too many validation errors, error limit reached. Validation aborted." {
+				t.Errorf("unexpected limit error message: %q", errs[maxErrors].Message)
+			}
+		})
+	}
+
+	for _, count := range []int{maxErrors - 1, maxErrors} {
+		errs := schema.ValidateWithVariables(tests[0].query, map[string]any{"input": nulls[:count]})
+		if len(errs) != count {
+			t.Errorf("expected %d errors for %d invalid values, got %d", count, count, len(errs))
+		}
+	}
+
+	clone := schema.MustClone(resolver)
+	if errs := clone.ValidateWithVariables(tests[0].query, tests[0].variables); len(errs) != maxErrors+1 {
+		t.Errorf("expected clone to enforce the limit of %d, got %d errors", maxErrors, len(errs))
+	}
+}
+
 type inputFieldDefaultResolver struct{}
 
 func (r *inputFieldDefaultResolver) Items(args struct{ Page struct{ Limit int32 } }) int32 {
