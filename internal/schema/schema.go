@@ -83,6 +83,11 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 		switch t := typeDef.(type) {
 		case *ast.InterfaceTypeDefinition:
 			for i, implements := range t.Interfaces {
+				for _, prev := range t.Interfaces[:i] {
+					if prev.Name == implements.Name {
+						return errors.Errorf("interface %q implements interface %q more than once", t.Name, implements.Name)
+					}
+				}
 				typ, ok := s.Types[implements.Name]
 				if !ok {
 					return errors.Errorf("interface %q not found", implements)
@@ -116,6 +121,11 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 			}
 		}
 		for i, intfName := range obj.InterfaceNames {
+			for _, prev := range obj.InterfaceNames[:i] {
+				if prev == intfName {
+					return errors.Errorf("type %q implements interface %q more than once", obj.Name, intfName)
+				}
+			}
 			t, ok := s.Types[intfName]
 			if !ok {
 				return errors.Errorf("interface %q not found", intfName)
