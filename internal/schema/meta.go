@@ -73,6 +73,7 @@ var metaSrc = `
 	type __Directive {
 		name: String!
 		description: String
+		isRepeatable: Boolean!
 		locations: [__DirectiveLocation!]!
 		args: [__InputValue!]!
 	}
