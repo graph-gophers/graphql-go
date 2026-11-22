@@ -233,6 +233,13 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val interface{}, t
 			}
 		}
 		c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value %s.\nExpected type \"%s\", found %s.", v.Name.Name, e, t, e)
+	case *ast.ScalarTypeDefinition:
+		if val == nil {
+			return
+		}
+		if !isBuiltInScalarValue(t.Name, val) {
+			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value %v.\nExpected type \"%s\", found %v.", v.Name.Name, val, t, val)
+		}
 	case *ast.InputObject:
 		if val == nil {
 			return
@@ -951,6 +958,39 @@ func validateBasicLit(v *ast.PrimitiveValue, t ast.Type) bool {
 	}
 
 	return false
+}
+
+// isBuiltInScalarValue reports whether val can be coerced to the built-in
+// scalar type name. Custom scalars are accepted here; their UnmarshalGraphQL
+// runs when the arguments are packed.
+func isBuiltInScalarValue(name string, val interface{}) bool {
+	rv := reflect.ValueOf(val)
+	var num float64
+	var isNum, isInt bool
+	switch rv.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		num, isNum, isInt = float64(rv.Int()), true, true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		num, isNum, isInt = float64(rv.Uint()), true, true
+	case reflect.Float32, reflect.Float64:
+		num, isNum = rv.Float(), true
+		isInt = num == math.Trunc(num)
+	}
+
+	switch name {
+	case "Int":
+		return isInt && num >= math.MinInt32 && num <= math.MaxInt32
+	case "Float":
+		return isNum
+	case "String":
+		return rv.Kind() == reflect.String
+	case "Boolean":
+		return rv.Kind() == reflect.Bool
+	case "ID":
+		return rv.Kind() == reflect.String || isInt
+	default:
+		return true
+	}
 }
 
 func validateBuiltInScalar(v string, n string) bool {
