@@ -180,11 +180,10 @@ func (b *Builder) MakeStructPacker(values []*ast.InputValueDefinition, typ refle
 	for _, v := range values {
 		name := v.Name.Name
 		fe := &structPackerField{name: name, def: v.Default}
-		fx := func(n string) bool {
-			return strings.EqualFold(stripUnderscore(n), stripUnderscore(name))
+		sf, ok, err := findInputField(structType, name)
+		if err != nil {
+			return nil, err
 		}
-
-		sf, ok := structType.FieldByNameFunc(fx)
 		if !ok {
 			return nil, fmt.Errorf("%s does not define field %q (hint: missing `args struct { ... }` wrapper for field arguments, or missing field on input struct)", typ, name)
 		}
@@ -219,6 +218,30 @@ func (b *Builder) MakeStructPacker(values []*ast.InputValueDefinition, typ refle
 	}
 	b.structPackers = append(b.structPackers, p)
 	return p, nil
+}
+
+// findInputField returns the struct field bound to an input value name. A
+// field tagged `graphql:"name"` takes precedence; otherwise fields are matched
+// by name, case-insensitively and ignoring underscores. More than one field
+// with the same tag is an error.
+func findInputField(structType reflect.Type, name string) (reflect.StructField, bool, error) {
+	var tagged []reflect.StructField
+	for _, f := range reflect.VisibleFields(structType) {
+		if f.Tag.Get("graphql") == name {
+			tagged = append(tagged, f)
+		}
+	}
+	switch len(tagged) {
+	case 0:
+		sf, ok := structType.FieldByNameFunc(func(n string) bool {
+			return strings.EqualFold(stripUnderscore(n), stripUnderscore(name))
+		})
+		return sf, ok, nil
+	case 1:
+		return tagged[0], true, nil
+	default:
+		return reflect.StructField{}, false, fmt.Errorf("%s has more than one field tagged `graphql:%q`", structType, name)
+	}
 }
 
 type StructPacker struct {
