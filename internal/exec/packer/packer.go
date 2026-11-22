@@ -8,7 +8,6 @@ import (
 
 	"github.com/graph-gophers/graphql-go/ast"
 	"github.com/graph-gophers/graphql-go/decode"
-	"github.com/graph-gophers/graphql-go/errors"
 )
 
 type packer interface {
@@ -179,7 +178,7 @@ func (b *Builder) MakeStructPacker(values []*ast.InputValueDefinition, typ refle
 	var fields []*structPackerField
 	for _, v := range values {
 		name := v.Name.Name
-		fe := &structPackerField{name: name, def: v.Default}
+		fe := &structPackerField{name: name, typ: v.Type, def: v.Default}
 		fx := func(n string) bool {
 			return strings.EqualFold(stripUnderscore(n), stripUnderscore(name))
 		}
@@ -230,6 +229,7 @@ type StructPacker struct {
 
 type structPackerField struct {
 	name   string
+	typ    ast.Type
 	index  []int
 	def    ast.Value
 	packer packer
@@ -237,7 +237,7 @@ type structPackerField struct {
 
 func (p *StructPacker) Pack(value interface{}) (reflect.Value, error) {
 	if value == nil {
-		return reflect.Value{}, errors.Errorf("got null for non-null")
+		return reflect.Value{}, fmt.Errorf("got null for non-null")
 	}
 
 	values := value.(map[string]interface{})
@@ -247,7 +247,7 @@ func (p *StructPacker) Pack(value interface{}) (reflect.Value, error) {
 		if value, ok := values[f.name]; ok {
 			packed, err := f.packer.Pack(value)
 			if err != nil {
-				return reflect.Value{}, err
+				return reflect.Value{}, fmt.Errorf("%q of type %q: %w", f.name, f.typ, err)
 			}
 			v.Elem().FieldByIndex(f.index).Set(packed)
 		}
@@ -311,7 +311,7 @@ type ValuePacker struct {
 
 func (p *ValuePacker) Pack(value interface{}) (reflect.Value, error) {
 	if value == nil {
-		return reflect.Value{}, errors.Errorf("got null for non-null")
+		return reflect.Value{}, fmt.Errorf("got null for non-null")
 	}
 
 	coerced, err := unmarshalInput(p.ValueType, value)
@@ -327,7 +327,7 @@ type unmarshalerPacker struct {
 
 func (p *unmarshalerPacker) Pack(value interface{}) (reflect.Value, error) {
 	if value == nil && !isNullable(p.ValueType) {
-		return reflect.Value{}, errors.Errorf("got null for non-null")
+		return reflect.Value{}, fmt.Errorf("got null for non-null")
 	}
 
 	v := reflect.New(p.ValueType)
