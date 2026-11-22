@@ -4,7 +4,7 @@ import (
 	"github.com/graph-gophers/graphql-go/ast"
 )
 
-func ParseInputValue(l *Lexer) *ast.InputValueDefinition {
+func ParseInputValue(l *Lexer, constDirectives bool) *ast.InputValueDefinition {
 	p := &ast.InputValueDefinition{}
 	p.Loc = l.Location()
 	p.Desc = l.DescComment()
@@ -16,18 +16,18 @@ func ParseInputValue(l *Lexer) *ast.InputValueDefinition {
 		l.ConsumeToken('=')
 		p.Default = ParseLiteral(l, true)
 	}
-	p.Directives = ParseDirectives(l)
+	p.Directives = ParseDirectives(l, constDirectives)
 	return p
 }
 
-func ParseArgumentList(l *Lexer) ast.ArgumentList {
+func ParseArgumentList(l *Lexer, constOnly bool) ast.ArgumentList {
 	var args ast.ArgumentList
 	l.ConsumeToken('(')
 	for l.Peek() != ')' {
 		name := l.ConsumeIdentWithLoc()
 		l.ConsumeToken(':')
-		value := ParseLiteral(l, false)
-		directives := ParseDirectives(l)
+		value := ParseLiteral(l, constOnly)
+		directives := ParseDirectives(l, constOnly)
 		args = append(args, &ast.Argument{
 			Name:       name,
 			Value:      value,
