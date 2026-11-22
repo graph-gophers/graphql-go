@@ -34,19 +34,23 @@ type valueTypeIssue struct {
 // DefaultOverlapPairLimit bounds overlap comparisons for an entire document.
 const DefaultOverlapPairLimit = 100_000
 
+const maxVariableValidationErrors = 20
+
 type context struct {
-	schema               *ast.Schema
-	doc                  *ast.ExecutableDefinition
-	errs                 []*errors.QueryError
-	opErrs               map[*ast.OperationDefinition][]*errors.QueryError
-	usedVars             map[*ast.OperationDefinition]varSet
-	fieldMap             map[*ast.Field]fieldInfo
-	overlapValidated     map[selectionPair]bool
-	maxDepth             int
-	overlapPairLimit     int
-	overlapPairsObserved int
-	overlapLimitHit      bool
-	validateDeprecated   bool
+	schema                *ast.Schema
+	doc                   *ast.ExecutableDefinition
+	errs                  []*errors.QueryError
+	opErrs                map[*ast.OperationDefinition][]*errors.QueryError
+	usedVars              map[*ast.OperationDefinition]varSet
+	fieldMap              map[*ast.Field]fieldInfo
+	overlapValidated      map[selectionPair]bool
+	maxDepth              int
+	overlapPairLimit      int
+	overlapPairsObserved  int
+	overlapLimitHit       bool
+	validateDeprecated    bool
+	variableErrors        int
+	variableErrorLimitHit bool
 }
 
 func (c *context) addErr(loc errors.Location, rule string, format string, a ...any) {
@@ -59,6 +63,18 @@ func (c *context) addErrMultiLoc(locs []errors.Location, rule string, format str
 		Locations: locs,
 		Rule:      rule,
 	})
+}
+
+func (c *context) addVariableErr(loc errors.Location, format string, a ...any) {
+	if c.variableErrors >= maxVariableValidationErrors {
+		if !c.variableErrorLimitHit {
+			c.variableErrorLimitHit = true
+			c.addErr(loc, "MaxVariableValidationErrors", "Too many validation errors, error limit reached. Validation aborted.")
+		}
+		return
+	}
+	c.variableErrors++
+	c.addErr(loc, "VariablesOfCorrectType", format, a...)
 }
 
 type opContext struct {
@@ -118,6 +134,9 @@ func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string
 			}
 			if val, ok := variables[v.Name.Name]; ok || v.Default == nil {
 				validateValue(opc, v, val, t, v.Name.Name)
+				if c.variableErrorLimitHit {
+					return c.errs
+				}
 			}
 
 			if v.Default != nil {
@@ -236,6 +255,9 @@ func Validate(s *ast.Schema, doc *ast.ExecutableDefinition, variables map[string
 }
 
 func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Type, path string) {
+	if c.variableErrorLimitHit {
+		return
+	}
 	at := ""
 	if path != v.Name.Name {
 		at = fmt.Sprintf(" at %q", path)
@@ -243,7 +265,7 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Typ
 	switch t := t.(type) {
 	case *ast.NonNull:
 		if val == nil {
-			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value null%s.\nExpected type \"%s\", found null.", v.Name.Name, at, t)
+			c.addVariableErr(v.Loc, "Variable \"%s\" has invalid value null%s.\nExpected type \"%s\", found null.", v.Name.Name, at, t)
 			return
 		}
 		validateValue(c, v, val, t.OfType, path)
@@ -259,6 +281,9 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Typ
 		}
 		for i, elem := range vv {
 			validateValue(c, v, elem, t.OfType, fmt.Sprintf("%s[%d]", path, i))
+			if c.variableErrorLimitHit {
+				return
+			}
 		}
 	case *ast.EnumTypeDefinition:
 		if val == nil {
@@ -266,7 +291,7 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Typ
 		}
 		e, ok := val.(string)
 		if !ok {
-			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid type %T%s.\nExpected type \"%s\", found %v.", v.Name.Name, val, at, t, val)
+			c.addVariableErr(v.Loc, "Variable \"%s\" has invalid type %T%s.\nExpected type \"%s\", found %v.", v.Name.Name, val, at, t, val)
 			return
 		}
 		for _, option := range t.EnumValuesDefinition {
@@ -274,14 +299,14 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Typ
 				return
 			}
 		}
-		c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value %s%s.\nExpected type \"%s\", found %s.", v.Name.Name, e, at, t, e)
+		c.addVariableErr(v.Loc, "Variable \"%s\" has invalid value %s%s.\nExpected type \"%s\", found %s.", v.Name.Name, e, at, t, e)
 	case *ast.InputObject:
 		if val == nil {
 			return
 		}
 		in, ok := val.(map[string]any)
 		if !ok {
-			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid type %T%s.\nExpected type \"%s\", found %s.", v.Name.Name, val, at, t, val)
+			c.addVariableErr(v.Loc, "Variable \"%s\" has invalid type %T%s.\nExpected type \"%s\", found %s.", v.Name.Name, val, at, t, val)
 			return
 		}
 		// Entries not defined by the type must raise a request error. Iterating the
@@ -299,18 +324,21 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Typ
 		slices.Sort(unknown)
 		for _, name := range unknown {
 			suggestion := makeSuggestion("Did you mean", t.Values.Names(), name)
-			c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value%s.\nField %q is not defined by type %q.%s", v.Name.Name, at, name, t.Name, suggestion)
+			c.addVariableErr(v.Loc, "Variable \"%s\" has invalid value%s.\nField %q is not defined by type %q.%s", v.Name.Name, at, name, t.Name, suggestion)
+			if c.variableErrorLimitHit {
+				return
+			}
 		}
 
 		// Validate @oneOf constraint: exactly one non-null field must be provided.
 		if t.Directives.Get("oneOf") != nil {
 			if len(in) != 1 {
-				c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value%s.\nOneOf Input Object %q must specify exactly one key.", v.Name.Name, at, t.Name)
+				c.addVariableErr(v.Loc, "Variable \"%s\" has invalid value%s.\nOneOf Input Object %q must specify exactly one key.", v.Name.Name, at, t.Name)
 				return
 			}
 			for name, fieldVal := range in {
 				if fieldVal == nil {
-					c.addErr(v.Loc, "VariablesOfCorrectType", "Variable \"%s\" has invalid value%s.\nField %q must be non-null.", v.Name.Name, at, t.Name+"."+name)
+					c.addVariableErr(v.Loc, "Variable \"%s\" has invalid value%s.\nField %q must be non-null.", v.Name.Name, at, t.Name+"."+name)
 					return
 				}
 			}
@@ -322,6 +350,9 @@ func validateValue(c *opContext, v *ast.InputValueDefinition, val any, t ast.Typ
 				continue
 			}
 			validateValue(c, v, fieldVal, f.Type, path+"."+f.Name.Name)
+			if c.variableErrorLimitHit {
+				return
+			}
 		}
 	}
 }

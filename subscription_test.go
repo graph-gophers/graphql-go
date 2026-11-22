@@ -126,6 +126,68 @@ func closedUpstreamNullable(rr ...*helloSaidNullableEventResolver) <-chan *hello
 	return c
 }
 
+type variableLimitSubscriptionResolver struct {
+	called atomic.Bool
+}
+
+func (*variableLimitSubscriptionResolver) Hello() string { return "hello" }
+
+func (r *variableLimitSubscriptionResolver) Values(args struct{ Input *[]string }) <-chan string {
+	r.called.Store(true)
+	ch := make(chan string)
+	close(ch)
+	return ch
+}
+
+func TestSubscriptionVariableValidationErrorLimit(t *testing.T) {
+	const maxErrors = 20
+	resolver := &variableLimitSubscriptionResolver{}
+	schema := graphql.MustParseSchema(`
+		type Query { hello: String! }
+		type Subscription { values(input: [String!]): String! }
+	`, resolver)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	responses, err := schema.Subscribe(ctx,
+		`subscription ($input: [String!]) { values(input: $input) }`,
+		"", map[string]any{"input": make([]any, 100)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case value, ok := <-responses:
+		if !ok {
+			t.Fatal("subscription closed without a validation response")
+		}
+		response, ok := value.(*graphql.Response)
+		if !ok {
+			t.Fatalf("unexpected subscription response type %T", value)
+		}
+		if len(response.Errors) != maxErrors+1 {
+			t.Fatalf("expected %d validation errors including the limit error, got %d", maxErrors+1, len(response.Errors))
+		}
+		if response.Errors[maxErrors].Rule != "MaxVariableValidationErrors" {
+			t.Errorf("expected final error rule MaxVariableValidationErrors, got %q", response.Errors[maxErrors].Rule)
+		}
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for the validation response")
+	}
+
+	select {
+	case _, ok := <-responses:
+		if ok {
+			t.Error("expected subscription channel to close after the validation response")
+		}
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for the subscription channel to close")
+	}
+	if resolver.called.Load() {
+		t.Error("subscription resolver was called for invalid variables")
+	}
+}
+
 func TestSchemaSubscribe(t *testing.T) {
 	gqltesting.RunSubscribes(t, []*gqltesting.TestSubscription{
 		{
