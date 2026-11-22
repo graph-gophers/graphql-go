@@ -2,6 +2,7 @@ package schema
 
 import (
 	"fmt"
+	"strings"
 	"text/scanner"
 
 	"github.com/graph-gophers/graphql-go/ast"
@@ -43,6 +44,9 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 		if err := resolveNamedType(s, t); err != nil {
 			return err
 		}
+	}
+	if err := validateInputObjectCycles(s); err != nil {
+		return err
 	}
 	for _, d := range s.Directives {
 		for _, arg := range d.Arguments {
@@ -352,6 +356,57 @@ func resolveInputObject(s *ast.Schema, values ast.ArgumentsDefinition) error {
 			return err
 		}
 
+	}
+	return nil
+}
+
+// validateInputObjectCycles rejects input objects that reference themselves
+// through a chain of non-null, non-list input object fields, since no finite
+// value can be supplied for them.
+//
+// https://spec.graphql.org/September2025/#sec-Input-Objects.Circular-References
+func validateInputObjectCycles(s *ast.Schema) error {
+	visited := make(map[string]bool)
+	var fieldPath []string
+	fieldPathIndexByTypeName := make(map[string]int)
+
+	var detectCycle func(in *ast.InputObject) error
+	detectCycle = func(in *ast.InputObject) error {
+		if visited[in.Name] {
+			return nil
+		}
+		visited[in.Name] = true
+		fieldPathIndexByTypeName[in.Name] = len(fieldPath)
+
+		for _, f := range in.Values {
+			nn, ok := f.Type.(*ast.NonNull)
+			if !ok {
+				continue
+			}
+			ref, ok := nn.OfType.(*ast.InputObject)
+			if !ok {
+				continue
+			}
+			fieldPath = append(fieldPath, f.Name.Name)
+			if i, ok := fieldPathIndexByTypeName[ref.Name]; ok {
+				return errors.Errorf("Cannot reference Input Object %q within itself through a series of non-null fields: %q.", ref.Name, strings.Join(fieldPath[i:], "."))
+			}
+			if err := detectCycle(ref); err != nil {
+				return err
+			}
+			fieldPath = fieldPath[:len(fieldPath)-1]
+		}
+
+		delete(fieldPathIndexByTypeName, in.Name)
+		return nil
+	}
+
+	for _, in := range s.Types {
+		if input, ok := in.(*ast.InputObject); ok {
+			if err := detectCycle(input); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
