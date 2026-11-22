@@ -374,6 +374,9 @@ func parseSchema(s *ast.Schema, l *common.Lexer) {
 				name := l.ConsumeIdent()
 				l.ConsumeToken(':')
 				typ := l.ConsumeIdent()
+				if _, ok := s.EntryPointNames[name]; ok {
+					l.SyntaxError(fmt.Sprintf("there can be only one %q type in schema", name))
+				}
 				s.EntryPointNames[name] = typ
 			}
 			l.ConsumeToken('}')
@@ -577,6 +580,9 @@ func parseExtension(s *ast.Schema, l *common.Lexer) {
 				name := l.ConsumeIdent()
 				l.ConsumeToken(':')
 				typ := l.ConsumeIdent()
+				if _, ok := s.EntryPointNames[name]; ok {
+					l.SyntaxError(fmt.Sprintf("type for %q already defined in the schema", name))
+				}
 				s.EntryPointNames[name] = typ
 			}
 			l.ConsumeToken('}')
