@@ -520,6 +520,10 @@ func parseEnumDef(l *common.Lexer) *ast.EnumTypeDefinition {
 			EnumValue:  l.ConsumeIdent(),
 			Directives: common.ParseDirectives(l),
 		}
+		switch v.EnumValue {
+		case "true", "false", "null":
+			l.SyntaxError(fmt.Sprintf("enum value %q is reserved and cannot be used", v.EnumValue))
+		}
 
 		enum.EnumValuesDefinition = append(enum.EnumValuesDefinition, v)
 	}
