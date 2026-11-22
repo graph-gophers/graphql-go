@@ -159,6 +159,7 @@
         "interfaces": null,
         "kind": "INTERFACE",
         "name": "Admin",
+        "specifiedByURL": null,
         "possibleTypes": [
           {
             "kind": "OBJECT",
@@ -175,6 +176,7 @@
         "interfaces": null,
         "kind": "SCALAR",
         "name": "Boolean",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -185,6 +187,7 @@
         "interfaces": null,
         "kind": "SCALAR",
         "name": "Float",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -195,6 +198,7 @@
         "interfaces": null,
         "kind": "SCALAR",
         "name": "ID",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -205,6 +209,7 @@
         "interfaces": null,
         "kind": "SCALAR",
         "name": "Int",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -236,6 +241,7 @@
         "interfaces": null,
         "kind": "INPUT_OBJECT",
         "name": "Pagination",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -263,6 +269,7 @@
         "interfaces": null,
         "kind": "INTERFACE",
         "name": "Person",
+        "specifiedByURL": null,
         "possibleTypes": [
           {
             "kind": "OBJECT",
@@ -387,6 +394,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "Query",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -410,6 +418,7 @@
         "interfaces": null,
         "kind": "ENUM",
         "name": "Role",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -420,6 +429,7 @@
         "interfaces": null,
         "kind": "UNION",
         "name": "SearchResult",
+        "specifiedByURL": null,
         "possibleTypes": [
           {
             "kind": "OBJECT",
@@ -436,6 +446,7 @@
         "interfaces": null,
         "kind": "SCALAR",
         "name": "String",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -446,6 +457,7 @@
         "interfaces": null,
         "kind": "SCALAR",
         "name": "Time",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -611,6 +623,7 @@
         ],
         "kind": "OBJECT",
         "name": "User",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -698,6 +711,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "__Directive",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -817,6 +831,7 @@
         "interfaces": null,
         "kind": "ENUM",
         "name": "__DirectiveLocation",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -884,6 +899,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "__EnumValue",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -991,6 +1007,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "__Field",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -1086,6 +1103,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "__InputValue",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -1185,6 +1203,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "__Schema",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -1382,6 +1401,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "__Type",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -1441,6 +1461,7 @@
         "interfaces": null,
         "kind": "ENUM",
         "name": "__TypeKind",
+        "specifiedByURL": null,
         "possibleTypes": null
       }
     ]

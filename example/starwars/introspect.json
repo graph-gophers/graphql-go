@@ -112,6 +112,7 @@
         "interfaces": null,
         "kind": "SCALAR",
         "name": "Boolean",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -232,6 +233,7 @@
         "interfaces": null,
         "kind": "INTERFACE",
         "name": "Character",
+        "specifiedByURL": null,
         "possibleTypes": [
           {
             "kind": "OBJECT",
@@ -381,6 +383,7 @@
         ],
         "kind": "OBJECT",
         "name": "Droid",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -410,6 +413,7 @@
         "interfaces": null,
         "kind": "ENUM",
         "name": "Episode",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -420,6 +424,7 @@
         "interfaces": null,
         "kind": "SCALAR",
         "name": "Float",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -495,6 +500,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "FriendsConnection",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -534,6 +540,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "FriendsEdge",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -715,6 +722,7 @@
         ],
         "kind": "OBJECT",
         "name": "Human",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -725,6 +733,7 @@
         "interfaces": null,
         "kind": "SCALAR",
         "name": "ID",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -735,6 +744,7 @@
         "interfaces": null,
         "kind": "SCALAR",
         "name": "Int",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -758,6 +768,7 @@
         "interfaces": null,
         "kind": "ENUM",
         "name": "LengthUnit",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -810,6 +821,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "Mutation",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -861,6 +873,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "PageInfo",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -1073,6 +1086,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "Query",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -1112,6 +1126,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "Review",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -1147,6 +1162,7 @@
         "interfaces": null,
         "kind": "INPUT_OBJECT",
         "name": "ReviewInput",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -1157,6 +1173,7 @@
         "interfaces": null,
         "kind": "UNION",
         "name": "SearchResult",
+        "specifiedByURL": null,
         "possibleTypes": [
           {
             "kind": "OBJECT",
@@ -1243,6 +1260,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "Starship",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -1253,6 +1271,7 @@
         "interfaces": null,
         "kind": "SCALAR",
         "name": "String",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -1340,6 +1359,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "__Directive",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -1459,6 +1479,7 @@
         "interfaces": null,
         "kind": "ENUM",
         "name": "__DirectiveLocation",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -1526,6 +1547,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "__EnumValue",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -1633,6 +1655,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "__Field",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -1728,6 +1751,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "__InputValue",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -1827,6 +1851,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "__Schema",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -2024,6 +2049,7 @@
         "interfaces": [],
         "kind": "OBJECT",
         "name": "__Type",
+        "specifiedByURL": null,
         "possibleTypes": null
       },
       {
@@ -2083,6 +2109,7 @@
         "interfaces": null,
         "kind": "ENUM",
         "name": "__TypeKind",
+        "specifiedByURL": null,
         "possibleTypes": null
       }
     ]
