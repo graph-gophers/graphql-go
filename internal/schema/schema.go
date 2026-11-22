@@ -163,6 +163,10 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 		}
 	}
 
+	if err := validateTypePositions(s); err != nil {
+		return err
+	}
+
 	s.SchemaString = schemaString
 
 	return nil
@@ -172,6 +176,82 @@ func ParseSchema(schemaString string, useStringDescriptions bool) (*ast.Schema, 
 	s := New()
 	err := Parse(s, schemaString, useStringDescriptions)
 	return s, err
+}
+
+// validateTypePositions checks that fields have output types and that arguments
+// and input fields have input types.
+// See https://spec.graphql.org/September2025/#sec-Input-and-Output-Types
+func validateTypePositions(s *ast.Schema) error {
+	checkInputs := func(prefix, suffix string, values ast.ArgumentsDefinition) error {
+		for _, v := range values {
+			if !isInputType(v.Type) {
+				return errors.Errorf("the type of %s%s%s must be an input type but got: %s", prefix, v.Name.Name, suffix, v.Type)
+			}
+		}
+		return nil
+	}
+	checkFields := func(typeName string, fields ast.FieldsDefinition) error {
+		for _, f := range fields {
+			if !isOutputType(f.Type) {
+				return errors.Errorf("the type of %s.%s must be an output type but got: %s", typeName, f.Name, f.Type)
+			}
+			if err := checkInputs(typeName+"."+f.Name+"(", ":)", f.Arguments); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for _, typeDef := range s.Types {
+		switch t := typeDef.(type) {
+		case *ast.ObjectTypeDefinition:
+			if err := checkFields(t.Name, t.Fields); err != nil {
+				return err
+			}
+		case *ast.InterfaceTypeDefinition:
+			if err := checkFields(t.Name, t.Fields); err != nil {
+				return err
+			}
+		case *ast.InputObject:
+			if err := checkInputs(t.Name+".", "", t.Values); err != nil {
+				return err
+			}
+		}
+	}
+	for _, d := range s.Directives {
+		if err := checkInputs("@"+d.Name+"(", ":)", d.Arguments); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func unwrapType(t ast.Type) ast.Type {
+	for {
+		switch tt := t.(type) {
+		case *ast.List:
+			t = tt.OfType
+		case *ast.NonNull:
+			t = tt.OfType
+		default:
+			return t
+		}
+	}
+}
+
+func isInputType(t ast.Type) bool {
+	switch unwrapType(t).(type) {
+	case *ast.ScalarTypeDefinition, *ast.EnumTypeDefinition, *ast.InputObject:
+		return true
+	}
+	return false
+}
+
+func isOutputType(t ast.Type) bool {
+	switch unwrapType(t).(type) {
+	case *ast.ScalarTypeDefinition, *ast.EnumTypeDefinition, *ast.ObjectTypeDefinition, *ast.InterfaceTypeDefinition, *ast.Union:
+		return true
+	}
+	return false
 }
 
 func mergeExtensions(s *ast.Schema) error {
