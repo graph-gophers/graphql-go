@@ -1450,6 +1450,35 @@ func TestNonNullVariableWithDefault(t *testing.T) {
 	}})
 }
 
+type nonNullArgErrorResolver struct{}
+
+func (r *nonNullArgErrorResolver) MyField(args struct{ Foo string }) string {
+	return args.Foo
+}
+
+func TestNonNullArgCoercedNullErrorMessage(t *testing.T) {
+	gqltesting.RunTest(t, &gqltesting.Test{
+		Schema: graphql.MustParseSchema(`
+			schema {
+				query: Query
+			}
+			type Query {
+				myField(foo: String!): String!
+			}
+		`, &nonNullArgErrorResolver{}),
+		Query: `
+			query ($v: String = "hello") {
+				myField(foo: $v)
+			}
+		`,
+		Variables:      map[string]any{"v": nil},
+		ExpectedResult: `{}`,
+		ExpectedErrors: []*gqlerrors.QueryError{{
+			Message: `"foo" of type "String!": got null for non-null`,
+		}},
+	})
+}
+
 func TestSkipDirective(t *testing.T) {
 	gqltesting.RunTests(t, []*gqltesting.Test{
 		{

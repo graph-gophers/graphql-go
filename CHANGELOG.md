@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## UNRELEASED
+
+* [SECURITY] Limit variable value validation to 20 errors to reduce amplification from invalid inputs. If the limit is exceeded, validation stops and returns a final limit error.
+
 ## [v1.11.1](https://github.com/graph-gophers/graphql-go/releases/tag/v1.11.0) Release v1.11.0
 
 * [SECURITY] Limit overlapping field validation to 100,000 pair comparisons per document by default and stop promptly when the limit is exceeded to prevent memory exhaustion. `OverlapValidationLimit(0)` and negative values now select the default; use a large value such as `math.MaxInt` for effectively no limit.
@@ -8,7 +12,6 @@
 * [BUGFIX] Reject malformed or out-of-range numeric literals during parsing instead of allowing panics. Custom scalars continue to receive numeric literals within the supported int64 and float64 ranges.
 
 [v1.11.0](https://github.com/graph-gophers/graphql-go/releases/tag/v1.11.0) Release v1.11.0
-
 
 * [FEATURE] Add the `MaxSelections(n)` schema option to change the limit on expanded selections per operation. Zero and negative values select the default (100,000); use a very large value such as `math.MaxInt` for effectively no limit.
 * [BUGFIX] Check max depth for every depth at which a fragment is spread, not only the first.
