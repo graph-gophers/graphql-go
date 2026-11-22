@@ -49,6 +49,7 @@ var introspectionQuery = `
     kind
     name
     description
+    specifiedByURL
     fields(includeDeprecated: true) {
       name
       description
