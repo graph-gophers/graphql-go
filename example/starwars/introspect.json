@@ -229,7 +229,7 @@
           }
         ],
         "inputFields": null,
-        "interfaces": null,
+        "interfaces": [],
         "kind": "INTERFACE",
         "name": "Character",
         "possibleTypes": [
