@@ -54,6 +54,10 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 		}
 	}
 
+	if err := resolveDirectives(s, s.SchemaDefinition.Directives, "SCHEMA"); err != nil {
+		return err
+	}
+
 	// https://graphql.github.io/graphql-spec/June2018/#sec-Root-Operation-Types
 	// > While any type can be the root operation type for a GraphQL operation, the type system definition language can
 	// > omit the schema definition when the query, mutation, and subscription root types are named Query, Mutation,
@@ -204,6 +208,7 @@ func mergeExtensions(s *ast.Schema) error {
 				}
 			}
 			og.InterfaceNames = append(og.InterfaceNames, e.InterfaceNames...)
+			og.Directives = append(og.Directives, e.Directives...)
 
 		case *ast.InputObject:
 			e := ext.Type.(*ast.InputObject)
@@ -213,7 +218,11 @@ func mergeExtensions(s *ast.Schema) error {
 					return fmt.Errorf("extended field %q already exists", field.Name)
 				}
 			}
+			if e.Directives.Get("oneOf") != nil {
+				return fmt.Errorf("directive \"@oneOf\" must not be provided by an input object type extension of %q", og.Name)
+			}
 			og.Values = append(og.Values, e.Values...)
+			og.Directives = append(og.Directives, e.Directives...)
 
 		case *ast.InterfaceTypeDefinition:
 			e := ext.Type.(*ast.InterfaceTypeDefinition)
@@ -224,6 +233,7 @@ func mergeExtensions(s *ast.Schema) error {
 				}
 			}
 			og.Fields = append(og.Fields, e.Fields...)
+			og.Directives = append(og.Directives, e.Directives...)
 
 		case *ast.Union:
 			e := ext.Type.(*ast.Union)
@@ -236,6 +246,7 @@ func mergeExtensions(s *ast.Schema) error {
 				}
 			}
 			og.TypeNames = append(og.TypeNames, e.TypeNames...)
+			og.Directives = append(og.Directives, e.Directives...)
 
 		case *ast.EnumTypeDefinition:
 			e := ext.Type.(*ast.EnumTypeDefinition)
@@ -248,6 +259,7 @@ func mergeExtensions(s *ast.Schema) error {
 				}
 			}
 			og.EnumValuesDefinition = append(og.EnumValuesDefinition, e.EnumValuesDefinition...)
+			og.Directives = append(og.Directives, e.Directives...)
 		default:
 			return fmt.Errorf(`unexpected %q, expecting "schema", "type", "enum", "interface", "union" or "input"`, og.TypeName())
 		}
