@@ -183,7 +183,26 @@ func (b *Builder) MakeStructPacker(values []*ast.InputValueDefinition, typ refle
 			return strings.EqualFold(stripUnderscore(n), stripUnderscore(name))
 		}
 
-		sf, ok := structType.FieldByNameFunc(fx)
+		var sf reflect.StructField
+		ok := false
+		for _, field := range reflect.VisibleFields(structType) {
+			if tag, tagged := field.Tag.Lookup("graphql"); tagged && tag == name {
+				if ok {
+					return nil, fmt.Errorf("%s has multiple fields with graphql tag %q", typ, name)
+				}
+				parent := structType
+				for _, i := range field.Index[:len(field.Index)-1] {
+					parent = parent.Field(i).Type
+					if parent.Kind() == reflect.Pointer {
+						return nil, fmt.Errorf("field %q with graphql tag %q is embedded through a pointer", field.Name, name)
+					}
+				}
+				sf, ok = field, true
+			}
+		}
+		if !ok {
+			sf, ok = structType.FieldByNameFunc(fx)
+		}
 		if !ok {
 			return nil, fmt.Errorf("%s does not define field %q (hint: missing `args struct { ... }` wrapper for field arguments, or missing field on input struct)", typ, name)
 		}

@@ -80,6 +80,9 @@ The method has up to two arguments:
 - Optional `context.Context` argument.
 - Mandatory `*struct { ... }` argument if the corresponding GraphQL field has arguments. The names of the struct fields have to be [exported](https://golang.org/ref/spec#Exported_identifiers) and have to match the names of the GraphQL arguments in a non-case-sensitive way.
 
+Argument and input object struct fields can instead specify an exact GraphQL name with a `graphql` tag, such as ``ItemIdentifier string `graphql:"itemID"` ``. A matching tag takes precedence over a field name.
+Tagged input fields promoted through an embedded pointer are not supported.
+
 The method has up to two results:
 
 - The GraphQL field's value as determined by the resolver.
