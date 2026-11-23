@@ -57,6 +57,15 @@ func (l *Lexer) Peek() rune {
 	return l.next
 }
 
+// PeekIdent returns the current identifier without consuming it, or "" when
+// the next token is not an identifier.
+func (l *Lexer) PeekIdent() string {
+	if l.next != scanner.Ident {
+		return ""
+	}
+	return l.sc.TokenText()
+}
+
 // ConsumeWhitespace consumes whitespace and tokens equivalent to whitespace (e.g. commas and comments).
 //
 // Consumed comment characters will build the description for the next type or field encountered.

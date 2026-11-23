@@ -427,6 +427,28 @@ func parseSchema(s *ast.Schema, l *common.Lexer) {
 }
 
 func parseObjectDef(l *common.Lexer) *ast.ObjectTypeDefinition {
+	object := parseObjectHead(l)
+
+	l.ConsumeToken('{')
+	object.Fields = parseFieldsDef(l)
+	l.ConsumeToken('}')
+
+	return object
+}
+
+func parseObjectExtension(l *common.Lexer) *ast.ObjectTypeDefinition {
+	object := parseObjectHead(l)
+
+	if l.Peek() == '{' {
+		l.ConsumeToken('{')
+		object.Fields = parseFieldsDef(l)
+		l.ConsumeToken('}')
+	}
+
+	return object
+}
+
+func parseObjectHead(l *common.Lexer) *ast.ObjectTypeDefinition {
 	object := &ast.ObjectTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
 
 	for l.Peek() != '{' {
@@ -435,13 +457,13 @@ func parseObjectDef(l *common.Lexer) *ast.ObjectTypeDefinition {
 			continue
 		}
 
-		if l.Peek() != scanner.Ident {
+		if l.Peek() != scanner.Ident || l.PeekIdent() != "implements" {
 			break
 		}
 
 		l.ConsumeKeyword("implements")
 
-		for l.Peek() != '{' && l.Peek() != '@' {
+		for l.Peek() == '&' || (l.Peek() == scanner.Ident && !isDefinitionKeyword(l.PeekIdent())) {
 			if l.Peek() == '&' {
 				l.ConsumeToken('&')
 			}
@@ -449,11 +471,17 @@ func parseObjectDef(l *common.Lexer) *ast.ObjectTypeDefinition {
 			object.InterfaceNames = append(object.InterfaceNames, l.ConsumeIdent())
 		}
 	}
-	l.ConsumeToken('{')
-	object.Fields = parseFieldsDef(l)
-	l.ConsumeToken('}')
 
 	return object
+}
+
+func isDefinitionKeyword(name string) bool {
+	switch name {
+	case "schema", "type", "interface", "union", "enum", "input", "scalar", "directive", "extend":
+		return true
+	default:
+		return false
+	}
 }
 
 func parseInterfaceDef(l *common.Lexer) *ast.InterfaceTypeDefinition {
@@ -583,7 +611,7 @@ func parseExtension(s *ast.Schema, l *common.Lexer) {
 		}
 
 	case "type":
-		obj := parseObjectDef(l)
+		obj := parseObjectExtension(l)
 		s.Extensions = append(s.Extensions, &ast.Extension{Type: obj, Loc: loc})
 
 	case "interface":
