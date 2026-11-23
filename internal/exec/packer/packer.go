@@ -266,6 +266,10 @@ type listPacker struct {
 func (e *listPacker) Pack(value interface{}) (reflect.Value, error) {
 	list, ok := value.([]interface{})
 	if !ok {
+		rv := reflect.ValueOf(value)
+		if rv.IsValid() && (rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array) {
+			return reflect.Value{}, fmt.Errorf("list value must be []interface{}, got %T; convert concrete slices before passing them as variables", value)
+		}
 		list = []interface{}{value}
 	}
 
