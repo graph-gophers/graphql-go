@@ -55,6 +55,9 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 			if err != nil {
 				return err
 			}
+			if err := validateInputType(t); err != nil {
+				return errors.Errorf("directive %q argument %q: %s", d.Name, arg.Name.Name, err)
+			}
 			arg.Type = t
 		}
 	}
@@ -445,11 +448,45 @@ func resolveField(s *ast.Schema, f *ast.FieldDefinition) error {
 	if err != nil {
 		return err
 	}
+	if err := validateOutputType(t); err != nil {
+		return errors.Errorf("field %q: %s", f.Name, err)
+	}
 	f.Type = t
 	if err := resolveDirectives(s, f.Directives, "FIELD_DEFINITION"); err != nil {
 		return err
 	}
 	return resolveInputObject(s, f.Arguments)
+}
+
+func namedType(t ast.Type) ast.Type {
+	for {
+		switch wrapped := t.(type) {
+		case *ast.List:
+			t = wrapped.OfType
+		case *ast.NonNull:
+			t = wrapped.OfType
+		default:
+			return t
+		}
+	}
+}
+
+func validateInputType(t ast.Type) error {
+	switch namedType(t).(type) {
+	case *ast.ScalarTypeDefinition, *ast.EnumTypeDefinition, *ast.InputObject:
+		return nil
+	default:
+		return fmt.Errorf("type %q is not an input type", t)
+	}
+}
+
+func validateOutputType(t ast.Type) error {
+	switch namedType(t).(type) {
+	case *ast.ScalarTypeDefinition, *ast.EnumTypeDefinition, *ast.ObjectTypeDefinition, *ast.InterfaceTypeDefinition, *ast.Union:
+		return nil
+	default:
+		return fmt.Errorf("type %q is not an output type", t)
+	}
 }
 
 func resolveDirectives(s *ast.Schema, directives ast.DirectiveList, loc string) error {
@@ -605,6 +642,9 @@ func resolveInputObject(s *ast.Schema, values ast.ArgumentsDefinition) error {
 		t, err := common.ResolveType(v.Type, s.Resolve)
 		if err != nil {
 			return err
+		}
+		if err := validateInputType(t); err != nil {
+			return errors.Errorf("input value %q: %s", v.Name.Name, err)
 		}
 		v.Type = t
 
