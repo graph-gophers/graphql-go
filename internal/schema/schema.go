@@ -251,8 +251,52 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 		}
 	}
 
+	if err := validateDefaultValues(s); err != nil {
+		return err
+	}
+
 	s.SchemaString = schemaString
 
+	return nil
+}
+
+func validateDefaultValues(s *ast.Schema) error {
+	check := func(owner string, values ast.ArgumentsDefinition) error {
+		for _, val := range values {
+			if val.Default == nil {
+				continue
+			}
+			if reason := validateConstValue(s, val.Default, val.Type); reason != "" {
+				return errors.Errorf("%s %q has an invalid default value %s: %s", owner, val.Name.Name, val.Default, reason)
+			}
+		}
+		return nil
+	}
+	for _, typeDef := range s.Types {
+		switch t := typeDef.(type) {
+		case *ast.ObjectTypeDefinition:
+			for _, field := range t.Fields {
+				if err := check("argument of "+t.Name+"."+field.Name, field.Arguments); err != nil {
+					return err
+				}
+			}
+		case *ast.InterfaceTypeDefinition:
+			for _, field := range t.Fields {
+				if err := check("argument of "+t.Name+"."+field.Name, field.Arguments); err != nil {
+					return err
+				}
+			}
+		case *ast.InputObject:
+			if err := check("field of "+t.Name, t.Values); err != nil {
+				return err
+			}
+		}
+	}
+	for _, directive := range s.Directives {
+		if err := check("argument of @"+directive.Name, directive.Arguments); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -532,6 +576,9 @@ func validateConstValue(s *ast.Schema, value ast.Value, t ast.Type) string {
 		}
 		provided := make(map[string]struct{}, len(object.Fields))
 		for _, field := range object.Fields {
+			if _, exists := provided[field.Name.Name]; exists {
+				return fmt.Sprintf("field %q is provided more than once", field.Name.Name)
+			}
 			inputField := t.Values.Get(field.Name.Name)
 			if inputField == nil {
 				return fmt.Sprintf("field %q is not defined by type %q", field.Name.Name, t.Name)
@@ -549,6 +596,14 @@ func validateConstValue(s *ast.Schema, value ast.Value, t ast.Type) string {
 				return fmt.Sprintf("field %q of required type %q was not provided", t.Name+"."+inputField.Name.Name, inputField.Type)
 			}
 		}
+		if t.Directives.Get("oneOf") != nil {
+			if len(object.Fields) != 1 {
+				return fmt.Sprintf("OneOf input object %q must specify exactly one field", t.Name)
+			}
+			if _, isNull := object.Fields[0].Value.(*ast.NullValue); isNull {
+				return fmt.Sprintf("field %q must be non-null", t.Name+"."+object.Fields[0].Name.Name)
+			}
+		}
 		return ""
 
 	case *ast.EnumTypeDefinition:
@@ -562,6 +617,11 @@ func validateConstValue(s *ast.Schema, value ast.Value, t ast.Type) string {
 		return fmt.Sprintf("enum %q cannot represent value %s", t.Name, value)
 
 	case *ast.ScalarTypeDefinition:
+		switch t.Name {
+		case "Int", "Float", "String", "Boolean", "ID":
+		default:
+			return ""
+		}
 		literal, ok := value.(*ast.PrimitiveValue)
 		if !ok {
 			return fmt.Sprintf("expected value of type %q, found %s", t, value)
@@ -588,8 +648,6 @@ func validateConstValue(s *ast.Schema, value ast.Value, t ast.Type) string {
 				_, err := strconv.ParseInt(literal.Text, 10, 32)
 				valid = err == nil
 			}
-		default:
-			valid = true
 		}
 		if !valid {
 			return fmt.Sprintf("%s cannot represent value %s", t.Name, value)

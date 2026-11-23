@@ -26,6 +26,7 @@ func TestDescriptionBeforeExtension(t *testing.T) {
 		{"input", `input I { x: String }`, `extend input I { y: String }`},
 		{"scalar", `scalar S`, `extend scalar S @specifiedBy(url: "https://example.com")`},
 	}
+
 	descriptions := []struct {
 		name string
 		text string
@@ -67,6 +68,43 @@ func TestDescriptionBeforeExtension(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestSchemaDefaultValues(t *testing.T) {
+	tests := []struct {
+		name string
+		sdl  string
+		want string
+	}{
+		{"interface argument", `interface Node { f(x: Int = "bad"): Int }`, `argument of Node.f "x"`},
+		{"extended field argument", `type Query { f: Int } extend type Query { g(x: Boolean = 1): Int }`, `argument of Query.g "x"`},
+		{"input field", `input I { x: [Int!] = [1, null] }`, `field of I "x"`},
+		{"directive argument", `directive @d(x: E = B) on FIELD enum E { A }`, `argument of @d "x"`},
+		{"int out of range", `type Query { f(x: Int = 2147483648): Int }`, `Int cannot represent`},
+		{"wrong scalar shape", `type Query { f(x: String = [1]): Int }`, `expected value of type`},
+		{"unknown input field", `input I { x: Int } type Query { f(x: I = {y: 1}): Int }`, `field "y" is not defined`},
+		{"duplicate input field", `input I { x: Int } type Query { f(x: I = {x: 1, x: 2}): Int }`, `field "x" is provided more than once`},
+		{"missing required input field", `input I { x: Int! } type Query { f(x: I = {}): Int }`, `field "I.x" of required type`},
+		{"nested input field", `input I { x: Int! } type Query { f(x: [I] = [{x: "bad"}]): Int }`, `Int cannot represent`},
+		{"oneof empty", `input I @oneOf { x: Int y: Int } type Query { f(x: I = {}): Int }`, `must specify exactly one field`},
+		{"oneof multiple", `input I @oneOf { x: Int y: Int } type Query { f(x: I = {x: 1, y: 2}): Int }`, `must specify exactly one field`},
+		{"oneof null", `input I @oneOf { x: Int } type Query { f(x: I = {x: null}): Int }`, `field "I.x" must be non-null`},
+		{"valid coercions", `input I { x: Int! = 1 } type Query { f(a: [Int!] = 1, b: I = {}, c: String = null): Int }`, ""},
+		{"valid oneof", `input I @oneOf { x: Int } type Query { f(x: I = {x: 1}): Int }`, ""},
+		{"custom scalar object", `scalar JSON type Query { f(x: JSON = {a: [1, true]}): Int }`, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := schema.ParseSchema(tt.sdl, false)
+			if tt.want == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("expected error containing %q, got %v", tt.want, err)
+			}
+		})
 	}
 }
 
