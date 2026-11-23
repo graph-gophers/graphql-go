@@ -530,6 +530,34 @@ func (s *Schema) validateSchema() error {
 	if err := validateRootOp(s.schema, "subscription", false); err != nil {
 		return err
 	}
+
+	rootOps := []struct {
+		name string
+		typ  ast.NamedType
+	}{
+		{name: "query", typ: s.schema.RootOperationTypes["query"]},
+		{name: "mutation", typ: s.schema.RootOperationTypes["mutation"]},
+		{name: "subscription", typ: s.schema.RootOperationTypes["subscription"]},
+	}
+	operationsByType := make(map[string][]string, len(rootOps))
+	var duplicateType string
+	for _, op := range rootOps {
+		if op.typ == nil {
+			continue
+		}
+		typeName := op.typ.TypeName()
+		operationsByType[typeName] = append(operationsByType[typeName], op.name)
+		if len(operationsByType[typeName]) == 2 {
+			duplicateType = typeName
+		}
+	}
+	if duplicateType != "" {
+		operations := operationsByType[duplicateType]
+		if len(operations) == 3 {
+			return fmt.Errorf("query, mutation, and subscription root types must all be different types if provided, all are set to %q", duplicateType)
+		}
+		return fmt.Errorf("root operation types %s and %s must be different, both are set to %q", operations[0], operations[1], duplicateType)
+	}
 	return nil
 }
 
