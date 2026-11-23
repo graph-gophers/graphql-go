@@ -51,6 +51,11 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 				return err
 			}
 			arg.Type = t
+			if arg.Default != nil {
+				if err := validateDefaultValue(arg.Type, arg.Default); err != nil {
+					return fmt.Errorf("directive %q argument %q: %w", d.Name, arg.Name.Name, err)
+				}
+			}
 		}
 	}
 
@@ -348,10 +353,70 @@ func resolveInputObject(s *ast.Schema, values ast.ArgumentsDefinition) error {
 		}
 		v.Type = t
 
+		if v.Default != nil {
+			if err := validateDefaultValue(t, v.Default); err != nil {
+				return fmt.Errorf("%q: %w", v.Name.Name, err)
+			}
+		}
+
 		if err := resolveDirectives(s, v.Directives, "ARGUMENT_DEFINITION"); err != nil {
 			return err
 		}
 
+	}
+	return nil
+}
+
+func validateDefaultValue(t ast.Type, value ast.Value) error {
+	switch t := t.(type) {
+	case *ast.NonNull:
+		if _, ok := value.(*ast.NullValue); ok {
+			return fmt.Errorf("default value null is not valid for non-null type %s", t)
+		}
+		return validateDefaultValue(t.OfType, value)
+	case *ast.List:
+		list, ok := value.(*ast.ListValue)
+		if !ok {
+			return nil
+		}
+		for _, item := range list.Values {
+			if err := validateDefaultValue(t.OfType, item); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *ast.EnumTypeDefinition:
+		primitive, ok := value.(*ast.PrimitiveValue)
+		if !ok || primitive.Type != scanner.Ident {
+			return nil
+		}
+		for _, enumValue := range t.EnumValuesDefinition {
+			if enumValue.EnumValue == primitive.Text {
+				return nil
+			}
+		}
+		return fmt.Errorf("default value %q is not a valid enum value for %s", primitive.Text, t.Name)
+	case *ast.ScalarTypeDefinition:
+		primitive, ok := value.(*ast.PrimitiveValue)
+		if !ok {
+			return nil
+		}
+		valid := false
+		switch t.Name {
+		case "Int":
+			valid = primitive.Type == scanner.Int
+		case "Float":
+			valid = primitive.Type == scanner.Int || primitive.Type == scanner.Float
+		case "String":
+			valid = primitive.Type == scanner.String
+		case "Boolean":
+			valid = primitive.Text == "true" || primitive.Text == "false"
+		default:
+			valid = true
+		}
+		if !valid {
+			return fmt.Errorf("default value %q is not valid for scalar %s", primitive.Text, t.Name)
+		}
 	}
 	return nil
 }
