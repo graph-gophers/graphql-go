@@ -7419,7 +7419,8 @@ type inputTagCasesResolver struct{}
 
 func (*inputTagCasesResolver) Check(args struct {
 	Renamed inputTagCases `graphql:"input"`
-}) string {
+},
+) string {
 	return strings.Join([]string{args.Renamed.ItemID, args.Renamed.Tagged, args.Renamed.Fallback, args.Renamed.Default, args.Renamed.Value}, "|")
 }
 
@@ -7430,7 +7431,8 @@ func (*duplicateInputTagResolver) Check(args struct {
 		First  string `graphql:"value"`
 		Second string `graphql:"value"`
 	}
-}) string {
+},
+) string {
 	return ""
 }
 
@@ -7438,7 +7440,8 @@ type pointerEmbeddedInputTagResolver struct{}
 
 func (*pointerEmbeddedInputTagResolver) Check(args struct {
 	Input struct{ *EmbeddedInputTag }
-}) string {
+},
+) string {
 	return ""
 }
 
