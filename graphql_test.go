@@ -7326,3 +7326,69 @@ func TestEnumCompletionErrorIncludesLocation(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultValueValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		sdl     string
+		wantErr bool
+	}{
+		{
+			name: "null default for non-null field argument",
+			sdl: `
+			type Query {
+				f1(arg1: Int! = null): Int!
+			}
+			`,
+			wantErr: true,
+		},
+		{
+			name: "null in non-null list element for input object field",
+			sdl: `
+			input InputObj {
+				arg1: [String!] = [null]
+			}
+			type Query {
+				f1(input: InputObj): Int
+			}
+			`,
+			wantErr: true,
+		},
+		{
+			name: "invalid enum default value for directive argument",
+			sdl: `
+			enum Language {
+				EN
+				JA
+			}
+			directive @localize(lang: Language = ZH) on FIELD
+			type Query {
+				f1: Int
+			}
+			`,
+			wantErr: true,
+		},
+		{
+			name: "valid default values should not error",
+			sdl: `
+			type Query {
+				f1(arg1: Int = 42): Int
+				f2(arg1: String = "hello"): String
+			}
+			`,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := graphql.ParseSchema(tt.sdl, nil)
+			if tt.wantErr && err == nil {
+				t.Fatal("expected an error for invalid default value, but got none")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+		})
+	}
+}
