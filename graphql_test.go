@@ -7609,3 +7609,67 @@ func TestDirectiveIsRepeatableIntrospection(t *testing.T) {
 		})
 	})
 }
+
+func TestRootOperations_mustBeDifferentTypes(t *testing.T) {
+	type args struct {
+		Schema string
+	}
+	type want struct {
+		Error string
+	}
+	tests := map[string]struct {
+		Args args
+		Want want
+	}{
+		"Same type for query and subscription": {
+			Args: args{
+				Schema: `
+					type SomeObject {
+						field: String
+					}
+
+					type UniqueObject {
+						field: String
+					}
+
+					schema {
+						query: SomeObject
+						mutation: UniqueObject
+						subscription: SomeObject
+					}
+				`,
+			},
+			Want: want{Error: `root operation types query and subscription must be different, both are set to "SomeObject"`},
+		},
+		"Same type for all root types": {
+			Args: args{
+				Schema: `
+					type SomeObject {
+						field: String
+					}
+
+					schema {
+						query: SomeObject
+						mutation: SomeObject
+						subscription: SomeObject
+					}
+				`,
+			},
+			Want: want{Error: `query, mutation, and subscription root types must all be different types if provided, all are set to "SomeObject"`},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := graphql.ParseSchema(tt.Args.Schema, nil)
+			if err == nil {
+				t.Fatalf("expected error %q but got none; schema with reused root types should be rejected", tt.Want.Error)
+			}
+			if err.Error() != tt.Want.Error {
+				t.Fatalf("got:  %v, want: %s", err.Error(), tt.Want.Error)
+			}
+		})
+	}
+}
