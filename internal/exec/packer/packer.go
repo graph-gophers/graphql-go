@@ -316,7 +316,7 @@ func (p *ValuePacker) Pack(value interface{}) (reflect.Value, error) {
 
 	coerced, err := unmarshalInput(p.ValueType, value)
 	if err != nil {
-		return reflect.Value{}, fmt.Errorf("could not unmarshal %#v (%T) into %s: %s", value, value, p.ValueType, err)
+		return reflect.Value{}, fmt.Errorf("could not unmarshal %#v (%T) into %s: %w", value, value, p.ValueType, err)
 	}
 	return reflect.ValueOf(coerced), nil
 }
