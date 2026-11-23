@@ -2,6 +2,7 @@ package selected
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -146,7 +147,12 @@ func applySelectionSet(r *Request, s *resolvable.Schema, e *resolvable.Object, s
 					var err error
 					packedArgs, err = fe.ArgsPacker.Pack(args)
 					if err != nil {
-						r.AddError(errors.Errorf("%s", err))
+						queryErr := errors.Errorf("%s", err)
+						var ex interface{ Extensions() map[string]interface{} }
+						if stderrors.As(err, &ex) {
+							queryErr.Extensions = ex.Extensions()
+						}
+						r.AddError(queryErr)
 						return
 					}
 				}
