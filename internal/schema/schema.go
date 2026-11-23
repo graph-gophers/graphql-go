@@ -51,6 +51,11 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 				return err
 			}
 			arg.Type = t
+			if arg.Default != nil {
+				if err := validateDefaultValue(arg.Type, arg.Default); err != nil {
+					return fmt.Errorf("directive %q argument %q: %w", d.Name, arg.Name.Name, err)
+				}
+			}
 		}
 	}
 
@@ -348,10 +353,70 @@ func resolveInputObject(s *ast.Schema, values ast.ArgumentsDefinition) error {
 		}
 		v.Type = t
 
+		if v.Default != nil {
+			if err := validateDefaultValue(t, v.Default); err != nil {
+				return fmt.Errorf("%q: %w", v.Name.Name, err)
+			}
+		}
+
 		if err := resolveDirectives(s, v.Directives, "ARGUMENT_DEFINITION"); err != nil {
 			return err
 		}
 
+	}
+	return nil
+}
+
+func validateDefaultValue(t ast.Type, value ast.Value) error {
+	switch t := t.(type) {
+	case *ast.NonNull:
+		if _, ok := value.(*ast.NullValue); ok {
+			return fmt.Errorf("default value null is not valid for non-null type %s", t)
+		}
+		return validateDefaultValue(t.OfType, value)
+	case *ast.List:
+		list, ok := value.(*ast.ListValue)
+		if !ok {
+			return nil
+		}
+		for _, item := range list.Values {
+			if err := validateDefaultValue(t.OfType, item); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *ast.EnumTypeDefinition:
+		primitive, ok := value.(*ast.PrimitiveValue)
+		if !ok || primitive.Type != scanner.Ident {
+			return nil
+		}
+		for _, enumValue := range t.EnumValuesDefinition {
+			if enumValue.EnumValue == primitive.Text {
+				return nil
+			}
+		}
+		return fmt.Errorf("default value %q is not a valid enum value for %s", primitive.Text, t.Name)
+	case *ast.ScalarTypeDefinition:
+		primitive, ok := value.(*ast.PrimitiveValue)
+		if !ok {
+			return nil
+		}
+		valid := false
+		switch t.Name {
+		case "Int":
+			valid = primitive.Type == scanner.Int
+		case "Float":
+			valid = primitive.Type == scanner.Int || primitive.Type == scanner.Float
+		case "String":
+			valid = primitive.Type == scanner.String
+		case "Boolean":
+			valid = primitive.Text == "true" || primitive.Text == "false"
+		default:
+			valid = true
+		}
+		if !valid {
+			return fmt.Errorf("default value %q is not valid for scalar %s", primitive.Text, t.Name)
+		}
 	}
 	return nil
 }
@@ -427,6 +492,28 @@ func parseSchema(s *ast.Schema, l *common.Lexer) {
 }
 
 func parseObjectDef(l *common.Lexer) *ast.ObjectTypeDefinition {
+	object := parseObjectHead(l)
+
+	l.ConsumeToken('{')
+	object.Fields = parseFieldsDef(l)
+	l.ConsumeToken('}')
+
+	return object
+}
+
+func parseObjectExtension(l *common.Lexer) *ast.ObjectTypeDefinition {
+	object := parseObjectHead(l)
+
+	if l.Peek() == '{' {
+		l.ConsumeToken('{')
+		object.Fields = parseFieldsDef(l)
+		l.ConsumeToken('}')
+	}
+
+	return object
+}
+
+func parseObjectHead(l *common.Lexer) *ast.ObjectTypeDefinition {
 	object := &ast.ObjectTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
 
 	for l.Peek() != '{' {
@@ -435,13 +522,13 @@ func parseObjectDef(l *common.Lexer) *ast.ObjectTypeDefinition {
 			continue
 		}
 
-		if l.Peek() != scanner.Ident {
+		if l.Peek() != scanner.Ident || l.PeekIdent() != "implements" {
 			break
 		}
 
 		l.ConsumeKeyword("implements")
 
-		for l.Peek() != '{' && l.Peek() != '@' {
+		for l.Peek() == '&' || (l.Peek() == scanner.Ident && !isDefinitionKeyword(l.PeekIdent())) {
 			if l.Peek() == '&' {
 				l.ConsumeToken('&')
 			}
@@ -449,11 +536,17 @@ func parseObjectDef(l *common.Lexer) *ast.ObjectTypeDefinition {
 			object.InterfaceNames = append(object.InterfaceNames, l.ConsumeIdent())
 		}
 	}
-	l.ConsumeToken('{')
-	object.Fields = parseFieldsDef(l)
-	l.ConsumeToken('}')
 
 	return object
+}
+
+func isDefinitionKeyword(name string) bool {
+	switch name {
+	case "schema", "type", "interface", "union", "enum", "input", "scalar", "directive", "extend":
+		return true
+	default:
+		return false
+	}
 }
 
 func parseInterfaceDef(l *common.Lexer) *ast.InterfaceTypeDefinition {
@@ -583,7 +676,7 @@ func parseExtension(s *ast.Schema, l *common.Lexer) {
 		}
 
 	case "type":
-		obj := parseObjectDef(l)
+		obj := parseObjectExtension(l)
 		s.Extensions = append(s.Extensions, &ast.Extension{Type: obj, Loc: loc})
 
 	case "interface":

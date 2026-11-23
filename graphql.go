@@ -354,6 +354,19 @@ func (s *Schema) validateSchema() error {
 	if err := validateRootOp(s.schema, "subscription", false); err != nil {
 		return err
 	}
+
+	// The query, mutation and subscription root types must all be distinct.
+	seen := make(map[string]string)
+	for _, op := range []string{"query", "mutation", "subscription"} {
+		name, ok := s.schema.EntryPointNames[op]
+		if !ok {
+			continue
+		}
+		if other, exists := seen[name]; exists {
+			return fmt.Errorf("root operation types %q and %q must use different types (both use %q)", other, op, name)
+		}
+		seen[name] = op
+	}
 	return nil
 }
 
