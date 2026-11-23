@@ -7521,3 +7521,91 @@ func TestGraphqlTagOnInputField(t *testing.T) {
 		})
 	}
 }
+
+type repeatableTestResolver struct{}
+
+func (r *repeatableTestResolver) Hello() string {
+	return "world"
+}
+
+func TestDirectiveIsRepeatableIntrospection(t *testing.T) {
+	t.Parallel()
+
+	// The __Directive introspection type should expose an isRepeatable field
+	// so that clients can discover whether a directive may be applied multiple
+	// times at the same location.
+
+	sdl := `
+		schema {
+			query: Query
+		}
+
+		directive @myRepeatable repeatable on FIELD
+		directive @myNonRepeatable on FIELD
+
+		type Query {
+			hello: String!
+		}
+	`
+
+	schema := graphql.MustParseSchema(sdl, &repeatableTestResolver{})
+
+	t.Run("__Directive type has isRepeatable field", func(t *testing.T) {
+		gqltesting.RunTest(t, &gqltesting.Test{
+			Schema: schema,
+			Query: `
+				{
+					__type(name: "__Directive") {
+						fields {
+							name
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"__type": {
+						"fields": [
+							{ "name": "name" },
+							{ "name": "description" },
+							{ "name": "isRepeatable" },
+							{ "name": "locations" },
+							{ "name": "args" }
+						]
+					}
+				}
+			`,
+		})
+	})
+
+	t.Run("directives report isRepeatable via introspection", func(t *testing.T) {
+		gqltesting.RunTest(t, &gqltesting.Test{
+			Schema: schema,
+			Query: `
+				{
+					__schema {
+						directives {
+							name
+							isRepeatable
+						}
+					}
+				}
+			`,
+			ExpectedResult: `
+				{
+					"__schema": {
+						"directives": [
+							{ "name": "deprecated", "isRepeatable": false },
+							{ "name": "include", "isRepeatable": false },
+							{ "name": "myNonRepeatable", "isRepeatable": false },
+							{ "name": "myRepeatable", "isRepeatable": true },
+							{ "name": "oneOf", "isRepeatable": false },
+							{ "name": "skip", "isRepeatable": false },
+							{ "name": "specifiedBy", "isRepeatable": false }
+						]
+					}
+				}
+			`,
+		})
+	})
+}

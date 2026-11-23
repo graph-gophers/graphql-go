@@ -21,6 +21,7 @@
           }
         ],
         "description": "Marks an element of a GraphQL schema as no longer supported.",
+        "isRepeatable": false,
         "locations": [
           "FIELD_DEFINITION",
           "ENUM_VALUE",
@@ -49,6 +50,7 @@
           }
         ],
         "description": "Directs the executor to include this field or fragment only when the `if` argument is true.",
+        "isRepeatable": false,
         "locations": [
           "FIELD",
           "FRAGMENT_SPREAD",
@@ -59,6 +61,7 @@
       {
         "args": [],
         "description": "Marks an input object type as requiring exactly one of its fields to be provided.",
+        "isRepeatable": false,
         "locations": [
           "INPUT_OBJECT"
         ],
@@ -84,6 +87,7 @@
           }
         ],
         "description": "Directs the executor to skip this field or fragment when the `if` argument is true.",
+        "isRepeatable": false,
         "locations": [
           "FIELD",
           "FRAGMENT_SPREAD",
@@ -111,6 +115,7 @@
           }
         ],
         "description": "Provides a scalar specification URL for specifying the behavior of custom scalar types.",
+        "isRepeatable": false,
         "locations": [
           "SCALAR"
         ],
@@ -1344,6 +1349,22 @@
               "kind": "SCALAR",
               "name": "String",
               "ofType": null
+            }
+          },
+          {
+            "args": [],
+            "deprecationReason": null,
+            "description": null,
+            "isDeprecated": false,
+            "name": "isRepeatable",
+            "type": {
+              "kind": "NON_NULL",
+              "name": null,
+              "ofType": {
+                "kind": "SCALAR",
+                "name": "Boolean",
+                "ofType": null
+              }
             }
           },
           {
