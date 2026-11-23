@@ -333,6 +333,10 @@ func (r *Directive) Description() *string {
 	return &r.directive.Desc
 }
 
+func (r *Directive) IsRepeatable() bool {
+	return r.directive.Repeatable
+}
+
 func (r *Directive) Locations() []string {
 	return r.directive.Locations
 }

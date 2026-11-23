@@ -38,6 +38,7 @@ var introspectionQuery = `
       directives {
         name
         description
+        isRepeatable
         locations
         args(includeDeprecated: true) {
           ...InputValue
