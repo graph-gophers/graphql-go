@@ -110,6 +110,14 @@ var introspectionQuery = `
                 ofType {
                   kind
                   name
+                  ofType {
+                    kind
+                    name
+                    ofType {
+                      kind
+                      name
+                    }
+                  }
                 }
               }
             }

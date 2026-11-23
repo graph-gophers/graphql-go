@@ -68,6 +68,68 @@ func TestSchema_ToJSON(t *testing.T) {
 	}
 }
 
+func TestSchema_ToJSONDeeplyWrappedType(t *testing.T) {
+	t.Parallel()
+
+	schema := graphql.MustParseSchema(`
+		type Query {
+			coordinates: [[[[Float!]!]!]!]!
+		}
+	`, nil)
+
+	data, err := schema.ToJSON()
+	if err != nil {
+		t.Fatalf("ToJSON() returned error: %v", err)
+	}
+
+	var result struct {
+		Schema struct {
+			Types []struct {
+				Name   string `json:"name"`
+				Fields []struct {
+					Name string   `json:"name"`
+					Type *typeRef `json:"type"`
+				} `json:"fields"`
+			} `json:"types"`
+		} `json:"__schema"`
+	}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("failed to unmarshal introspection JSON: %v", err)
+	}
+
+	var coordinates *typeRef
+	for _, typ := range result.Schema.Types {
+		if typ.Name != "Query" {
+			continue
+		}
+		for _, field := range typ.Fields {
+			if field.Name == "coordinates" {
+				coordinates = field.Type
+				break
+			}
+		}
+	}
+	if coordinates == nil {
+		t.Fatal("could not find coordinates field on Query type")
+	}
+
+	current := coordinates
+	depth := 0
+	for current.OfType != nil {
+		current = current.OfType
+		depth++
+	}
+	if depth != 9 || current.Kind != "SCALAR" || current.Name != "Float" {
+		t.Fatalf("innermost type: got depth %d, kind %q, name %q; want depth 9, SCALAR Float", depth, current.Kind, current.Name)
+	}
+}
+
+type typeRef struct {
+	Kind   string   `json:"kind"`
+	Name   string   `json:"name"`
+	OfType *typeRef `json:"ofType"`
+}
+
 func formatJSON(data []byte) ([]byte, error) {
 	var v any
 	if err := json.Unmarshal(data, &v); err != nil {
