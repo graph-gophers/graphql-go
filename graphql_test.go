@@ -7392,3 +7392,132 @@ func TestDefaultValueValidation(t *testing.T) {
 		})
 	}
 }
+
+type inputWithTag struct {
+	ItemIdentifier string `graphql:"itemID"`
+}
+
+type inputTagResolver struct{}
+
+func (r *inputTagResolver) SetActive(args struct{ Input inputWithTag }) string {
+	return args.Input.ItemIdentifier
+}
+
+type EmbeddedInputTag struct {
+	Value string `graphql:"promoted"`
+}
+
+type inputTagCases struct {
+	ItemID   string
+	Tagged   string `graphql:"itemID"`
+	Fallback string
+	Default  string `graphql:"defaultName"`
+	EmbeddedInputTag
+}
+
+type inputTagCasesResolver struct{}
+
+func (*inputTagCasesResolver) Check(args struct {
+	Renamed inputTagCases `graphql:"input"`
+},
+) string {
+	return strings.Join([]string{args.Renamed.ItemID, args.Renamed.Tagged, args.Renamed.Fallback, args.Renamed.Default, args.Renamed.Value}, "|")
+}
+
+type duplicateInputTagResolver struct{}
+
+func (*duplicateInputTagResolver) Check(args struct {
+	Input struct {
+		First  string `graphql:"value"`
+		Second string `graphql:"value"`
+	}
+},
+) string {
+	return ""
+}
+
+type pointerEmbeddedInputTagResolver struct{}
+
+func (*pointerEmbeddedInputTagResolver) Check(args struct {
+	Input struct{ *EmbeddedInputTag }
+},
+) string {
+	return ""
+}
+
+func TestGraphqlTagOnInputField(t *testing.T) {
+	t.Parallel()
+
+	const casesSchema = `
+		type Query { check(input: Input!): String! }
+		input Input {
+			itemID: String!
+			fallback: String!
+			defaultName: String = "default"
+			promoted: String!
+		}
+	`
+	tests := []struct {
+		name, sdl, query, result, wantErr string
+		resolver                          any
+		variables                         map[string]any
+	}{
+		{
+			name:     "input field",
+			sdl:      `type Query { setActive(input: Input!): String! } input Input { itemID: String! }`,
+			resolver: &inputTagResolver{},
+			query:    `{ setActive(input: { itemID: "abc123" }) }`,
+			result:   `{"setActive":"abc123"}`,
+		},
+		{
+			name:     "tag precedence and default",
+			sdl:      casesSchema,
+			resolver: &inputTagCasesResolver{},
+			query:    `{ check(input: {itemID: "tagged", fallback: "plain", promoted: "embedded"}) }`,
+			result:   `{"check":"|tagged|plain|default|embedded"}`,
+		},
+		{
+			name:     "variables",
+			sdl:      casesSchema,
+			resolver: &inputTagCasesResolver{},
+			query:    `query($input: Input!) { check(input: $input) }`,
+			variables: map[string]any{"input": map[string]any{
+				"itemID": "variable", "fallback": "plain", "defaultName": "custom", "promoted": "embedded",
+			}},
+			result: `{"check":"|variable|plain|custom|embedded"}`,
+		},
+		{
+			name:     "duplicate tags",
+			sdl:      `type Query { check(input: Input!): String! } input Input { value: String! }`,
+			resolver: &duplicateInputTagResolver{},
+			wantErr:  `multiple fields with graphql tag "value"`,
+		},
+		{
+			name:     "embedded pointer",
+			sdl:      `type Query { check(input: Input!): String! } input Input { promoted: String! }`,
+			resolver: &pointerEmbeddedInputTagResolver{},
+			wantErr:  `is embedded through a pointer`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			schema, err := graphql.ParseSchema(tt.sdl, tt.resolver)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("expected error containing %q, got %v", tt.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected schema error: %v", err)
+			}
+			gqltesting.RunTest(t, &gqltesting.Test{
+				Schema:         schema,
+				Query:          tt.query,
+				Variables:      tt.variables,
+				ExpectedResult: tt.result,
+			})
+		})
+	}
+}
