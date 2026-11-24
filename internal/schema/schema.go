@@ -43,6 +43,9 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 	if err := mergeExtensions(s); err != nil {
 		return err
 	}
+	if err := resolveDirectives(s, s.SchemaDefinition.Directives, "SCHEMA"); err != nil {
+		return err
+	}
 
 	for _, t := range s.Types {
 		if err := resolveNamedType(s, t); err != nil {
@@ -381,6 +384,7 @@ func mergeExtensions(s *ast.Schema) error {
 		switch og := typ.(type) {
 		case *ast.ObjectTypeDefinition:
 			e := ext.Type.(*ast.ObjectTypeDefinition)
+			og.Directives = append(og.Directives, e.Directives...)
 
 			for _, field := range e.Fields {
 				if og.Fields.Get(field.Name) != nil {
@@ -400,6 +404,7 @@ func mergeExtensions(s *ast.Schema) error {
 
 		case *ast.InputObject:
 			e := ext.Type.(*ast.InputObject)
+			og.Directives = append(og.Directives, e.Directives...)
 
 			for _, field := range e.Values {
 				if og.Values.Get(field.Name.Name) != nil {
@@ -410,6 +415,7 @@ func mergeExtensions(s *ast.Schema) error {
 
 		case *ast.InterfaceTypeDefinition:
 			e := ext.Type.(*ast.InterfaceTypeDefinition)
+			og.Directives = append(og.Directives, e.Directives...)
 
 			for _, field := range e.Fields {
 				if og.Fields.Get(field.Name) != nil {
@@ -420,6 +426,7 @@ func mergeExtensions(s *ast.Schema) error {
 
 		case *ast.Union:
 			e := ext.Type.(*ast.Union)
+			og.Directives = append(og.Directives, e.Directives...)
 
 			for _, en := range e.TypeNames {
 				for _, on := range og.TypeNames {
@@ -432,6 +439,7 @@ func mergeExtensions(s *ast.Schema) error {
 
 		case *ast.EnumTypeDefinition:
 			e := ext.Type.(*ast.EnumTypeDefinition)
+			og.Directives = append(og.Directives, e.Directives...)
 
 			if err := validateEnumValues(e); err != nil {
 				return err
