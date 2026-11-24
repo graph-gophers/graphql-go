@@ -1918,3 +1918,175 @@ func TestNoDuplicatePossibleTypesWhenInterfaceRepeated(t *testing.T) {
 		t.Errorf("expected possible type to be User, got %s", nodeType.PossibleTypes[0].Name)
 	}
 }
+
+func TestExtendNonRepeatableDirective(t *testing.T) {
+	tests := []struct {
+		name string
+		sdl  string
+	}{
+		{
+			name: "extend type repeats non-repeatable directive",
+			sdl: `
+			directive @foo on OBJECT
+			type Query {
+				someField: String
+			}
+			type TestObject @foo {
+				field: String
+			}
+			extend type TestObject @foo {
+				newField: String
+			}
+			`,
+		},
+		{
+			name: "extend interface repeats non-repeatable directive",
+			sdl: `
+			directive @foo on INTERFACE
+			type Query {
+				someField: String
+			}
+			interface TestInterface @foo {
+				field: String
+			}
+			extend interface TestInterface @foo {
+				newField: String
+			}
+			`,
+		},
+		{
+			name: "extend union repeats non-repeatable directive",
+			sdl: `
+			directive @foo on UNION
+			type Query {
+				someField: String
+			}
+			type A { field: String }
+			type B { field: String }
+			union TestUnion @foo = A
+			extend union TestUnion @foo = B
+			`,
+		},
+		{
+			name: "extend enum repeats non-repeatable directive",
+			sdl: `
+			directive @foo on ENUM
+			type Query {
+				someField: String
+			}
+			enum TestEnum @foo {
+				A
+			}
+			extend enum TestEnum @foo {
+				B
+			}
+			`,
+		},
+		{
+			name: "extend input repeats non-repeatable directive",
+			sdl: `
+			directive @foo on INPUT_OBJECT
+			type Query {
+				someField: String
+			}
+			input TestInput @foo {
+				field: String
+			}
+			extend input TestInput @foo {
+				newField: String
+			}
+			`,
+		},
+		{
+			name: "extend schema repeats non-repeatable directive",
+			sdl: `
+			directive @foo on SCHEMA
+			type Query {
+				someField: String
+			}
+			schema @foo {
+				query: Query
+			}
+			extend schema @foo
+			`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := schema.ParseSchema(tt.sdl, false)
+			if err == nil {
+				t.Fatal("expected error for non-repeatable directive repeated via extend, but got <nil>")
+			}
+			if !strings.Contains(err.Error(), "non repeatable") && !strings.Contains(err.Error(), "can only be used once") {
+				t.Fatalf("expected non-repeatable directive error, but got: %q", err.Error())
+			}
+		})
+	}
+}
+
+func TestExtendInputObjectDirectivesAreMerged(t *testing.T) {
+	tests := []struct {
+		name           string
+		sdl            string
+		validateError  func(err error) error
+		validateSchema func(s *ast.Schema) error
+	}{
+		{
+			name: "Extend input object type with directive",
+			sdl: `
+			directive @oneOf on INPUT_OBJECT
+
+			input SomeInput {
+				first: String
+			}
+
+			extend input SomeInput @oneOf {
+				second: Int
+			}
+			`,
+			validateSchema: func(s *ast.Schema) error {
+				typ, ok := s.Types["SomeInput"].(*ast.InputObject)
+				if !ok {
+					return fmt.Errorf("type %q not found", "SomeInput")
+				}
+
+				// Fields from the extension should be merged
+				if len(typ.Values) != 2 {
+					return fmt.Errorf("expected 2 fields, but got %d", len(typ.Values))
+				}
+				if typ.Values.Get("first") == nil {
+					return fmt.Errorf("field %q not found", "first")
+				}
+				if typ.Values.Get("second") == nil {
+					return fmt.Errorf("field %q not found", "second")
+				}
+
+				// Directives from the extension should also be merged
+				d := typ.Directives.Get("oneOf")
+				if d == nil {
+					return fmt.Errorf("expected @oneOf directive on SomeInput after extension, but Directives.Get(\"oneOf\") returned nil")
+				}
+
+				return nil
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := schema.ParseSchema(tt.sdl, false)
+			if err != nil {
+				if tt.validateError == nil {
+					t.Fatal(err)
+				}
+				if err2 := tt.validateError(err); err2 != nil {
+					t.Fatal(err2)
+				}
+			}
+			if tt.validateSchema != nil {
+				if err := tt.validateSchema(s); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
+	}
+}
