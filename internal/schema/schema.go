@@ -157,7 +157,13 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 				return err
 			}
 		}
+		seenInterfaces := make(map[string]struct{}, len(obj.InterfaceNames))
 		for i, intfName := range obj.InterfaceNames {
+			if _, ok := seenInterfaces[intfName]; ok {
+				return errors.Errorf("type %q implements interface %q more than once", obj.Name, intfName)
+			}
+			seenInterfaces[intfName] = struct{}{}
+
 			t, ok := s.Types[intfName]
 			if !ok {
 				return errors.Errorf("interface %q not found", intfName)
