@@ -1852,3 +1852,69 @@ func TestSchemaValidatesWrappedAndExtendedTypes(t *testing.T) {
 		})
 	}
 }
+
+func TestRejectsDuplicateInterfaceImplementation(t *testing.T) {
+	tests := []struct {
+		name          string
+		sdl           string
+		validateError func(err error) error
+	}{
+		{
+			name: "Object declares same interface twice",
+			sdl: `
+			interface NonUniqInterface {
+				f: String
+			}
+			interface AnotherInterface {
+				f: String
+			}
+			type SomeObject implements NonUniqInterface & AnotherInterface & NonUniqInterface {
+				f: String
+			}`,
+			validateError: func(err error) error {
+				if err == nil {
+					return fmt.Errorf("expected error for duplicate interface implementation, but got <nil>")
+				}
+				return nil
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := schema.ParseSchema(tt.sdl, false)
+			if err2 := tt.validateError(err); err2 != nil {
+				t.Fatal(err2)
+			}
+		})
+	}
+}
+
+func TestNoDuplicatePossibleTypesWhenInterfaceRepeated(t *testing.T) {
+	sdl := `
+		interface Node {
+			id: ID!
+		}
+		type User implements Node & Node {
+			id: ID!
+			name: String!
+		}
+	`
+	s, err := schema.ParseSchema(sdl, false)
+	if err != nil {
+		// If the parser rejects duplicate interface names, that is acceptable
+		// correct behavior — no duplicate PossibleTypes can result.
+		return
+	}
+
+	nodeType, ok := s.Types["Node"].(*ast.InterfaceTypeDefinition)
+	if !ok {
+		t.Fatal("interface Node not found")
+	}
+
+	if len(nodeType.PossibleTypes) != 1 {
+		t.Fatalf("expected 1 possible type for Node, got %d", len(nodeType.PossibleTypes))
+	}
+	if nodeType.PossibleTypes[0].Name != "User" {
+		t.Errorf("expected possible type to be User, got %s", nodeType.PossibleTypes[0].Name)
+	}
+}
