@@ -119,12 +119,12 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 	for _, typeDef := range s.Types {
 		switch t := typeDef.(type) {
 		case *ast.InterfaceTypeDefinition:
-			seenInterfaces := make(map[string]struct{}, len(t.Interfaces))
+			seenIfaces := make(map[string]struct{}, len(t.Interfaces))
 			for i, implements := range t.Interfaces {
-				if _, ok := seenInterfaces[implements.Name]; ok {
+				if _, ok := seenIfaces[implements.Name]; ok {
 					return errors.Errorf("interface %q implements interface %q more than once", t.Name, implements.Name)
 				}
-				seenInterfaces[implements.Name] = struct{}{}
+				seenIfaces[implements.Name] = struct{}{}
 				typ, ok := s.Types[implements.Name]
 				if !ok {
 					return errors.Errorf("interface %q not found", implements)
@@ -139,11 +139,11 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 					if implField == nil {
 						return errors.Errorf("interface %q expects field %q but %q does not provide it", intf.Name, f, t.Name)
 					}
-					intfField := intf.Fields.Get(f)
-					if err := validateImplementingFieldArguments(intf.Name, t.Name, "interface", intfField, implField); err != nil {
+					ifaceField := intf.Fields.Get(f)
+					if err := validateImplementingFieldArguments(intf.Name, t.Name, "interface", ifaceField, implField); err != nil {
 						return err
 					}
-					if intfField.Directives.Get("deprecated") == nil && implField.Directives.Get("deprecated") != nil {
+					if ifaceField.Directives.Get("deprecated") == nil && implField.Directives.Get("deprecated") != nil {
 						return errors.Errorf("interface %q field %q is not deprecated but implementing interface %q marks it as deprecated", intf.Name, f, t.Name)
 					}
 				}
@@ -165,32 +165,32 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 				return err
 			}
 		}
-		seenInterfaces := make(map[string]struct{}, len(obj.InterfaceNames))
-		for i, intfName := range obj.InterfaceNames {
-			if _, ok := seenInterfaces[intfName]; ok {
-				return errors.Errorf("type %q implements interface %q more than once", obj.Name, intfName)
+		seenIfaces := make(map[string]struct{}, len(obj.InterfaceNames))
+		for i, ifaceName := range obj.InterfaceNames {
+			if _, ok := seenIfaces[ifaceName]; ok {
+				return errors.Errorf("type %q implements interface %q more than once", obj.Name, ifaceName)
 			}
-			seenInterfaces[intfName] = struct{}{}
+			seenIfaces[ifaceName] = struct{}{}
 
-			t, ok := s.Types[intfName]
+			t, ok := s.Types[ifaceName]
 			if !ok {
-				return errors.Errorf("interface %q not found", intfName)
+				return errors.Errorf("interface %q not found", ifaceName)
 			}
 			intf, ok := t.(*ast.InterfaceTypeDefinition)
 			if !ok {
-				return errors.Errorf("type %q is not an interface", intfName)
+				return errors.Errorf("type %q is not an interface", ifaceName)
 			}
 			for _, f := range intf.Fields.Names() {
 				implField := obj.Fields.Get(f)
 				if implField == nil {
-					return errors.Errorf("interface %q expects field %q but %q does not provide it", intfName, f, obj.Name)
+					return errors.Errorf("interface %q expects field %q but %q does not provide it", ifaceName, f, obj.Name)
 				}
-				intfField := intf.Fields.Get(f)
-				if err := validateImplementingFieldArguments(intfName, obj.Name, "type", intfField, implField); err != nil {
+				ifaceField := intf.Fields.Get(f)
+				if err := validateImplementingFieldArguments(ifaceName, obj.Name, "type", ifaceField, implField); err != nil {
 					return err
 				}
-				if intfField.Directives.Get("deprecated") == nil && implField.Directives.Get("deprecated") != nil {
-					return errors.Errorf("interface %q field %q is not deprecated but implementing type %q marks it as deprecated", intfName, f, obj.Name)
+				if ifaceField.Directives.Get("deprecated") == nil && implField.Directives.Get("deprecated") != nil {
+					return errors.Errorf("interface %q field %q is not deprecated but implementing type %q marks it as deprecated", ifaceName, f, obj.Name)
 				}
 			}
 			obj.Interfaces[i] = intf
@@ -328,23 +328,23 @@ func ParseSchema(schemaString string, useStringDescriptions bool) (*ast.Schema, 
 	return s, err
 }
 
-func validateImplementingFieldArguments(interfaceName, implementerName, implementerKind string, intfField, implField *ast.FieldDefinition) error {
-	for _, intfArg := range intfField.Arguments {
+func validateImplementingFieldArguments(interfaceName, implementerName, implementerKind string, ifaceField, implField *ast.FieldDefinition) error {
+	for _, intfArg := range ifaceField.Arguments {
 		implArg := implField.Arguments.Get(intfArg.Name.Name)
 		if implArg == nil {
-			return errors.Errorf("interface %q field %q expects argument %q but implementing %s %q does not provide it", interfaceName, intfField.Name, intfArg.Name.Name, implementerKind, implementerName)
+			return errors.Errorf("interface %q field %q expects argument %q but implementing %s %q does not provide it", interfaceName, ifaceField.Name, intfArg.Name.Name, implementerKind, implementerName)
 		}
 		if !typesEqual(intfArg.Type, implArg.Type) {
-			return errors.Errorf("interface %q field %q argument %q has type %q but implementing %s %q defines type %q", interfaceName, intfField.Name, intfArg.Name.Name, intfArg.Type, implementerKind, implementerName, implArg.Type)
+			return errors.Errorf("interface %q field %q argument %q has type %q but implementing %s %q defines type %q", interfaceName, ifaceField.Name, intfArg.Name.Name, intfArg.Type, implementerKind, implementerName, implArg.Type)
 		}
 	}
 
 	for _, implArg := range implField.Arguments {
-		if intfField.Arguments.Get(implArg.Name.Name) != nil {
+		if ifaceField.Arguments.Get(implArg.Name.Name) != nil {
 			continue
 		}
 		if isRequiredArgument(implArg) {
-			return errors.Errorf("interface %q field %q defines additional argument %q on implementing %s %q, but additional arguments must not be required", interfaceName, intfField.Name, implArg.Name.Name, implementerKind, implementerName)
+			return errors.Errorf("interface %q field %q defines additional argument %q on implementing %s %q, but additional arguments must not be required", interfaceName, ifaceField.Name, implArg.Name.Name, implementerKind, implementerName)
 		}
 	}
 
