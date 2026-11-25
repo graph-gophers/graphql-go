@@ -2157,3 +2157,25 @@ func parseSchema(t *testing.T, sdl string, want error) *ast.Schema {
 	}
 	return nil
 }
+
+func TestVariableNotAllowedInSchemaDirectiveArgument(t *testing.T) {
+	varErr := &qerrors.QueryError{Err: qerrors.ErrSyntax, Message: "syntax error: variable not allowed"}
+	tests := []struct {
+		name string
+		sdl  string
+		want error
+	}{
+		{"variable in directive argument on type definition", `directive @test(arg: String) on OBJECT type Query @test(arg: $var) { hello: String! }`, varErr},
+		{"variable in directive argument on field definition", `directive @test(arg: String) on FIELD_DEFINITION type Query { hello: String! @test(arg: $var) }`, varErr},
+		{"variable nested in list in directive argument on type definition", `directive @test(arg: [String]) on OBJECT type Query @test(arg: [$var]) { hello: String! }`, varErr},
+		{"variable nested in input object", `input Options { value: String } directive @test(arg: Options) on OBJECT type Query @test(arg: {value: $var}) { hello: String }`, varErr},
+		{"variable on argument definition", `directive @test(arg: String) on ARGUMENT_DEFINITION type Query { hello(name: String @test(arg: $var)): String }`, varErr},
+		{"variable on schema extension", `directive @test(arg: String) on SCHEMA type Query { hello: String } extend schema @test(arg: $var)`, varErr},
+		{"constant nested values are allowed", `input Options { values: [String] } directive @test(arg: Options) on OBJECT type Query @test(arg: {values: ["literal"]}) { hello: String }`, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parseSchema(t, tt.sdl, tt.want)
+		})
+	}
+}

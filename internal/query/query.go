@@ -95,7 +95,7 @@ func parseOperation(l *common.Lexer, opType ast.OperationType) *ast.OperationDef
 		}
 		l.ConsumeToken(')')
 	}
-	op.Directives = common.ParseDirectives(l)
+	op.Directives = common.ParseDirectives(l, false)
 	op.Selections = parseSelectionSet(l)
 	return op
 }
@@ -105,7 +105,7 @@ func parseFragment(l *common.Lexer) *ast.FragmentDefinition {
 	f.Name = l.ConsumeIdentWithLoc()
 	l.ConsumeKeyword("on")
 	f.On = ast.TypeName{Ident: l.ConsumeIdentWithLoc()}
-	f.Directives = common.ParseDirectives(l)
+	f.Directives = common.ParseDirectives(l, false)
 	f.Selections = parseSelectionSet(l)
 	return f
 }
@@ -140,9 +140,9 @@ func parseFieldDef(l *common.Lexer) *ast.Field {
 		f.Name = l.ConsumeIdentWithLoc()
 	}
 	if l.Peek() == '(' {
-		f.Arguments = common.ParseArgumentList(l)
+		f.Arguments = common.ParseArgumentList(l, false)
 	}
-	f.Directives = common.ParseDirectives(l)
+	f.Directives = common.ParseDirectives(l, false)
 	if l.Peek() == '{' {
 		f.SelectionSetLoc = l.Location()
 		f.SelectionSet = parseSelectionSet(l)
@@ -164,12 +164,12 @@ func parseSpread(l *common.Lexer) ast.Selection {
 				Name: ident,
 				Loc:  loc,
 			}
-			fs.Directives = common.ParseDirectives(l)
+			fs.Directives = common.ParseDirectives(l, false)
 			return fs
 		}
 		f.On = ast.TypeName{Ident: l.ConsumeIdentWithLoc()}
 	}
-	f.Directives = common.ParseDirectives(l)
+	f.Directives = common.ParseDirectives(l, false)
 	f.Selections = parseSelectionSet(l)
 	return f
 }
