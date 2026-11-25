@@ -2138,6 +2138,29 @@ func TestDuplicateSchemaNames(t *testing.T) {
 	})
 }
 
+func TestInputObjectCircularReferences(t *testing.T) {
+	tests := []struct {
+		name string
+		sdl  string
+		want error
+	}{
+		{"breakable references", `type Query { field(arg: A): String } input A { self: A array: [A] nonNullArray: [A]! nonNullElements: [A!]! other: B } input B { parent: A }`, nil},
+		{"self reference", `type Query { field(arg: A): String } input A { self: A! }`, qerrors.Errorf(`Cannot reference Input Object "A" within itself through a series of non-null fields: "self"`)},
+		{"three object cycle", `type Query { field(arg: A): String } input A { toB: B! } input B { toC: C! } input C { toA: A! }`, qerrors.Errorf(`Cannot reference Input Object "A" within itself through a series of non-null fields: "toB.toC.toA"`)},
+		{"multiple cycles", `type Query { field(arg: A): String } input A { toB: B! } input B { toA: A! toC: C! } input C { toB: B! self: C! }`, qerrors.Errorf(`Cannot reference Input Object "A" within itself through a series of non-null fields: "toB.toA"`)},
+		{"cycle excludes leading path", `input A { toB: B! } input B { toC: C! } input C { toB: B! }`, qerrors.Errorf(`Cannot reference Input Object "B" within itself through a series of non-null fields: "toC.toB"`)},
+		{"extension creates unused cycle", `type Query { field: String } input A { value: String } extend input A { toB: B! } input B { toA: A! }`, qerrors.Errorf(`Cannot reference Input Object "A" within itself through a series of non-null fields: "toB.toA"`)},
+		{"nullable edge breaks cycle", `input A { toB: B! } input B { toA: A }`, nil},
+		{"list edge breaks cycle", `input A { toB: B! } input B { toA: [A!]! }`, nil},
+		{"shared dependency is not a cycle", `input A { first: B! second: C! } input B { toC: C! } input C { value: String! }`, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parseSchema(t, tt.sdl, tt.want)
+		})
+	}
+}
+
 func parseSchema(t *testing.T, sdl string, want error) *ast.Schema {
 	t.Helper()
 	s, err := schema.ParseSchema(sdl, false)
