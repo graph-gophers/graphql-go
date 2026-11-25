@@ -119,7 +119,12 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 	for _, typeDef := range s.Types {
 		switch t := typeDef.(type) {
 		case *ast.InterfaceTypeDefinition:
+			seenInterfaces := make(map[string]struct{}, len(t.Interfaces))
 			for i, implements := range t.Interfaces {
+				if _, ok := seenInterfaces[implements.Name]; ok {
+					return errors.Errorf("interface %q implements interface %q more than once", t.Name, implements.Name)
+				}
+				seenInterfaces[implements.Name] = struct{}{}
 				typ, ok := s.Types[implements.Name]
 				if !ok {
 					return errors.Errorf("interface %q not found", implements)
@@ -198,7 +203,12 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 			return err
 		}
 		union.UnionMemberTypes = make([]*ast.ObjectTypeDefinition, len(union.TypeNames))
+		seenTypes := make(map[string]struct{}, len(union.TypeNames))
 		for i, name := range union.TypeNames {
+			if _, ok := seenTypes[name]; ok {
+				return errors.Errorf("union type %q already declared in %q", name, union.Name)
+			}
+			seenTypes[name] = struct{}{}
 			t, ok := s.Types[name]
 			if !ok {
 				return errors.Errorf("object type %q not found", name)
@@ -371,6 +381,8 @@ func validateEnumValues(enum *ast.EnumTypeDefinition) error {
 }
 
 func mergeExtensions(s *ast.Schema) error {
+	objIfaces := make(map[*ast.ObjectTypeDefinition]map[string]struct{})
+	unionMembers := make(map[*ast.Union]map[string]struct{})
 	for _, ext := range s.Extensions {
 		typ := s.Types[ext.Type.TypeName()]
 		if typ == nil {
@@ -393,12 +405,19 @@ func mergeExtensions(s *ast.Schema) error {
 			}
 			og.Fields = append(og.Fields, e.Fields...)
 
-			for _, en := range e.InterfaceNames {
-				for _, on := range og.InterfaceNames {
-					if on == en {
-						return fmt.Errorf("interface %q implemented in the extension is already implemented in %q", on, og.Name)
-					}
+			seen, ok := objIfaces[og]
+			if !ok {
+				seen = make(map[string]struct{}, len(og.InterfaceNames))
+				for _, name := range og.InterfaceNames {
+					seen[name] = struct{}{}
 				}
+				objIfaces[og] = seen
+			}
+			for _, name := range e.InterfaceNames {
+				if _, ok := seen[name]; ok {
+					return fmt.Errorf("interface %q implemented in the extension is already implemented in %q", name, og.Name)
+				}
+				seen[name] = struct{}{}
 			}
 			og.InterfaceNames = append(og.InterfaceNames, e.InterfaceNames...)
 
@@ -423,17 +442,25 @@ func mergeExtensions(s *ast.Schema) error {
 				}
 			}
 			og.Fields = append(og.Fields, e.Fields...)
+			og.Interfaces = append(og.Interfaces, e.Interfaces...)
 
 		case *ast.Union:
 			e := ext.Type.(*ast.Union)
 			og.Directives = append(og.Directives, e.Directives...)
 
-			for _, en := range e.TypeNames {
-				for _, on := range og.TypeNames {
-					if on == en {
-						return fmt.Errorf("union type %q already declared in %q", on, og.Name)
-					}
+			seen, ok := unionMembers[og]
+			if !ok {
+				seen = make(map[string]struct{}, len(og.TypeNames))
+				for _, name := range og.TypeNames {
+					seen[name] = struct{}{}
 				}
+				unionMembers[og] = seen
+			}
+			for _, name := range e.TypeNames {
+				if _, ok := seen[name]; ok {
+					return fmt.Errorf("union type %q already declared in %q", name, og.Name)
+				}
+				seen[name] = struct{}{}
 			}
 			og.TypeNames = append(og.TypeNames, e.TypeNames...)
 
@@ -731,6 +758,17 @@ func resolveInputObject(s *ast.Schema, values ast.ArgumentsDefinition) error {
 func parseSchema(s *ast.Schema, l *common.Lexer) {
 	l.ConsumeWhitespace()
 
+	typeNames := make(map[string]struct{})
+	dirNames := make(map[string]struct{})
+	addType := func(t ast.NamedType, loc errors.Location) {
+		name := t.TypeName()
+		if _, ok := typeNames[name]; ok {
+			l.SyntaxErrorAt(fmt.Sprintf("type %q already declared", name), loc)
+		}
+		typeNames[name] = struct{}{}
+		s.Types[name] = t
+	}
+
 	for l.Peek() != scanner.EOF {
 		hasStringDesc := l.Peek() == scanner.String
 		descLoc := l.Location()
@@ -756,45 +794,49 @@ func parseSchema(s *ast.Schema, l *common.Lexer) {
 			obj := parseObjectDef(l)
 			obj.Desc = desc
 			obj.DescIsSet = descIsSet
-			s.Types[obj.Name] = obj
+			addType(obj, obj.Loc)
 			s.Objects = append(s.Objects, obj)
 
 		case "interface":
 			iface := parseInterfaceDef(l)
 			iface.Desc = desc
 			iface.DescIsSet = descIsSet
-			s.Types[iface.Name] = iface
+			addType(iface, iface.Loc)
 
 		case "union":
 			union := parseUnionDef(l)
 			union.Desc = desc
 			union.DescIsSet = descIsSet
-			s.Types[union.Name] = union
+			addType(union, union.Loc)
 			s.Unions = append(s.Unions, union)
 
 		case "enum":
 			enum := parseEnumDef(l)
 			enum.Desc = desc
 			enum.DescIsSet = descIsSet
-			s.Types[enum.Name] = enum
+			addType(enum, enum.Loc)
 			s.Enums = append(s.Enums, enum)
 
 		case "input":
 			input := parseInputDef(l)
 			input.Desc = desc
 			input.DescIsSet = descIsSet
-			s.Types[input.Name] = input
+			addType(input, input.Loc)
 
 		case "scalar":
 			loc := l.Location()
 			name := l.ConsumeIdent()
 			directives := common.ParseDirectives(l)
-			s.Types[name] = &ast.ScalarTypeDefinition{Name: name, Desc: desc, DescIsSet: descIsSet, Directives: directives, Loc: loc}
+			addType(&ast.ScalarTypeDefinition{Name: name, Desc: desc, DescIsSet: descIsSet, Directives: directives, Loc: loc}, loc)
 
 		case "directive":
 			directive := parseDirectiveDef(l)
 			directive.Desc = desc
 			directive.DescIsSet = descIsSet
+			if _, ok := dirNames[directive.Name]; ok {
+				l.SyntaxErrorAt(fmt.Sprintf("directive %q already declared", "@"+directive.Name), directive.Loc)
+			}
+			dirNames[directive.Name] = struct{}{}
 			s.Directives[directive.Name] = directive
 
 		case "extend":
