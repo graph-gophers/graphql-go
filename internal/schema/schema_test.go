@@ -3,6 +3,7 @@ package schema_test
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -2089,4 +2090,70 @@ func TestExtendInputObjectDirectivesAreMerged(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDuplicateSchemaNames(t *testing.T) {
+	syntaxError := func(message string) error {
+		return &qerrors.QueryError{Err: qerrors.ErrSyntax, Message: "syntax error: " + message}
+	}
+	tests := []struct {
+		name string
+		sdl  string
+		want error
+	}{
+		{"objects", `type Foo { id: Int } type Foo { id: String }`, syntaxError(`type "Foo" already declared`)},
+		{"different type kinds", `type Foo { id: Int } scalar Foo`, syntaxError(`type "Foo" already declared`)},
+		{"directives", `directive @foo on FIELD directive @foo on FIELD`, syntaxError(`directive "@foo" already declared`)},
+		{"interfaces", `interface Node { id: ID } interface Node { id: ID }`, syntaxError(`type "Node" already declared`)},
+		{"unions", `type A { x: Int } union U = A union U = A`, syntaxError(`type "U" already declared`)},
+		{"enums", `enum E { A } enum E { B }`, syntaxError(`type "E" already declared`)},
+		{"inputs", `input I { x: Int } input I { y: Int }`, syntaxError(`type "I" already declared`)},
+		{"scalars", `scalar S scalar S`, syntaxError(`type "S" already declared`)},
+		{"built-in scalar twice", `scalar String scalar String`, syntaxError(`type "String" already declared`)},
+		{"built-in directive twice", `directive @skip on FIELD directive @skip on FIELD`, syntaxError(`directive "@skip" already declared`)},
+		{"interface implements twice", `interface A { x: Int } interface B implements A & A { x: Int }`, qerrors.Errorf(`interface "B" implements interface "A" more than once`)},
+		{"interface extension repeats implementation", `interface A { x: Int } interface B implements A { x: Int } extend interface B implements A { y: Int }`, qerrors.Errorf(`interface "B" implements interface "A" more than once`)},
+		{"interface extensions repeat implementation", `interface A { x: Int } interface B { x: Int } extend interface B implements A { y: Int } extend interface B implements A { z: Int }`, qerrors.Errorf(`interface "B" implements interface "A" more than once`)},
+		{"interface extension validates implementation", `interface A { x: Int } interface B { y: Int } extend interface B implements A { z: Int }`, qerrors.Errorf(`interface "A" expects field "x" but "B" does not provide it`)},
+		{"object extension repeats implementation", `interface A { x: Int } type B { x: Int } extend type B implements A & A { y: Int }`, errors.New(`interface "A" implemented in the extension is already implemented in "B"`)},
+		{"object extensions repeat implementation", `interface A { x: Int } type B { x: Int } extend type B implements A { y: Int } extend type B implements A { z: Int }`, errors.New(`interface "A" implemented in the extension is already implemented in "B"`)},
+		{"union member twice", `type A { x: Int } union U = A | A`, qerrors.Errorf(`union type "A" already declared in "U"`)},
+		{"union extension repeats member", `type A { x: Int } type B { x: Int } union U = A extend union U = B | B`, errors.New(`union type "B" already declared in "U"`)},
+		{"union extensions repeat member", `type A { x: Int } type B { x: Int } union U = A extend union U = B extend union U = B`, errors.New(`union type "B" already declared in "U"`)},
+		{"built-ins declared once", `scalar String directive @skip(if: Boolean!) on FIELD type Query { x: String }`, nil},
+		{"separate namespaces", `scalar A directive @A on FIELD`, nil},
+		{"valid type extension", `type A { x: Int } extend type A { y: Int }`, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parseSchema(t, tt.sdl, tt.want)
+		})
+	}
+	t.Run("valid interface extension", func(t *testing.T) {
+		s := parseSchema(t, `interface A { x: Int } interface B { x: Int } extend interface B implements A { y: Int }`, nil)
+		iface := s.Types["B"].(*ast.InterfaceTypeDefinition)
+		if len(iface.Interfaces) != 1 || iface.Interfaces[0].Name != "A" {
+			t.Fatalf("expected interface B to implement A, got %v", iface.Interfaces)
+		}
+	})
+}
+
+func parseSchema(t *testing.T, sdl string, want error) *ast.Schema {
+	t.Helper()
+	s, err := schema.ParseSchema(sdl, false)
+	if reflect.TypeOf(err) != reflect.TypeOf(want) {
+		t.Fatalf("expected error type %T, got %T (%v)", want, err, err)
+	}
+	if want == nil {
+		return s
+	}
+	if werr, ok := errors.AsType[*qerrors.QueryError](want); ok {
+		got := err.(*qerrors.QueryError)
+		if got.Message != werr.Message || errors.Is(err, qerrors.ErrSyntax) != errors.Is(want, qerrors.ErrSyntax) {
+			t.Fatalf("expected error %q (syntax: %t), got %q (syntax: %t)", werr.Message, errors.Is(want, qerrors.ErrSyntax), got.Message, errors.Is(err, qerrors.ErrSyntax))
+		}
+	} else if err.Error() != want.Error() {
+		t.Fatalf("expected error %q, got %q", want.Error(), err.Error())
+	}
+	return nil
 }
