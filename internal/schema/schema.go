@@ -5,6 +5,7 @@ import (
 	"maps"
 	"slices"
 	"strconv"
+	"strings"
 	"text/scanner"
 
 	"github.com/graph-gophers/graphql-go/ast"
@@ -51,6 +52,9 @@ func Parse(s *ast.Schema, schemaString string, useStringDescriptions bool) error
 		if err := resolveNamedType(s, t); err != nil {
 			return err
 		}
+	}
+	if err := validateInputObjectCycles(s); err != nil {
+		return err
 	}
 	for _, d := range s.Directives {
 		for _, arg := range d.Arguments {
@@ -523,6 +527,47 @@ func resolveNamedType(s *ast.Schema, t ast.NamedType) error {
 	case *ast.ScalarTypeDefinition:
 		if err := resolveDirectives(s, t.Directives, "SCALAR"); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func validateInputObjectCycles(s *ast.Schema) error {
+	visited := make(map[*ast.InputObject]bool)
+	active := make(map[*ast.InputObject]int)
+	var path []string
+	var visit func(*ast.InputObject) error
+	visit = func(in *ast.InputObject) error {
+		active[in] = len(path)
+		for _, field := range in.Values {
+			nonNull, ok := field.Type.(*ast.NonNull)
+			if !ok {
+				continue
+			}
+			next, ok := nonNull.OfType.(*ast.InputObject)
+			if !ok {
+				continue
+			}
+			path = append(path, field.Name.Name)
+			if start, ok := active[next]; ok {
+				return errors.Errorf("Cannot reference Input Object %q within itself through a series of non-null fields: %q", next.Name, strings.Join(path[start:], "."))
+			}
+			if !visited[next] {
+				if err := visit(next); err != nil {
+					return err
+				}
+			}
+			path = path[:len(path)-1]
+		}
+		delete(active, in)
+		visited[in] = true
+		return nil
+	}
+	for _, name := range slices.Sorted(maps.Keys(s.Types)) {
+		if in, ok := s.Types[name].(*ast.InputObject); ok && !visited[in] {
+			if err := visit(in); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
