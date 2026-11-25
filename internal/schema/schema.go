@@ -779,7 +779,7 @@ func parseSchema(s *ast.Schema, l *common.Lexer) {
 			s.Present = true
 			s.Loc = l.Location()
 			s.Desc = desc
-			s.SchemaDefinition.Directives = common.ParseDirectives(l)
+			s.SchemaDefinition.Directives = common.ParseDirectives(l, true)
 			l.ConsumeToken('{')
 			for l.Peek() != '}' {
 
@@ -826,7 +826,7 @@ func parseSchema(s *ast.Schema, l *common.Lexer) {
 		case "scalar":
 			loc := l.Location()
 			name := l.ConsumeIdent()
-			directives := common.ParseDirectives(l)
+			directives := common.ParseDirectives(l, true)
 			addType(&ast.ScalarTypeDefinition{Name: name, Desc: desc, DescIsSet: descIsSet, Directives: directives, Loc: loc}, loc)
 
 		case "directive":
@@ -856,7 +856,7 @@ func parseObjectDef(l *common.Lexer) *ast.ObjectTypeDefinition {
 
 	for l.Peek() != '{' {
 		if l.Peek() == '@' {
-			object.Directives = common.ParseDirectives(l)
+			object.Directives = common.ParseDirectives(l, true)
 			continue
 		}
 
@@ -894,7 +894,7 @@ func parseInterfaceDef(l *common.Lexer) *ast.InterfaceTypeDefinition {
 		}
 	}
 
-	i.Directives = common.ParseDirectives(l)
+	i.Directives = common.ParseDirectives(l, true)
 
 	l.ConsumeToken('{')
 	i.Fields = parseFieldsDef(l)
@@ -906,7 +906,7 @@ func parseInterfaceDef(l *common.Lexer) *ast.InterfaceTypeDefinition {
 func parseUnionDef(l *common.Lexer) *ast.Union {
 	union := &ast.Union{Loc: l.Location(), Name: l.ConsumeIdent()}
 
-	union.Directives = common.ParseDirectives(l)
+	union.Directives = common.ParseDirectives(l, true)
 	l.ConsumeToken('=')
 	if l.Peek() == '|' {
 		l.ConsumeToken('|')
@@ -924,7 +924,7 @@ func parseInputDef(l *common.Lexer) *ast.InputObject {
 	i := &ast.InputObject{}
 	i.Loc = l.Location()
 	i.Name = l.ConsumeIdent()
-	i.Directives = common.ParseDirectives(l)
+	i.Directives = common.ParseDirectives(l, true)
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
 		i.Values = append(i.Values, common.ParseInputValue(l))
@@ -936,7 +936,7 @@ func parseInputDef(l *common.Lexer) *ast.InputObject {
 func parseEnumDef(l *common.Lexer) *ast.EnumTypeDefinition {
 	enum := &ast.EnumTypeDefinition{Loc: l.Location(), Name: l.ConsumeIdent()}
 
-	enum.Directives = common.ParseDirectives(l)
+	enum.Directives = common.ParseDirectives(l, true)
 	l.ConsumeToken('{')
 	for l.Peek() != '}' {
 		desc, descIsSet := l.ConsumeDescription()
@@ -945,7 +945,7 @@ func parseEnumDef(l *common.Lexer) *ast.EnumTypeDefinition {
 			DescIsSet:  descIsSet,
 			Loc:        l.Location(),
 			EnumValue:  l.ConsumeIdent(),
-			Directives: common.ParseDirectives(l),
+			Directives: common.ParseDirectives(l, true),
 		}
 
 		enum.EnumValuesDefinition = append(enum.EnumValuesDefinition, v)
@@ -997,7 +997,7 @@ func parseExtension(s *ast.Schema, l *common.Lexer) {
 	switch x := l.ConsumeIdent(); x {
 	case "schema":
 		s.Present = true
-		s.SchemaDefinition.Directives = append(s.SchemaDefinition.Directives, common.ParseDirectives(l)...)
+		s.SchemaDefinition.Directives = append(s.SchemaDefinition.Directives, common.ParseDirectives(l, true)...)
 		if l.Peek() == '{' { // in schema extensions the body is optional
 			l.ConsumeToken('{')
 			for l.Peek() != '}' {
@@ -1051,7 +1051,7 @@ func parseFieldsDef(l *common.Lexer) ast.FieldsDefinition {
 		}
 		l.ConsumeToken(':')
 		f.Type = common.ParseType(l)
-		f.Directives = common.ParseDirectives(l)
+		f.Directives = common.ParseDirectives(l, true)
 		fields = append(fields, f)
 	}
 	return fields

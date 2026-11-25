@@ -43,6 +43,35 @@ func TestParseRejectsEmptyNestedSelectionSet(t *testing.T) {
 	}
 }
 
+func TestDirectiveArgumentVariables(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{"operation", `query Q($v: Boolean!) @test(arg: $v) { field }`},
+		{"field", `query Q($v: Boolean!) { field @include(if: $v) }`},
+		{"fragment spread", `query Q($v: Boolean!) { ...F @include(if: $v) } fragment F on Query { field }`},
+		{"inline fragment", `query Q($v: Boolean!) { ... on Query @include(if: $v) { field } }`},
+		{"fragment definition", `fragment F on Query @test(arg: $v) { field }`},
+		{"nested value", `query Q($v: String!) { field @test(arg: {values: [$v]}) }`},
+		{"field argument", `query Q($v: String!) { field(arg: $v) }`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := query.Parse(tt.query); err != nil {
+				t.Fatalf("expected query to parse, got %v", err)
+			}
+		})
+	}
+}
+
+func TestVariableDefinitionDirectiveRequiresConstant(t *testing.T) {
+	_, err := query.Parse(`query Q($v: String @test(arg: $other)) { field }`)
+	if err == nil || err.Message != "syntax error: variable not allowed" {
+		t.Fatalf("expected variable not allowed syntax error, got %v", err)
+	}
+}
+
 func TestParseAcceptsFullUnicodeEscapeSyntax(t *testing.T) {
 	t.Parallel()
 
